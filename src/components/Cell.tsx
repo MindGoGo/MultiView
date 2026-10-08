@@ -30,6 +30,7 @@ interface Props {
   /** 網頁來源的顯示模式（R13、R14）；其他來源固定為 video */
   webMode: WebMode
   onToggleWebMode(index: number): void
+  onToggleAdblock(index: number): void
 }
 
 /** 格子窄的時候只顯示圖示，完整名稱放在 title（R14 AC7） */
@@ -228,6 +229,15 @@ export function Cell(props: Props) {
               onClick={() => props.onToggleWebMode(index)}
             >
               {pageMode ? <Label full="只顯示影片" icon="▣" /> : <Label full="顯示整個網頁" icon="⛶" />}
+            </button>
+          )}
+          {isWeb && (
+            <button
+              className={source.adblock ? 'active' : ''}
+              title={source.adblock ? '廣告阻擋：開（按一下關閉，網頁會重新載入）' : '廣告阻擋：關（按一下開啟，網頁會重新載入）'}
+              onClick={() => props.onToggleAdblock(index)}
+            >
+              <Label full={source.adblock ? '廣告阻擋：開' : '廣告阻擋：關'} icon={source.adblock ? '🛡' : '⊘'} />
             </button>
           )}
           <button title="更換網址" onClick={() => setEditing(true)}>

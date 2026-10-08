@@ -13,6 +13,8 @@ export interface Source {
   volume: number
   /** 載入後是否自動播放；從設定檔還原的來源為 false（R10 AC1） */
   autoplay: boolean
+  /** 廣告阻擋，只用於網頁來源（R17）；跟著來源移動和保存 */
+  adblock: boolean
 }
 
 export type Slots = (Source | null)[]

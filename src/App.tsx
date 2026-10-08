@@ -38,7 +38,15 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
   saved.forEach((s, i) => {
     const parsed = s && parseSource(s.url)
     if (s && parsed)
-      slots[i] = { id: newSourceId(), url: s.url, parsed, muted: s.muted, volume: s.volume, autoplay: false }
+      slots[i] = {
+        id: newSourceId(),
+        url: s.url,
+        parsed,
+        muted: s.muted,
+        volume: s.volume,
+        autoplay: false,
+        adblock: s.adblock
+      }
   })
   return slots
 }
@@ -72,7 +80,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     window.multiview.saveView({
       layout,
       ratios: ratiosMap,
-      slots: slots.map((s) => (s ? { url: s.url, muted: s.muted, volume: s.volume } : null))
+      slots: slots.map((s) => (s ? { url: s.url, muted: s.muted, volume: s.volume, adblock: s.adblock } : null))
     })
   }, [layout, ratiosMap, slots])
 
@@ -98,7 +106,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         // 更換網址時保留原本的聲音設定（R2 AC8）
         muted: existing ? existing.muted : initialMuted(slots, layout),
         volume: existing ? existing.volume : 100,
-        autoplay: true
+        autoplay: true,
+        // 廣告阻擋預設開啟（R17）
+        adblock: true
       })
     )
     return null
@@ -109,6 +119,12 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const onRetry = (index: number) => {
     const s = slots[index]
     if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true }))
+  }
+
+  // 切換廣告阻擋：換新的 id 讓網頁重新載入，比照「重試」（R17 AC2）
+  const onToggleAdblock = (index: number) => {
+    const s = slots[index]
+    if (s) setSlots(setSlot(slots, index, { ...s, adblock: !s.adblock, id: newSourceId(), autoplay: true }))
   }
 
   // 每種版型的比例分開記錄（R5 AC4）
@@ -231,6 +247,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         webModes={webModes}
         onWebMode={onWebMode}
         onToggleWebMode={onToggleWebMode}
+        onToggleAdblock={onToggleAdblock}
       />
       <Toolbar
         visible={toolbarVisible || toast !== null}

@@ -54,6 +54,7 @@ interface Props {
   webModes: Record<number, WebMode>
   onWebMode(id: number, mode: WebMode): void
   onToggleWebMode(index: number): void
+  onToggleAdblock(index: number): void
 }
 
 /** 隱藏的網頁來源不能用 display: none，<webview> 會因此重新載入，改成看不見（R4 AC3） */
@@ -99,6 +100,7 @@ export function Grid(props: Props) {
             ) : source.parsed.kind === 'web' ? (
               <WebPlayer
                 url={source.parsed.url}
+                adblock={source.adblock}
                 mode={props.webModes[source.id] ?? 'video'}
                 onModeChange={(mode) => props.onWebMode(source.id, mode)}
                 {...common}
@@ -136,6 +138,7 @@ export function Grid(props: Props) {
             onDirect={props.onDirect}
             webMode={source ? (props.webModes[source.id] ?? 'video') : 'video'}
             onToggleWebMode={props.onToggleWebMode}
+            onToggleAdblock={props.onToggleAdblock}
           />
         )
       })}

@@ -1,4 +1,4 @@
-// 網頁來源的播放器（R13–R16）：在格子裡用 <webview> 載入整個網頁
+// 網頁來源的播放器（R13–R17）：在格子裡用 <webview> 載入整個網頁
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
 import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
@@ -7,6 +7,8 @@ import { WEB_PARTITION, type WebMode, type WebReport, type WebState } from './we
 
 interface Props extends PlayerProps {
   url: string
+  /** 廣告阻擋（R17）；改變時由上層換新的來源 id，網頁會重新載入 */
+  adblock: boolean
   mode: WebMode
   onModeChange(mode: WebMode): void
 }
@@ -19,7 +21,7 @@ export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「�
 export const NOTICE_NOT_FOUND = '找不到影片'
 
 export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
-  { url, mode, onModeChange, muted, volume, autoplay, active, onStatus },
+  { url, adblock, mode, onModeChange, muted, volume, autoplay, active, onStatus },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -77,7 +79,8 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   useEffect(() => {
     const view = document.createElement('webview') as WebviewTag
     view.setAttribute('partition', WEB_PARTITION)
-    view.setAttribute('src', url)
+    // 先載入空白頁；設定好廣告阻擋後才載入使用者的網址（R17）
+    view.setAttribute('src', 'about:blank')
     view.className = 'web-view'
     viewRef.current = view
     page.current = { loaded: false, found: false, attached: false, failed: false }
@@ -108,8 +111,18 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     const onStartNavigation = (e: Electron.DidStartNavigationEvent) => {
       if (e.isMainFrame && !e.isInPlace) {
         page.current.loaded = false
+        checkNoVideoRef.current()
         startLoadTimer()
       }
+    }
+    // 空白頁第一次 dom-ready 時網頁已經建立，設定好廣告阻擋後才載入使用者的網址（R17）
+    let started = false
+    const start = () => {
+      if (started) return
+      started = true
+      void window.multiview
+        .initWeb(view.getWebContentsId(), { adblock })
+        .then(() => view.isConnected && view.setAttribute('src', url))
     }
     const onFailLoad = (e: Electron.DidFailLoadEvent) => {
       if (isLoadFailure(e.errorCode, e.isMainFrame)) fail('load')
@@ -119,8 +132,10 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     const onDomReady = () => {
       page.current.attached = true
       sendState()
+      start()
     }
     const onFinishLoad = () => {
+      if (view.getURL() === 'about:blank') return
       clearTimeout(loadTimer)
       page.current.loaded = true
       checkNoVideoRef.current()

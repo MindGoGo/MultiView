@@ -45,7 +45,10 @@ const api = {
   },
   close: () => ipcRenderer.send('win:close'),
   /** 告知主程序網頁來源的顯示模式（R14） */
-  setWebMode: (webContentsId: number, mode: WebMode) => ipcRenderer.send('web:mode', webContentsId, mode)
+  setWebMode: (webContentsId: number, mode: WebMode) => ipcRenderer.send('web:mode', webContentsId, mode),
+  /** 網頁載入使用者的網址前，設定這一格的廣告阻擋（R17） */
+  initWeb: (webContentsId: number, opts: { adblock: boolean }): Promise<void> =>
+    ipcRenderer.invoke('web:init', webContentsId, opts)
 }
 
 export type MultiviewApi = typeof api

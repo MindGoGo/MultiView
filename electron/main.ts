@@ -1,11 +1,12 @@
 import path from 'node:path'
-import { app, BrowserWindow, ipcMain, screen, type Rectangle } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, session, type Rectangle } from 'electron'
 import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
 import { normalizeView, type Settings } from '../src/lib/settings'
 import { shortcutFor } from '../src/lib/shortcuts'
 import { WEB_PARTITION, type WebMode } from '../src/players/webTypes'
+import { forgetWebContents, installAdblock, loadAdblockList, setAdblockEnabled } from './adblock'
 
 // 測試時用獨立的資料夾，不動到正式的設定檔
 if (process.env['MULTIVIEW_USER_DATA']) app.setPath('userData', process.env['MULTIVIEW_USER_DATA'])
@@ -120,7 +121,8 @@ async function createWindow() {
 
   // 網頁來源一律在沙箱中執行，只載入我們的偵測程式（非功能需求：安全）
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
-    if (params.partition !== WEB_PARTITION || !/^https?:/i.test(params.src)) {
+    // 先以空白頁建立，設定好廣告阻擋後才載入使用者的網址（R17）
+    if (params.partition !== WEB_PARTITION || (params.src !== 'about:blank' && !/^https?:/i.test(params.src))) {
       event.preventDefault()
       return
     }
@@ -202,6 +204,8 @@ ipcMain.on('win:close', () => win?.close())
 /** 每個網頁的顯示模式，由畫面告知；用來決定焦點在網頁裡時按鍵給誰 */
 const webModes = new Map<number, WebMode>()
 ipcMain.on('web:mode', (_, id: number, mode: WebMode) => webModes.set(id, mode))
+// 網頁載入使用者的網址前，先設定這一格的廣告阻擋（R17）
+ipcMain.handle('web:init', (_, id: number, opts: { adblock: boolean }) => setAdblockEnabled(id, opts.adblock))
 
 function attachWebGuest(guest: Electron.WebContents) {
   const id = guest.id
@@ -222,12 +226,17 @@ function attachWebGuest(guest: Electron.WebContents) {
     event.preventDefault()
     win?.webContents.send('shortcut', input.key)
   })
-  guest.once('destroyed', () => webModes.delete(id))
+  guest.once('destroyed', () => {
+    webModes.delete(id)
+    forgetWebContents(id)
+  })
 }
 
 app.whenReady().then(() => {
   settings = loadSettings(settingsFile())
   saver = createSaver(settingsFile())
+  loadAdblockList()
+  installAdblock(session.fromPartition(WEB_PARTITION))
   void createWindow()
 })
 

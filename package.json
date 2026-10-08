@@ -12,12 +12,15 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dist": "electron-vite build && electron-builder --win portable --x64",
-    "icon": "node scripts/make-icon.mjs"
+    "icon": "node scripts/make-icon.mjs",
+    "adblock:update": "node scripts/update-easylist.mjs"
   },
   "dependencies": {
+    "@ghostery/adblocker": "^2.18.2",
     "hls.js": "^1.7.3",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "tldts-experimental": "^7.4.18"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
@@ -41,6 +44,12 @@
     "files": [
       "out/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/easylist.txt",
+        "to": "easylist.txt"
+      }
     ],
     "electronDist": "node_modules/electron/dist",
     "win": {

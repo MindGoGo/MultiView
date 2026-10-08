@@ -1,4 +1,4 @@
-// 注入網頁來源每一個框架（包括跨網域的子框架）的偵測與控制程式（R13、R15、R16）。
+// 注入網頁來源每一個框架（包括跨網域的子框架）的偵測與控制程式（R13、R15–R17）。
 // 在沙箱中執行，不能使用 Node.js；只透過固定的訊息和程式溝通（非功能需求：安全）。
 //
 // 每個框架每秒找一次自己的主要影片候選，子框架用 postMessage 回報給上層框架，
@@ -339,3 +339,63 @@ for (const type of ['play', 'pause', 'playing', 'waiting', 'ended', 'emptied', '
   window.addEventListener(type, scheduleScan, true)
 
 setInterval(scan, SCAN_MS)
+
+// ---------- 隱藏廣告元素（R17） ----------
+// 把頁面上出現的 class / id / 連結交給程式比對廣告清單，拿回要隱藏的樣式。
+// 關閉廣告阻擋的格子和 YouTube 播放器框架，程式會回傳空字串。
+
+const MAX_TOKENS = 1000
+const seen = { classes: new Set<string>(), ids: new Set<string>(), hrefs: new Set<string>() }
+let adStyle: HTMLStyleElement | null = null
+
+function collectNew(root: ParentNode, out: { classes: string[]; ids: string[]; hrefs: string[] }) {
+  root.querySelectorAll('[class], [id], a[href]').forEach((el) => {
+    el.classList.forEach((c) => {
+      if (!seen.classes.has(c) && out.classes.length < MAX_TOKENS) {
+        seen.classes.add(c)
+        out.classes.push(c)
+      }
+    })
+    if (el.id && !seen.ids.has(el.id) && out.ids.length < MAX_TOKENS) {
+      seen.ids.add(el.id)
+      out.ids.push(el.id)
+    }
+    const href = el instanceof HTMLAnchorElement ? el.href : ''
+    if (href && !seen.hrefs.has(href) && out.hrefs.length < MAX_TOKENS) {
+      seen.hrefs.add(href)
+      out.hrefs.push(href)
+    }
+  })
+}
+
+async function requestCosmetics(first: boolean) {
+  const dom = { url: location.href, classes: [] as string[], ids: [] as string[], hrefs: [] as string[] }
+  if (document.documentElement) collectNew(document, dom)
+  if (!first && dom.classes.length + dom.ids.length + dom.hrefs.length === 0) return
+  const css = (await ipcRenderer.invoke('adblock:cosmetics', dom).catch(() => '')) as string
+  if (!css || !document.documentElement) return
+  adStyle ??= document.createElement('style')
+  adStyle.textContent += css + '\n'
+  if (!adStyle.isConnected) document.documentElement.appendChild(adStyle)
+}
+
+let cosmeticsTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleCosmetics() {
+  if (cosmeticsTimer) return
+  cosmeticsTimer = setTimeout(() => {
+    cosmeticsTimer = undefined
+    void requestCosmetics(false)
+  }, 500)
+}
+
+if (location.protocol === 'http:' || location.protocol === 'https:') {
+  window.addEventListener('DOMContentLoaded', () => {
+    void requestCosmetics(true)
+    new MutationObserver(scheduleCosmetics).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'id']
+    })
+  })
+}

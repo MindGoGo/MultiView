@@ -15,6 +15,8 @@ export interface SavedSource {
   url: string
   muted: boolean
   volume: number
+  /** 廣告阻擋（R17）；舊的設定檔沒有這個欄位時視為開啟 */
+  adblock: boolean
 }
 
 /** 畫面這一側的設定，由畫面送給主程序保存 */
@@ -73,7 +75,7 @@ function normalizeRatios(raw: unknown): Partial<Record<LayoutId, Ratios>> {
 function normalizeSource(raw: unknown): SavedSource | null {
   if (!isObject(raw) || typeof raw.url !== 'string' || !parseSource(raw.url)) return null
   const volume = isFiniteNumber(raw.volume) ? Math.round(Math.min(Math.max(raw.volume, 0), 100)) : 100
-  return { url: raw.url, muted: raw.muted === true, volume }
+  return { url: raw.url, muted: raw.muted === true, volume, adblock: raw.adblock !== false }
 }
 
 function normalizeSlots(raw: unknown): (SavedSource | null)[] {
