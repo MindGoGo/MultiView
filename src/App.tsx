@@ -28,6 +28,7 @@ import { shortcutFor } from './lib/shortcuts'
 import type { ViewSettings } from './lib/settings'
 import type { PlayerHandle, PlayStatus } from './players/types'
 import type { WebMode } from './players/webTypes'
+import type { WebFailure } from './lib/webErrors'
 
 const TOAST_MS = 3000
 
@@ -54,6 +55,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const ratios = ratiosMap[layout] ?? defaultRatios(layout)
   const [slots, setSlots] = useState<Slots>(() => restoreSlots(initial.slots))
   const [statuses, setStatuses] = useState<Record<number, PlayStatus>>({})
+  const [failures, setFailures] = useState<Record<number, WebFailure>>({})
   const players = useRef(new Map<number, PlayerHandle>())
   const [move, setMove] = useState<{ from: number; over: number | null } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -79,8 +81,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
     else players.current.delete(id)
   }, [])
 
-  const onStatus = useCallback((id: number, status: PlayStatus) => {
+  const onStatus = useCallback((id: number, status: PlayStatus, failure?: WebFailure) => {
     setStatuses((prev) => (prev[id] === status ? prev : { ...prev, [id]: status }))
+    if (failure) setFailures((prev) => (prev[id] === failure ? prev : { ...prev, [id]: failure }))
   }, [])
 
   const onSubmitUrl = (index: number, text: string): string | null => {
@@ -208,6 +211,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         ratios={ratios}
         slots={slots}
         statuses={statuses}
+        failures={failures}
         registerPlayer={registerPlayer}
         onStatus={onStatus}
         onSubmitUrl={onSubmitUrl}

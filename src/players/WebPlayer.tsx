@@ -1,7 +1,8 @@
-// 網頁來源的播放器（R13–R15）：在格子裡用 <webview> 載入整個網頁
+// 網頁來源的播放器（R13–R16）：在格子裡用 <webview> 載入整個網頁
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
 import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
+import { isHttpFailure, isLoadFailure, LOAD_TIMEOUT_MS, type WebFailure } from '../lib/webErrors'
 import { WEB_PARTITION, type WebMode, type WebReport, type WebState } from './webTypes'
 
 interface Props extends PlayerProps {
@@ -28,7 +29,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   const latest = useRef({ mode, onModeChange, onStatus })
   latest.current = { mode, onModeChange, onStatus }
   /** 網頁回報的最新結果，以及網頁是否已經載入完成 */
-  const page = useRef({ loaded: false, found: false, attached: false })
+  const page = useRef({ loaded: false, found: false, attached: false, failed: false })
   // 新加入的來源播放意圖是「播放」，從設定檔還原的是「暫停」（R15）
   const stateRef = useRef<WebState>({ v: 0, mode, intent: autoplay ? 'play' : 'pause', volume, muted })
   const noVideoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -58,8 +59,8 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
 
   /** 影片模式、網頁已載入、但沒有主要影片時開始計時，否則取消（R13 AC4、AC3-3） */
   const checkNoVideo = () => {
-    const { loaded, found } = page.current
-    if (latest.current.mode === 'video' && loaded && !found) {
+    const { loaded, found, failed } = page.current
+    if (latest.current.mode === 'video' && loaded && !found && !failed) {
       noVideoTimer.current ??= setTimeout(() => {
         noVideoTimer.current = null
         latest.current.onModeChange('page')
@@ -79,19 +80,48 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     view.setAttribute('src', url)
     view.className = 'web-view'
     viewRef.current = view
-    page.current = { loaded: false, found: false, attached: false }
+    page.current = { loaded: false, found: false, attached: false, failed: false }
     let lastStatus: PlayStatus | null = null
     const report = (s: PlayStatus) => {
+      if (page.current.failed) return
       if (s !== lastStatus) latest.current.onStatus(s)
       lastStatus = s
     }
     report('loading')
+
+    // 錯誤狀態（R16）：不自動重試，等使用者按「重試」或「更換網址」
+    let loadTimer: ReturnType<typeof setTimeout> | undefined
+    const fail = (failure: WebFailure) => {
+      if (page.current.failed) return
+      clearTimeout(loadTimer)
+      page.current.failed = true
+      checkNoVideoRef.current()
+      if (failure === 'drm') updateStateRef.current({ intent: 'pause' })
+      else if (page.current.attached) view.stop()
+      latest.current.onStatus('error', failure)
+    }
+    const startLoadTimer = () => {
+      clearTimeout(loadTimer)
+      loadTimer = setTimeout(() => fail('load'), LOAD_TIMEOUT_MS)
+    }
+    startLoadTimer()
+    const onStartNavigation = (e: Electron.DidStartNavigationEvent) => {
+      if (e.isMainFrame && !e.isInPlace) {
+        page.current.loaded = false
+        startLoadTimer()
+      }
+    }
+    const onFailLoad = (e: Electron.DidFailLoadEvent) => {
+      if (isLoadFailure(e.errorCode, e.isMainFrame)) fail('load')
+    }
+    const onGone = () => fail('load')
 
     const onDomReady = () => {
       page.current.attached = true
       sendState()
     }
     const onFinishLoad = () => {
+      clearTimeout(loadTimer)
       page.current.loaded = true
       checkNoVideoRef.current()
     }
@@ -100,6 +130,9 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
         sendState()
       } else if (e.channel === 'mv:report') {
         const r = e.args[0] as WebReport
+        if (isHttpFailure(r.http)) fail('load')
+        else if (r.drm) fail('drm')
+        if (page.current.failed) return
         page.current.found = r.found
         checkNoVideoRef.current()
         report(r.status ?? 'loading')
@@ -115,12 +148,19 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     view.addEventListener('dom-ready', onDomReady)
     view.addEventListener('did-finish-load', onFinishLoad)
     view.addEventListener('ipc-message', onIpc)
+    view.addEventListener('did-start-navigation', onStartNavigation)
+    view.addEventListener('did-fail-load', onFailLoad)
+    view.addEventListener('render-process-gone', onGone)
     hostRef.current!.appendChild(view)
 
     return () => {
+      clearTimeout(loadTimer)
       view.removeEventListener('dom-ready', onDomReady)
       view.removeEventListener('did-finish-load', onFinishLoad)
       view.removeEventListener('ipc-message', onIpc)
+      view.removeEventListener('did-start-navigation', onStartNavigation)
+      view.removeEventListener('did-fail-load', onFailLoad)
+      view.removeEventListener('render-process-gone', onGone)
       view.remove()
       viewRef.current = null
       if (noVideoTimer.current) clearTimeout(noVideoTimer.current)

@@ -1,3 +1,5 @@
+import type { WebFailure } from '../lib/webErrors'
+
 export type PlayStatus = 'loading' | 'playing' | 'paused' | 'ended' | 'error'
 
 export interface PlayerHandle {
@@ -13,7 +15,8 @@ export interface PlayerProps {
   autoplay: boolean
   /** false 表示來源被隱藏（R4 AC3），要暫停 */
   active: boolean
-  onStatus(status: PlayStatus): void
+  /** failure：網頁來源錯誤狀態的種類（R16），其他來源不使用 */
+  onStatus(status: PlayStatus, failure?: WebFailure): void
 }
 
 /** 載入失敗或斷線時的自動重試次數（R2 AC7） */

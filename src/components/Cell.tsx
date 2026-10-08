@@ -3,12 +3,14 @@ import type { Source } from '../lib/slots'
 import { isAudible } from '../lib/audio'
 import type { PlayStatus } from '../players/types'
 import type { WebMode } from '../players/webTypes'
+import { WEB_FAILURE_TEXT, type WebFailure } from '../lib/webErrors'
 
 interface Props {
   index: number
   style: CSSProperties
   source: Source | null
   status: PlayStatus | undefined
+  failure: WebFailure | undefined
   /** 送出網址；回傳錯誤訊息，成功時回傳 null */
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
@@ -154,6 +156,12 @@ export function Cell(props: Props) {
         <div className="cell-center cell-message">
           {source.parsed.kind === 'youtube' ? (
             <div>此影片無法在外部播放</div>
+          ) : isWeb ? (
+            // 網頁載入失敗可以重試；DRM 只能更換網址（R16）
+            <>
+              <div>{WEB_FAILURE_TEXT[props.failure ?? 'load']}</div>
+              {props.failure !== 'drm' && <button onClick={() => onRetry(index)}>重試</button>}
+            </>
           ) : (
             <>
               <div>無法載入影片</div>

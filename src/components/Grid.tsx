@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { cellRects, dividers, type Axis, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
 import { isVisible, type Slots } from '../lib/slots'
 import type { PlayerHandle, PlayStatus } from '../players/types'
+import type { WebFailure } from '../lib/webErrors'
 import { YouTubePlayer } from '../players/YouTubePlayer'
 import { VideoPlayer } from '../players/VideoPlayer'
 import { WebPlayer } from '../players/WebPlayer'
@@ -29,8 +30,10 @@ interface Props {
   ratios: Ratios
   slots: Slots
   statuses: Record<number, PlayStatus>
+  /** 網頁來源錯誤狀態的種類，依來源 id（R16） */
+  failures: Record<number, WebFailure>
   registerPlayer(id: number, handle: PlayerHandle | null): void
-  onStatus(id: number, status: PlayStatus): void
+  onStatus(id: number, status: PlayStatus, failure?: WebFailure): void
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
@@ -76,7 +79,7 @@ export function Grid(props: Props) {
           volume: source.volume,
           autoplay: source.autoplay,
           active: visible,
-          onStatus: (s: PlayStatus) => props.onStatus(source.id, s)
+          onStatus: (s: PlayStatus, f?: WebFailure) => props.onStatus(source.id, s, f)
         }
         return (
           <div
@@ -116,6 +119,7 @@ export function Grid(props: Props) {
             style={rectStyle(r)}
             source={source}
             status={source ? statuses[source.id] : undefined}
+            failure={source ? props.failures[source.id] : undefined}
             onSubmitUrl={props.onSubmitUrl}
             onRemove={props.onRemove}
             onRetry={props.onRetry}

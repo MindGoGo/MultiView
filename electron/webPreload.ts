@@ -1,4 +1,4 @@
-// 注入網頁來源每一個框架（包括跨網域的子框架）的偵測與控制程式（R13、R15）。
+// 注入網頁來源每一個框架（包括跨網域的子框架）的偵測與控制程式（R13、R15、R16）。
 // 在沙箱中執行，不能使用 Node.js；只透過固定的訊息和程式溝通（非功能需求：安全）。
 //
 // 每個框架每秒找一次自己的主要影片候選，子框架用 postMessage 回報給上層框架，
@@ -19,6 +19,7 @@ interface ChildReport {
   vw: number
   vh: number
   status: WebVideoStatus | null
+  drm: boolean
   v: number
 }
 
@@ -234,13 +235,37 @@ function leafStatus(): WebVideoStatus | null {
   return childReport(best.el)?.status ?? null
 }
 
+/** 觸發過加密媒體事件（需要 DRM）的影片（R16） */
+const drmVideos = new WeakSet<EventTarget>()
+window.addEventListener(
+  'encrypted',
+  (e) => {
+    if (e.target) drmVideos.add(e.target)
+    scheduleScan()
+  },
+  true
+)
+
+/** 主要影片是否需要 DRM：影片在這個框架就直接看，在子框架就用子框架回報的 */
+function leafDrm(): boolean {
+  if (!best) return false
+  if (best.el instanceof HTMLVideoElement) return drmVideos.has(best.el)
+  return childReport(best.el)?.drm ?? false
+}
+
+function httpStatus(): number | null {
+  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+  return nav?.responseStatus || null
+}
+
 function report(vw: number, vh: number) {
   const status = leafStatus()
+  const drm = leafDrm()
   if (isTop) {
-    const r: WebReport = { found: best !== null, status, v: state.v }
+    const r: WebReport = { found: best !== null, status, v: state.v, drm, http: httpStatus() }
     ipcRenderer.sendToHost('mv:report', r)
   } else {
-    const r: ChildReport = { best: best?.rect ?? null, vw, vh, status, v: state.v }
+    const r: ChildReport = { best: best?.rect ?? null, vw, vh, status, drm, v: state.v }
     window.parent.postMessage({ [MARK]: 'report', ...r }, '*')
   }
 }
@@ -284,15 +309,16 @@ window.addEventListener('message', (e) => {
     const frame = best?.el instanceof HTMLIFrameElement && best.el.contentWindow === source ? best.el : null
     source.postMessage({ [MARK]: 'sync', onPath: onPath && frame !== null, state }, '*')
     // 主要影片所在的子框架狀態改變時，馬上往上回報
-    if (frame && (d.status as WebVideoStatus | null) !== lastForwarded) {
-      lastForwarded = d.status as WebVideoStatus | null
+    const forwarded = String(d.status) + '|' + String(d.drm)
+    if (frame && forwarded !== lastForwarded) {
+      lastForwarded = forwarded
       scheduleScan()
     }
   } else if (d[MARK] === 'sync' && !isTop && source === window.parent) {
     setState(d.state as WebState, d.onPath === true)
   }
 })
-let lastForwarded: WebVideoStatus | null = null
+let lastForwarded = ''
 
 if (isTop) {
   ipcRenderer.on('mv:state', (_, next: WebState) => setState(next, true))

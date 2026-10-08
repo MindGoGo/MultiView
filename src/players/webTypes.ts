@@ -1,4 +1,4 @@
-// 程式和注入網頁的程式之間傳遞的資料（R13–R15）
+// 程式和注入網頁的程式之間傳遞的資料（R13–R16）
 
 /** 影片模式 / 整頁模式（R13、R14） */
 export type WebMode = 'video' | 'page'
@@ -25,6 +25,10 @@ export interface WebReport {
   status: WebVideoStatus | null
   /** 回報時網頁收到的狀態版本，用來忽略比使用者操作還舊的回報 */
   v: number
+  /** 主要影片觸發過加密媒體事件，表示需要 DRM（R16） */
+  drm: boolean
+  /** 主文件的 HTTP 狀態碼；拿不到時為 null（R16 AC2） */
+  http: number | null
 }
 
 /** 網頁來源使用的網站資料區（R18） */
