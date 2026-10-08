@@ -2,7 +2,7 @@
 
 - 功能代號：`captions-and-quality-menu`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-09
 - 前置規格：[multiview-player](multiview-player.md)（R1–R11）、[web-page-source](web-page-source.md)（R12–R18）、[player-controls-and-lists](player-controls-and-lists.md)（R19–R25）、[cell-play-and-page-menu](cell-play-and-page-menu.md)（R26–R29）。本規格的需求編號從 R30 接續。
 
@@ -108,7 +108,7 @@
 ## 8. 非功能需求
 
 - **技術風險（實作時處理，不影響需求）：**
-  - YouTube IFrame API 的字幕控制（`loadModule('captions')`、`setOption('captions', 'track', …)`、`getOption('captions', 'tracklist')`）沒有正式文件；做不到時要停下來回報。
+  - YouTube IFrame API 的字幕控制（`loadModule('captions')`、`setOption('captions', 'track', …)`、`getOption('captions', 'tracklist')`）沒有正式文件，實測可用。主畫面讀到的 `getOption('captions', 'track')` 會延遲，不能用來確認目前的字幕；沒有字幕的影片不會觸發 `onApiChange`。
   - YouTube 的「選擇特定畫質」只能靠播放器大小，和 R24 相同。
 - **測試：** 畫質名稱對應、可用畫質整理、m3u8 的畫質選擇、設定檔相容寫成單元測試；字幕與實際畫質以手動驗收。
 
@@ -124,8 +124,10 @@
 
 ## 10. 未決事項
 
-- [ ] 分支：從 `cell-play-and-page-menu` 開出。
-- [ ] 驗收用的 YouTube 字幕影片：實作時選一部有多種字幕語言的影片，記在這裡。
+- [x] 分支：從 `cell-play-and-page-menu` 開出 `captions-and-quality-menu`（2026-10-09）。
+- [x] 驗收用的 YouTube 字幕影片：`iG9CE55wbtY`（TED，64 種字幕）；沒有字幕的影片：`aqz-KE-bpKQ`。
+- [ ] R30 AC6（直接操作時不顯示）需要使用者以真實滑鼠確認一次。
+- [ ] YouTube 往下選畫質時，網路足夠的情況下 YouTube 可能長時間維持原本的畫質（測試時 2 分鐘後仍是 720p）。
 
 ## 變更紀錄
 
@@ -137,3 +139,4 @@
 | 2026-10-09 | R31 補還沒播放的影片顯示「播放後才能選擇字幕」，新增 AC7 | 實作時發現：YouTube 在影片開始播放前不提供字幕清單 |
 | 2026-10-09 | YouTube 的可用畫質只列 480p 以上，修改 R32 AC2 | 實作時發現：YouTube 內嵌播放器即使只有 256×144，仍然選 480p（large） |
 | 2026-10-09 | R32 AC2 往下選畫質時以 YouTube 的「最佳」解析度驗證 | 實作時發現：YouTube 往下換畫質要等已緩衝的片段播完，可能超過 1 分鐘 |
+| 2026-10-09 | 更新技術說明與未決事項 | 實作完成 |
