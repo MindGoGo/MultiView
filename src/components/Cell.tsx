@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import type { Source } from '../lib/slots'
+import { isAudible } from '../lib/audio'
 import type { PlayStatus } from '../players/types'
 
 interface Props {
@@ -18,6 +19,9 @@ interface Props {
   onMoveOver(index: number | null): void
   /** target：放開時游標下的格子，不在任何格子上時為 null */
   onMoveEnd(target: number | null): void
+  onFocusAudio(index: number): void
+  onToggleMute(index: number): void
+  onVolume(index: number, volume: number): void
 }
 
 /** 游標下的格子編號；不在任何格子上時回傳 null */
@@ -56,7 +60,16 @@ export function Cell(props: Props) {
       className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''}`}
       style={style}
       data-index={index}
+      onClick={(e) => {
+        // 只有點在格子本身（影片區域）才算，按鈕和輸入框不算（R7 獨占聲音）
+        if (e.target === e.currentTarget) props.onFocusAudio(index)
+      }}
     >
+      {source && isAudible(source) && !showInput && (
+        <div className="audio-indicator" title="有聲音">
+          🔊
+        </div>
+      )}
       {showInput && (
         <div className="cell-center">
           <input
@@ -119,6 +132,21 @@ export function Cell(props: Props) {
               移動
             </button>
           )}
+          <button
+            title={source.muted ? '開啟這一格的聲音' : '關閉這一格的聲音'}
+            onClick={() => props.onToggleMute(index)}
+          >
+            {source.muted ? '🔇' : '🔊'}
+          </button>
+          <input
+            className="volume"
+            type="range"
+            min={0}
+            max={100}
+            value={source.volume}
+            title={`音量 ${source.volume}`}
+            onChange={(e) => props.onVolume(index, Number(e.target.value))}
+          />
           <button title="更換網址" onClick={() => setEditing(true)}>
             更換網址
           </button>

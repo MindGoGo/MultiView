@@ -7,9 +7,15 @@ interface Props {
   layout: LayoutId
   onLayout(layout: LayoutId): void
   toast: string | null
+  /** 有可以控制的來源（R8 AC5） */
+  canControl: boolean
+  onPlayAll(): void
+  onPauseAll(): void
+  onMuteAll(): void
 }
 
-export function Toolbar({ visible, win, layout, onLayout, toast }: Props) {
+export function Toolbar(props: Props) {
+  const { visible, win, layout, onLayout, toast, canControl } = props
   const api = window.multiview
   return (
     <div className={`toolbar ${visible ? 'show' : ''}`}>
@@ -24,6 +30,17 @@ export function Toolbar({ visible, win, layout, onLayout, toast }: Props) {
             {LAYOUT_LABELS[id]}
           </button>
         ))}
+      </div>
+      <div className="toolbar-group">
+        <button disabled={!canControl} title="全部播放" onClick={props.onPlayAll}>
+          ▶ 全部播放
+        </button>
+        <button disabled={!canControl} title="全部暫停" onClick={props.onPauseAll}>
+          ❚❚ 全部暫停
+        </button>
+        <button disabled={!canControl} title="全部靜音" onClick={props.onMuteAll}>
+          🔇 全部靜音
+        </button>
       </div>
       <div className="toolbar-drag">{toast && <span className="toast">{toast}</span>}</div>
       <div className="toolbar-group">

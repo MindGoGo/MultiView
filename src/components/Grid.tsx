@@ -39,6 +39,9 @@ interface Props {
   onMoveStart(index: number): void
   onMoveOver(index: number | null): void
   onMoveEnd(target: number | null): void
+  onFocusAudio(index: number): void
+  onToggleMute(index: number): void
+  onVolume(index: number, volume: number): void
 }
 
 export function Grid(props: Props) {
@@ -67,6 +70,7 @@ export function Grid(props: Props) {
           <div
             key={source.id}
             className="player-box"
+            data-slot={index}
             style={visible ? rectStyle(rects[index]) : { display: 'none' }}
           >
             {source.parsed.kind === 'youtube' ? (
@@ -96,6 +100,9 @@ export function Grid(props: Props) {
             onMoveStart={props.onMoveStart}
             onMoveOver={props.onMoveOver}
             onMoveEnd={props.onMoveEnd}
+            onFocusAudio={props.onFocusAudio}
+            onToggleMute={props.onToggleMute}
+            onVolume={props.onVolume}
           />
         )
       })}

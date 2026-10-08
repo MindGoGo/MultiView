@@ -245,3 +245,20 @@ button.link {
 .cell.moving .cell-controls {
   opacity: 1;
 }
+
+/* ---- 聲音（R7） ---- */
+.audio-indicator {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.volume {
+  width: 80px;
+  accent-color: var(--accent);
+}

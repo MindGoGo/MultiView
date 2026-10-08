@@ -14,6 +14,8 @@ import {
 } from './lib/layout'
 import { emptySlots, hiddenCount, newSourceId, setSlot, swapSlots, type Slots } from './lib/slots'
 import { parseSource } from './lib/source'
+import { focusAudio, initialMuted, muteAll, setVolume, toggleMute } from './lib/audio'
+import { controllableIndices } from './lib/playback'
 import type { PlayerHandle, PlayStatus } from './players/types'
 
 const TOOLBAR_ZONE_PX = 40
@@ -90,7 +92,7 @@ export default function App() {
         url: text.trim(),
         parsed,
         // 更換網址時保留原本的聲音設定（R2 AC8）
-        muted: existing ? existing.muted : false,
+        muted: existing ? existing.muted : initialMuted(slots, layout),
         volume: existing ? existing.volume : 100,
         autoplay: true
       })
@@ -121,6 +123,16 @@ export default function App() {
     setMove(null)
   }
 
+  const onFocusAudio = (index: number) => {
+    const s = slots[index]
+    // 空白格或錯誤狀態的格子不影響聲音（R7）
+    if (s && statuses[s.id] !== 'error') setSlots(focusAudio(slots, index))
+  }
+
+  const controllable = controllableIndices(slots, layout, statuses)
+  const playAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.play())
+  const pauseAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.pause())
+
   const changeLayout = (next: LayoutId) => {
     setLayout(next)
     const n = hiddenCount(slots, next)
@@ -145,6 +157,9 @@ export default function App() {
         onMoveStart={(from) => setMove({ from, over: from })}
         onMoveOver={(over) => setMove((m) => (m ? { ...m, over } : m))}
         onMoveEnd={onMoveEnd}
+        onFocusAudio={onFocusAudio}
+        onToggleMute={(i) => setSlots(toggleMute(slots, i))}
+        onVolume={(i, v) => setSlots(setVolume(slots, i, v))}
       />
       <Toolbar
         visible={toolbarVisible || toast !== null}
@@ -152,6 +167,10 @@ export default function App() {
         layout={layout}
         onLayout={changeLayout}
         toast={toast}
+        canControl={controllable.length > 0}
+        onPlayAll={playAll}
+        onPauseAll={pauseAll}
+        onMuteAll={() => setSlots(muteAll(slots))}
       />
     </div>
   )

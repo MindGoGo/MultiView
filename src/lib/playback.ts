@@ -1,0 +1,29 @@
+// 全部播放／暫停的對象（R8、R9）
+import type { LayoutId } from './layout'
+import { isVisible, type Slots } from './slots'
+import type { PlayStatus } from '../players/types'
+
+/** 顯示中、有來源、而且不是錯誤狀態的格位（R8）。 */
+export function controllableIndices(
+  slots: Slots,
+  layout: LayoutId,
+  statuses: Record<number, PlayStatus>
+): number[] {
+  const out: number[] = []
+  slots.forEach((s, i) => {
+    if (s && isVisible(i, layout) && statuses[s.id] !== 'error') out.push(i)
+  })
+  return out
+}
+
+/** Space：只要有任何一格在播放就全部暫停，否則全部播放（R9）。 */
+export function toggleAllAction(
+  slots: Slots,
+  layout: LayoutId,
+  statuses: Record<number, PlayStatus>
+): 'play' | 'pause' {
+  const anyPlaying = controllableIndices(slots, layout, statuses).some(
+    (i) => statuses[slots[i]!.id] === 'playing'
+  )
+  return anyPlaying ? 'pause' : 'play'
+}
