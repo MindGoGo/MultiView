@@ -3,6 +3,7 @@ import type { Source } from '../lib/slots'
 import { isAudible } from '../lib/audio'
 import type { PlayStatus } from '../players/types'
 import type { WebMode } from '../players/webTypes'
+import type { NavState } from '../players/types'
 import { WEB_FAILURE_TEXT, type WebFailure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import { ProgressBar } from './ProgressBar'
@@ -40,6 +41,9 @@ interface Props {
   isSolo: boolean
   onToggleSolo(index: number): void
   onTogglePlay(index: number): void
+  /** 網頁來源能不能上一頁／下一頁（R28） */
+  nav: NavState | undefined
+  onNav(index: number, back: boolean): void
   /** 這一格的網址在最愛中（R22） */
   favorite: boolean
   onToggleFavorite(index: number): void
@@ -247,6 +251,16 @@ export function Cell(props: Props) {
             >
               <Label full="直接操作" icon="👆" />
             </button>
+          )}
+          {pageMode && (
+            <>
+              <button title="上一頁" disabled={!props.nav?.back} onClick={() => props.onNav(index, true)}>
+                ←
+              </button>
+              <button title="下一頁" disabled={!props.nav?.forward} onClick={() => props.onNav(index, false)}>
+                →
+              </button>
+            </>
           )}
           {isWeb && (
             <button

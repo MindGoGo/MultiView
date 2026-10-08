@@ -1,7 +1,7 @@
 // 網頁來源的播放器（R13–R17）：在格子裡用 <webview> 載入整個網頁
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
-import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
+import type { NavState, PlayerHandle, PlayerProps, PlayStatus } from './types'
 import { isHttpFailure, isLoadFailure, LOAD_TIMEOUT_MS, type WebFailure } from '../lib/webErrors'
 import { videoModeScale } from '../lib/webVideo'
 import { intentFromReport, shouldWaitForVideo } from '../lib/webPlayback'
@@ -13,6 +13,8 @@ interface Props extends PlayerProps {
   adblock: boolean
   mode: WebMode
   onModeChange(mode: WebMode): void
+  /** 能不能上一頁／下一頁改變時通知（R28） */
+  onNavState(state: NavState): void
 }
 
 /** 網頁載入完成或主要影片消失後，找不到主要影片多久就切換成整頁模式（R13 AC4） */
@@ -23,15 +25,15 @@ export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「�
 export const NOTICE_NOT_FOUND = '找不到影片'
 
 export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
-  { url, adblock, mode, onModeChange, muted, volume, autoplay, active, onStatus, onLoaded },
+  { url, adblock, mode, onModeChange, onNavState, muted, volume, autoplay, active, onStatus, onLoaded },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<WebviewTag | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const latest = useRef({ mode, onModeChange, onStatus, onLoaded })
-  latest.current = { mode, onModeChange, onStatus, onLoaded }
+  const latest = useRef({ mode, onModeChange, onStatus, onLoaded, onNavState })
+  latest.current = { mode, onModeChange, onStatus, onLoaded, onNavState }
   /** 網頁回報的最新結果，以及網頁是否已經載入完成 */
   const page = useRef({ loaded: false, found: false, attached: false, failed: false })
   /** 網頁回報的主要影片進度（R19） */
@@ -133,6 +135,20 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     }
     const onGone = () => fail('load')
 
+    // 瀏覽紀錄從使用者的網址開始：程式內部先載入的空白頁不算一頁（R28）
+    let historyCleared = false
+    const reportNav = () => {
+      if (!page.current.attached) return
+      latest.current.onNavState({ back: view.canGoBack(), forward: view.canGoForward() })
+    }
+    const onNavigate = (e: Electron.DidNavigateEvent) => {
+      if (!historyCleared && e.url !== 'about:blank') {
+        historyCleared = true
+        view.clearHistory()
+      }
+      reportNav()
+    }
+
     const onDomReady = () => {
       page.current.attached = true
       sendState()
@@ -148,6 +164,11 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     const onIpc = (e: Electron.IpcMessageEvent) => {
       if (e.channel === 'mv:hello') {
         sendState()
+      } else if (e.channel === 'mv:nav') {
+        // 滑鼠側鍵只在整頁模式作用（R28 AC3）
+        if (latest.current.mode !== 'page' || !page.current.attached) return
+        if (e.args[0] === true && view.canGoBack()) view.goBack()
+        else if (e.args[0] === false && view.canGoForward()) view.goForward()
       } else if (e.channel === 'mv:report') {
         const r = e.args[0] as WebReport
         if (isHttpFailure(r.http)) fail('load')
@@ -166,6 +187,8 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     view.addEventListener('did-finish-load', onFinishLoad)
     view.addEventListener('ipc-message', onIpc)
     view.addEventListener('did-start-navigation', onStartNavigation)
+    view.addEventListener('did-navigate', onNavigate)
+    view.addEventListener('did-navigate-in-page', reportNav)
     view.addEventListener('did-fail-load', onFailLoad)
     view.addEventListener('render-process-gone', onGone)
     hostRef.current!.appendChild(view)
@@ -176,6 +199,8 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
       view.removeEventListener('did-finish-load', onFinishLoad)
       view.removeEventListener('ipc-message', onIpc)
       view.removeEventListener('did-start-navigation', onStartNavigation)
+      view.removeEventListener('did-navigate', onNavigate)
+      view.removeEventListener('did-navigate-in-page', reportNav)
       view.removeEventListener('did-fail-load', onFailLoad)
       view.removeEventListener('render-process-gone', onGone)
       view.remove()
@@ -231,6 +256,14 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     pause: () => updateStateRef.current({ intent: 'pause' }),
     getProgress: () => (page.current.failed ? null : progressRef.current),
     getTitle: () => (viewRef.current && page.current.attached ? viewRef.current.getTitle() || null : null),
+    goBack: () => {
+      const view = viewRef.current
+      if (view && page.current.attached && view.canGoBack()) view.goBack()
+    },
+    goForward: () => {
+      const view = viewRef.current
+      if (view && page.current.attached && view.canGoForward()) view.goForward()
+    },
     seek: (seconds) => {
       const view = viewRef.current
       if (view && page.current.attached) view.send('mv:seek', seconds)

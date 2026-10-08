@@ -14,6 +14,15 @@ export interface PlayerHandle {
   seek(seconds: number): void
   /** 影片名稱的來源（YouTube 標題、網頁標題）；取不到時回傳 null（R22、R23） */
   getTitle(): string | null
+  /** 網頁來源的上一頁／下一頁（R28） */
+  goBack?(): void
+  goForward?(): void
+}
+
+/** 網頁來源能不能上一頁／下一頁（R28） */
+export interface NavState {
+  back: boolean
+  forward: boolean
 }
 
 export interface PlayerProps {

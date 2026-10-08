@@ -493,6 +493,18 @@ function scheduleScan() {
 
 setInterval(scan, SCAN_MS)
 
+// 滑鼠的上一頁／下一頁側鍵（R28）：只有整頁模式網頁收得到（影片模式被格子上的攔截層擋住），
+// 由程式確認是整頁模式後換頁。Chromium 不會把側鍵轉成視窗的 app-command，只能在網頁裡聽。
+window.addEventListener(
+  'mouseup',
+  (e) => {
+    if (e.button !== 3 && e.button !== 4) return
+    e.preventDefault()
+    ipcRenderer.sendToHost('mv:nav', e.button === 3)
+  },
+  true
+)
+
 // ---------- 隱藏廣告元素（R17） ----------
 // 把頁面上出現的 class / id / 連結交給程式比對廣告清單，拿回要隱藏的樣式。
 // 關閉廣告阻擋的格子和 YouTube 播放器框架，程式會回傳空字串。

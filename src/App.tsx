@@ -26,7 +26,7 @@ import { focusAudio, initialMuted, muteAll, setVolume, toggleMute } from './lib/
 import { controllableIndices, isPlayingStatus, toggleAllAction } from './lib/playback'
 import { shortcutFor } from './lib/shortcuts'
 import type { ViewSettings } from './lib/settings'
-import type { PlayerHandle, PlayStatus } from './players/types'
+import type { NavState, PlayerHandle, PlayStatus } from './players/types'
 import type { WebMode } from './players/webTypes'
 import type { WebFailure } from './lib/webErrors'
 import {
@@ -81,6 +81,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const [slots, setSlots] = useState<Slots>(() => restoreSlots(initial.slots))
   const [statuses, setStatuses] = useState<Record<number, PlayStatus>>({})
   const [failures, setFailures] = useState<Record<number, WebFailure>>({})
+  const [navStates, setNavStates] = useState<Record<number, NavState>>({})
+  const onNavState = useCallback((id: number, s: NavState) => setNavStates((prev) => ({ ...prev, [id]: s })), [])
   const players = useRef(new Map<number, PlayerHandle>())
   const [move, setMove] = useState<{ from: number; over: number | null } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -302,6 +304,15 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (s) players.current.get(s.id)?.seek(seconds)
   }
 
+  // 整頁模式的上一頁／下一頁（R28）
+  const onNav = (index: number, back: boolean) => {
+    const s = slots[index]
+    if (!s || s.parsed.kind !== 'web' || webModes[s.id] !== 'page') return
+    const p = players.current.get(s.id)
+    if (back) p?.goBack?.()
+    else p?.goForward?.()
+  }
+
   // 每格的播放／暫停按鈕：只影響這一格（R26）
   const onTogglePlay = (index: number) => {
     const s = slots[index]
@@ -408,6 +419,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         solo={soloIndex}
         onToggleSolo={(i) => (solo ? exitSolo() : enterSolo(i))}
         onTogglePlay={onTogglePlay}
+        navStates={navStates}
+        onNavState={onNavState}
+        onNav={onNav}
         onLoaded={onLoaded}
         listOver={listOver}
         isFavorite={(url) => isFavorite(lists, url)}

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { cellRects, dividers, type Axis, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
 import { isVisible, type Slots } from '../lib/slots'
-import type { PlayerHandle, PlayStatus } from '../players/types'
+import type { NavState, PlayerHandle, PlayStatus } from '../players/types'
 import type { WebFailure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import { YouTubePlayer } from '../players/YouTubePlayer'
@@ -63,6 +63,10 @@ interface Props {
   onToggleSolo(index: number): void
   onTogglePlay(index: number): void
   onLoaded(id: number): void
+  /** 網頁來源能不能上一頁／下一頁，依來源 id（R28） */
+  navStates: Record<number, NavState>
+  onNavState(id: number, state: NavState): void
+  onNav(index: number, back: boolean): void
   /** 從清單拖曳中、游標下的格子（R21） */
   listOver: number | null
   isFavorite(url: string): boolean
@@ -121,6 +125,7 @@ export function Grid(props: Props) {
                 adblock={source.adblock}
                 mode={props.webModes[source.id] ?? 'video'}
                 onModeChange={(mode) => props.onWebMode(source.id, mode)}
+                onNavState={(s) => props.onNavState(source.id, s)}
                 {...common}
               />
             ) : (
@@ -166,6 +171,8 @@ export function Grid(props: Props) {
             onToggleQuality={props.onToggleQuality}
             onToggleSolo={props.onToggleSolo}
             onTogglePlay={props.onTogglePlay}
+            nav={source ? props.navStates[source.id] : undefined}
+            onNav={props.onNav}
             getProgress={props.getProgress}
             onSeek={props.onSeek}
           />
