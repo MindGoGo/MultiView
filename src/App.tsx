@@ -4,7 +4,6 @@ import { Grid } from './components/Grid'
 import { useWindowState } from './hooks/useWindowState'
 import { usePointerZones } from './hooks/usePointerZones'
 import {
-  DEFAULT_LAYOUT,
   defaultRatios,
   minFraction,
   moveDivider,
@@ -26,18 +25,30 @@ import { parseSource } from './lib/source'
 import { focusAudio, initialMuted, muteAll, setVolume, toggleMute } from './lib/audio'
 import { controllableIndices, toggleAllAction } from './lib/playback'
 import { shortcutFor } from './lib/shortcuts'
+import type { ViewSettings } from './lib/settings'
 import type { PlayerHandle, PlayStatus } from './players/types'
 
 const TOAST_MS = 3000
 
-export default function App() {
+/** 還原上次的來源：一律先暫停，等使用者按播放（R10 AC1） */
+function restoreSlots(saved: ViewSettings['slots']): Slots {
+  const slots = emptySlots()
+  saved.forEach((s, i) => {
+    const parsed = s && parseSource(s.url)
+    if (s && parsed)
+      slots[i] = { id: newSourceId(), url: s.url, parsed, muted: s.muted, volume: s.volume, autoplay: false }
+  })
+  return slots
+}
+
+export default function App({ initial }: { initial: ViewSettings }) {
   const win = useWindowState()
   const { toolbarVisible, direct, setDirect } = usePointerZones()
 
-  const [layout, setLayout] = useState<LayoutId>(DEFAULT_LAYOUT)
-  const [ratiosMap, setRatiosMap] = useState<Partial<Record<LayoutId, Ratios>>>({})
+  const [layout, setLayout] = useState<LayoutId>(initial.layout)
+  const [ratiosMap, setRatiosMap] = useState<Partial<Record<LayoutId, Ratios>>>(initial.ratios)
   const ratios = ratiosMap[layout] ?? defaultRatios(layout)
-  const [slots, setSlots] = useState<Slots>(emptySlots)
+  const [slots, setSlots] = useState<Slots>(() => restoreSlots(initial.slots))
   const [statuses, setStatuses] = useState<Record<number, PlayStatus>>({})
   const players = useRef(new Map<number, PlayerHandle>())
   const [move, setMove] = useState<{ from: number; over: number | null } | null>(null)
@@ -49,6 +60,15 @@ export default function App() {
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
   }
+
+  // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
+  useEffect(() => {
+    window.multiview.saveView({
+      layout,
+      ratios: ratiosMap,
+      slots: slots.map((s) => (s ? { url: s.url, muted: s.muted, volume: s.volume } : null))
+    })
+  }, [layout, ratiosMap, slots])
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
     if (handle) players.current.set(id, handle)

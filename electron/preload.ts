@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { ViewSettings } from '../src/lib/settings'
 
 export interface CursorPos {
   x: number
@@ -12,6 +13,8 @@ export interface WinState {
 }
 
 const api = {
+  getView: (): Promise<ViewSettings> => ipcRenderer.invoke('settings:getView'),
+  saveView: (view: ViewSettings) => ipcRenderer.send('settings:saveView', view),
   getWindowState: (): Promise<WinState> => ipcRenderer.invoke('win:getState'),
   onWindowState: (cb: (state: WinState) => void) => {
     const listener = (_: unknown, state: WinState) => cb(state)

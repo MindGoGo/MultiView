@@ -1,9 +1,9 @@
 import path from 'node:path'
-import { app, BrowserWindow, ipcMain, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, type Rectangle } from 'electron'
 import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
-import type { Settings } from '../src/lib/settings'
+import { normalizeView, type Settings } from '../src/lib/settings'
 import { shortcutFor } from '../src/lib/shortcuts'
 
 // 測試時用獨立的資料夾，不動到正式的設定檔
@@ -31,10 +31,30 @@ function sendWindowState() {
   })
 }
 
-/** 只記錄一般狀態下的位置，全螢幕、最小化、最大化時不記錄（R1 AC4）。 */
+/** 進入全螢幕的過程中也會觸發 resize，用這個旗標避免記到全螢幕的大小 */
+let fullscreenGuard = false
+/** 開啟時還原的位置；高 DPI 下實際大小會有 1–2px 的捨入誤差，不能把誤差存回去，否則每次開啟都會變大 */
+let restoredBounds: Rectangle | null = null
+const ROUNDING_TOLERANCE_PX = 2
+
+/**
+ * 只記錄一般狀態下的位置，全螢幕、最小化、最大化時不記錄（R1 AC4）。
+ * 用內容區的大小：無邊框視窗在 Windows 高 DPI 下，用整個視窗大小還原會一次比一次大。
+ */
 function trackBounds() {
-  if (!win || win.isFullScreen() || win.isMinimized() || win.isMaximized()) return
-  const b = win.getBounds()
+  if (!win || fullscreenGuard || win.isFullScreen() || win.isMinimized() || win.isMaximized())
+    return
+  const b = win.getContentBounds()
+  const r = restoredBounds
+  if (
+    r &&
+    b.x === r.x &&
+    b.y === r.y &&
+    Math.abs(b.width - r.width) <= ROUNDING_TOLERANCE_PX &&
+    Math.abs(b.height - r.height) <= ROUNDING_TOLERANCE_PX
+  )
+    return
+  restoredBounds = null
   settings.window = { ...settings.window, x: b.x, y: b.y, width: b.width, height: b.height }
   saveSoon()
 }
@@ -45,6 +65,7 @@ async function createWindow() {
 
   win = new BrowserWindow({
     ...bounds,
+    useContentSize: true,
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     frame: false,
@@ -58,13 +79,24 @@ async function createWindow() {
     }
   })
 
+  // 無邊框視窗在 Windows 高 DPI 下，建構時給的大小不準，建立後再校正一次
+  win.setContentBounds(bounds)
+  restoredBounds = bounds
+
   win.on('ready-to-show', () => win?.show())
-  win.on('moved', trackBounds)
-  win.on('resized', trackBounds)
+  // move / resize 在程式移動視窗時也會觸發（moved / resized 不會）
+  win.on('move', trackBounds)
+  win.on('resize', trackBounds)
   win.on('enter-full-screen', sendWindowState)
-  win.on('leave-full-screen', sendWindowState)
+  win.on('leave-full-screen', () => {
+    fullscreenGuard = false
+    sendWindowState()
+  })
   win.on('always-on-top-changed', sendWindowState)
-  win.on('close', () => saver.flush())
+  win.on('close', () => {
+    trackBounds()
+    saver.flush()
+  })
   win.on('closed', () => (win = null))
 
   // 焦點在 YouTube 播放器（iframe）裡時，按鍵不會傳到畫面，在這裡攔下來轉給畫面（R9 AC3）
@@ -77,6 +109,9 @@ async function createWindow() {
     win?.webContents.send('shortcut', input.key)
   })
 
+  // YouTube 播放器會註冊 beforeunload，Electron 遇到時會默默取消關閉，這裡一律允許關閉（R1 AC6）
+  win.webContents.on('will-prevent-unload', (event) => event.preventDefault())
+
   // 不讓網頁開新視窗（例如點到 YouTube 標誌）
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
@@ -85,11 +120,32 @@ async function createWindow() {
   await win.loadURL(url)
 }
 
+// 畫面這一側的設定（版型、比例、來源）（R10）
+ipcMain.handle('settings:getView', () => ({
+  layout: settings.layout,
+  ratios: settings.ratios,
+  slots: settings.slots
+}))
+ipcMain.on('settings:saveView', (_, view: unknown) => {
+  settings = { ...settings, ...normalizeView(view) }
+  saveSoon()
+})
+
 ipcMain.handle('win:getState', () => ({
   fullscreen: win?.isFullScreen() ?? false,
   alwaysOnTop: win?.isAlwaysOnTop() ?? false
 }))
-ipcMain.on('win:toggleFullscreen', () => win?.setFullScreen(!win.isFullScreen()))
+function enterFullscreen() {
+  if (!win || win.isFullScreen()) return
+  // 先記下進入全螢幕前的位置，關閉時還原用（R1 AC4）
+  trackBounds()
+  fullscreenGuard = true
+  win.setFullScreen(true)
+}
+ipcMain.on('win:toggleFullscreen', () => {
+  if (win?.isFullScreen()) win.setFullScreen(false)
+  else enterFullscreen()
+})
 ipcMain.on('win:exitFullscreen', () => {
   if (win?.isFullScreen()) win.setFullScreen(false)
 })
