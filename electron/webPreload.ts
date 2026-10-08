@@ -1,4 +1,4 @@
-// 注入網頁來源每一個框架（包括跨網域的子框架）的偵測程式（R13）。
+// 注入網頁來源每一個框架（包括跨網域的子框架）的偵測與控制程式（R13、R15）。
 // 在沙箱中執行，不能使用 Node.js；只透過固定的訊息和程式溝通（非功能需求：安全）。
 //
 // 每個框架每秒找一次自己的主要影片候選，子框架用 postMessage 回報給上層框架，
@@ -24,7 +24,7 @@ interface ChildReport {
 
 type Target = HTMLVideoElement | HTMLIFrameElement
 
-let state: WebState = { v: 0, mode: 'video' }
+let state: WebState = { v: 0, mode: 'video', intent: 'pause', volume: 100, muted: true }
 /** 這個框架是否在「最上層 → 主要影片」的路徑上 */
 let onPath = isTop
 const children = new Map<Window, { report: ChildReport; at: number }>()
@@ -90,8 +90,43 @@ function scan() {
     if (best?.el instanceof HTMLIFrameElement) syncChild(best.el)
   }
   applyStyles()
+  syncLeaf()
   report(vw, vh)
 }
+
+// ---------- 控制主要影片（R15） ----------
+
+/** 主要影片在這個框架時就是它；在子框架或這個框架不在路徑上時為 null */
+let leafVideo: HTMLVideoElement | null = null
+
+function syncLeaf() {
+  const v = onPath && best?.el instanceof HTMLVideoElement ? best.el : null
+  if (v === leafVideo) return
+  leafVideo = v
+  // 換成新的主要影片時套用目前的音量和播放意圖（R15）
+  if (v) applyControl(v)
+}
+
+function applyControl(v: HTMLVideoElement) {
+  v.volume = Math.min(Math.max(state.volume, 0), 100) / 100
+  if (!state.muted) v.muted = false
+  if (state.intent === 'pause') {
+    if (!v.paused) v.pause()
+  } else if (v.paused && !v.ended) {
+    void v.play().catch(() => undefined)
+  }
+}
+
+// 影片模式下，網站自己開始播放但播放意圖是暫停時，把它暫停（R15 AC5）。
+// 整頁模式下使用者可能直接按了網站的播放，這時改由程式依回報更新播放意圖。
+window.addEventListener(
+  'play',
+  (e) => {
+    const v = leafVideo
+    if (v && e.target === v && state.mode === 'video' && state.intent === 'pause') v.pause()
+  },
+  true
+)
 
 // ---------- 影片模式的樣式 ----------
 
@@ -202,7 +237,7 @@ function leafStatus(): WebVideoStatus | null {
 function report(vw: number, vh: number) {
   const status = leafStatus()
   if (isTop) {
-    const r: WebReport = { found: best !== null, status }
+    const r: WebReport = { found: best !== null, status, v: state.v }
     ipcRenderer.sendToHost('mv:report', r)
   } else {
     const r: ChildReport = { best: best?.rect ?? null, vw, vh, status, v: state.v }
@@ -232,6 +267,8 @@ function setState(next: WebState, nextOnPath: boolean) {
   onPath = nextOnPath
   if (changed) {
     applyStyles()
+    syncLeaf()
+    if (leafVideo) applyControl(leafVideo)
     broadcast()
     scheduleScan()
   }
