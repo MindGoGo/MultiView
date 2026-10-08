@@ -2,7 +2,7 @@
 
 - 功能代號：`multiview-player`
 - Jira：無
-- 狀態：已複查（待使用者確認修正）
+- 狀態：已確認、已實作
 - 最後更新：2026-10-08
 
 ## 1. 背景與目標
@@ -182,22 +182,26 @@
 
 ## 8. 預計影響的檔案
 
-新專案，預計結構如下：
-- `electron/main.ts`：主視窗、置頂、全螢幕、最小視窗、視窗位置還原、快捷鍵攔截（R1、R9、R10）
+新專案，實際結構如下（與初版預計的差異：mp4 與 m3u8 共用 `VideoPlayer.tsx`；快捷鍵的對應放在 `src/lib/shortcuts.ts`，事件處理放在 `App.tsx`）：
+- `electron/main.ts`：主視窗、置頂、全螢幕、最小化 / 關閉、游標位置回報、快捷鍵攔截、設定 IPC（R1、R3、R9、R10）
+- `electron/windowState.ts`：視窗位置還原的判斷（R1）
 - `electron/store.ts`：設定檔的讀寫和損毀處理（R10）
+- `electron/staticServer.ts`：正式版用本機 http 提供畫面（YouTube 內嵌需要正常的來源網址）
 - `src/lib/source.ts`：網址解析與分類（R2）
 - `src/lib/layout.ts`：版型定義、格子編號、分隔線比例計算、最小尺寸限制（R4、R5）
 - `src/lib/slots.ts`：格位、換位、隱藏判斷（R4、R6）
-- `src/lib/audio.ts`：聲音狀態規則（R7、R8）
-- `src/components/Grid.tsx`、`Cell.tsx`、`Toolbar.tsx`、`Divider.tsx`（R3–R8）
-- `src/players/YouTubePlayer.tsx`、`HlsPlayer.tsx`、`Mp4Player.tsx`（R2、R3）
-- `src/hooks/useShortcuts.ts`（R9）
-- `tests/unit/`：source、layout、slots、audio、store 的單元測試
+- `src/lib/audio.ts`、`src/lib/playback.ts`：聲音規則、全部控制的對象（R7、R8）
+- `src/lib/shortcuts.ts`：快捷鍵對應（R9）
+- `src/lib/settings.ts`：設定檔結構與驗證（R10）
+- `src/components/Grid.tsx`、`Cell.tsx`、`Toolbar.tsx`、`Divider.tsx`（R2–R8）
+- `src/players/YouTubePlayer.tsx`、`VideoPlayer.tsx`（R2、R3）
+- `src/hooks/usePointerZones.ts`：工具列顯示與直接操作模式（R3）
+- `tests/unit/`：單元測試；`tests/e2e/`：實際啟動程式的端對端測試
 
 ## 9. 未決事項
 
 - [x] 作業系統與使用對象：只支援 Windows，使用者自己使用，不做簽章和自動更新（2026-10-08 確認）。
-- [ ] 專案目前不是 git repo，開始實作時會 `git init`，建立 `main` 和 `develop` 兩個分支，功能分支從 `develop` 開。
+- [x] 已 `git init`，建立 `main`、`develop` 兩個分支，功能分支 `multiview-player` 從 `develop` 開出（沒有遠端，所以沒有 `git pull`）。
 
 ## 變更紀錄
 
@@ -206,3 +210,4 @@
 | 2026-10-08 | 初版 | |
 | 2026-10-08 | R10 AC1 改為開啟後維持暫停；確認只支援 Windows、個人使用 | 使用者確認規格 |
 | 2026-10-08 | 新增共用定義（格位、格子編號、點擊攔截層）；R1 加入最小尺寸、最小化 / 關閉；R2 補齊網址格式、空白輸入、播放中斷線、Shorts；R3 修正 YouTube 推薦的限制、加入「直接操作播放器」；R4 加入格位不遞補；R5 定義每種版型的分隔線、調整視窗大小；R7 修正新來源的聲音規則；R9 加入焦點的驗收條件；範圍新增不包含的項目；新增技術風險 | 第 2 步複查 |
+| 2026-10-08 | 第 8 節改成實際的檔案結構 | 實作完成 |
