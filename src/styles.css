@@ -94,3 +94,110 @@ button.active {
 .toolbar button.close:hover {
   background: var(--danger);
 }
+
+.toast {
+  display: inline-block;
+  margin-left: 12px;
+  line-height: 40px;
+  color: #ffd166;
+}
+
+/* ---- 格子與播放器（R2、R4） ---- */
+.grid {
+  position: absolute;
+  inset: 0;
+  background: var(--divider);
+}
+
+.player-box,
+.cell {
+  position: absolute;
+}
+
+.player-box {
+  background: #000;
+}
+
+.player {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.yt-host iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.cell {
+  z-index: 10;
+}
+
+.cell.empty {
+  background: #0b0b0b;
+}
+
+.cell-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+}
+
+/* 錯誤或更換網址時蓋住整格，避免和播放器自己的訊息疊在一起 */
+.cell.filled .cell-center {
+  background: #0b0b0b;
+}
+
+.cell-message {
+  color: var(--muted-text);
+}
+
+.url-input {
+  width: min(360px, 90%);
+  padding: 6px 10px;
+  font: inherit;
+  color: var(--text);
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  outline: none;
+  user-select: text;
+}
+
+.url-input:focus {
+  border-color: var(--accent);
+}
+
+.url-error {
+  color: var(--danger);
+}
+
+button.link {
+  color: var(--muted-text);
+}
+
+.cell-controls {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--panel);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cell:hover .cell-controls {
+  opacity: 1;
+}

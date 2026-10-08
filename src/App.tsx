@@ -1,14 +1,35 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Toolbar } from './components/Toolbar'
+import { Grid } from './components/Grid'
 import { useWindowState } from './hooks/useWindowState'
+import { DEFAULT_LAYOUT, defaultRatios, type LayoutId, type Ratios } from './lib/layout'
+import { emptySlots, hiddenCount, newSourceId, setSlot, type Slots } from './lib/slots'
+import { parseSource } from './lib/source'
+import type { PlayerHandle, PlayStatus } from './players/types'
 
 const TOOLBAR_ZONE_PX = 40
 const TOOLBAR_HIDE_MS = 1000
+const TOAST_MS = 3000
 
 export default function App() {
   const win = useWindowState()
   const [toolbarVisible, setToolbarVisible] = useState(false)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [layout, setLayout] = useState<LayoutId>(DEFAULT_LAYOUT)
+  const [ratiosMap] = useState<Partial<Record<LayoutId, Ratios>>>({})
+  const ratios = ratiosMap[layout] ?? defaultRatios(layout)
+  const [slots, setSlots] = useState<Slots>(emptySlots)
+  const [statuses, setStatuses] = useState<Record<number, PlayStatus>>({})
+  const players = useRef(new Map<number, PlayerHandle>())
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  const showToast = (message: string) => {
+    setToast(message)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
+  }
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -40,9 +61,66 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
+    if (handle) players.current.set(id, handle)
+    else players.current.delete(id)
+  }, [])
+
+  const onStatus = useCallback((id: number, status: PlayStatus) => {
+    setStatuses((prev) => (prev[id] === status ? prev : { ...prev, [id]: status }))
+  }, [])
+
+  const onSubmitUrl = (index: number, text: string): string | null => {
+    const parsed = parseSource(text)
+    if (!parsed) return '不支援的網址'
+    const existing = slots[index]
+    setSlots(
+      setSlot(slots, index, {
+        id: newSourceId(),
+        url: text.trim(),
+        parsed,
+        // 更換網址時保留原本的聲音設定（R2 AC8）
+        muted: existing ? existing.muted : false,
+        volume: existing ? existing.volume : 100,
+        autoplay: true
+      })
+    )
+    return null
+  }
+
+  const onRemove = (index: number) => setSlots(setSlot(slots, index, null))
+
+  const onRetry = (index: number) => {
+    const s = slots[index]
+    if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true }))
+  }
+
+  const changeLayout = (next: LayoutId) => {
+    setLayout(next)
+    const n = hiddenCount(slots, next)
+    if (n > 0) showToast(`有 ${n} 個來源暫時隱藏`)
+  }
+
   return (
     <div className="app">
-      <Toolbar visible={toolbarVisible} win={win} />
+      <Grid
+        layout={layout}
+        ratios={ratios}
+        slots={slots}
+        statuses={statuses}
+        registerPlayer={registerPlayer}
+        onStatus={onStatus}
+        onSubmitUrl={onSubmitUrl}
+        onRemove={onRemove}
+        onRetry={onRetry}
+      />
+      <Toolbar
+        visible={toolbarVisible || toast !== null}
+        win={win}
+        layout={layout}
+        onLayout={changeLayout}
+        toast={toast}
+      />
     </div>
   )
 }

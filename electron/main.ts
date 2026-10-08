@@ -5,6 +5,9 @@ import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
 import type { Settings } from '../src/lib/settings'
 
+// 測試時用獨立的資料夾，不動到正式的設定檔
+if (process.env['MULTIVIEW_USER_DATA']) app.setPath('userData', process.env['MULTIVIEW_USER_DATA'])
+
 // 多格同時自動播放（含有聲音的格子）
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 // 拿掉 User-Agent 中的 Electron 字樣，避免網站提供降級版本

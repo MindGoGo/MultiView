@@ -1,15 +1,31 @@
 import type { WinState } from '../../electron/preload'
+import { LAYOUT_IDS, LAYOUT_LABELS, type LayoutId } from '../lib/layout'
 
 interface Props {
   visible: boolean
   win: WinState
+  layout: LayoutId
+  onLayout(layout: LayoutId): void
+  toast: string | null
 }
 
-export function Toolbar({ visible, win }: Props) {
+export function Toolbar({ visible, win, layout, onLayout, toast }: Props) {
   const api = window.multiview
   return (
     <div className={`toolbar ${visible ? 'show' : ''}`}>
-      <div className="toolbar-drag" />
+      <div className="toolbar-group">
+        {LAYOUT_IDS.map((id) => (
+          <button
+            key={id}
+            className={id === layout ? 'active' : ''}
+            title={`版型 ${LAYOUT_LABELS[id]}`}
+            onClick={() => onLayout(id)}
+          >
+            {LAYOUT_LABELS[id]}
+          </button>
+        ))}
+      </div>
+      <div className="toolbar-drag">{toast && <span className="toast">{toast}</span>}</div>
       <div className="toolbar-group">
         <button
           className={win.alwaysOnTop ? 'active' : ''}
