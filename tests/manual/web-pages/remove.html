@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>remove</title>
+<script src="fake-video.js"></script>
+<p>3 秒後影片會被移除，之後不再出現。</p>
+<video id="a" width="400" height="225"></video>
+<script>
+  fakeVideo(a, '3 秒後消失', '#06a')
+  setTimeout(() => a.remove(), 3000)
+</script>

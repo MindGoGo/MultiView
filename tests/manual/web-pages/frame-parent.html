@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>frame-parent</title>
+<script src="fake-video.js"></script>
+<style>
+  body { margin: 0; background: #334; color: #fff; font: 14px sans-serif; }
+</style>
+<header style="height: 30px">新聞台網站（網域 A）</header>
+<video id="side" width="220" height="124" muted></video>
+<div style="transform: translateX(10px)">
+  <iframe src="http://localhost:8702/frame-child.html" width="400" height="250" style="border: 4px solid #888"></iframe>
+</div>
+<script>
+  fakeVideo(side, 'SIDE', '#555')
+</script>

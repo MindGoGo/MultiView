@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>drm</title>
+<script src="fake-video.js"></script>
+<video id="v" width="400" height="225"></video>
+<script>
+  fakeVideo(v, 'DRM', '#606')
+  // 模擬需要 DRM 的影片：觸發加密媒體事件
+  setTimeout(() => v.dispatchEvent(new Event('encrypted')), 1500)
+</script>

@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>frame-child</title>
+<script src="fake-video.js"></script>
+<style>
+  body { margin: 0; background: #222; color: #fff; font: 12px sans-serif; }
+  video { display: block; width: 100%; height: calc(100vh - 24px); }
+</style>
+<div style="height: 24px">別家播放器（網域 B）的控制列</div>
+<video id="v"></video>
+<script>
+  fakeVideo(v, 'IFRAME 主要影片', '#06a')
+</script>

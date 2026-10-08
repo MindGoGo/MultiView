@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>網頁來源測試頁</title>
+<h1>網頁來源手動驗收測試頁</h1>
+<p>
+  啟動：在專案根目錄執行 <code>node tests/manual/web-pages/server.mjs</code>（需要 Node 18 以上），再把下列網址貼到程式的空白格。
+  步驟和預期結果見 <code>tests/manual/web-page-source.md</code>。
+</p>
+<ul>
+  <li><a href="/multi.html">multi.html</a>：大小不同的影片，加上被隱藏、太小、透明、在可視範圍外的影片（R13 AC3）</li>
+  <li><a href="/frame-parent.html">frame-parent.html</a>：主要影片在跨網域的子框架裡（R13 AC3-1）</li>
+  <li><a href="/frame-same.html">frame-same.html</a>：主要影片在同網域的子框架裡（R13 AC3-1）</li>
+  <li><a href="/swap.html">swap.html</a>：播放 3 秒後換成另一個影片（R13 AC3-2）</li>
+  <li><a href="/remove.html">remove.html</a>：播放 3 秒後移除影片（R13 AC3-3）</li>
+  <li><a href="/novideo.html">novideo.html</a>：沒有影片，有連結、輸入框、可捲動（R13 AC4、R14）</li>
+  <li><a href="/autoplay.html">autoplay.html</a>：網站自己會一直自動播放（R15 AC5、AC7）</li>
+  <li><a href="/drm.html">drm.html</a>：影片觸發加密媒體事件（R16 AC5）</li>
+  <li><a href="/missing">/missing</a>：回應 404（R16 AC2）；<a href="/slow">/slow</a>：35 秒後才回應（R16 AC6）</li>
+  <li><a href="/broken-image.html">broken-image.html</a>：有一張 404 的圖片（R16 AC7）</li>
+  <li><a href="http://mv.localtest.me:8701/ads.html">ads.html</a>（用 mv.localtest.me 開啟；不要用 ads. 開頭的網域，會整個被清單擋下）：請求 EasyList 中的廣告網址、隱藏廣告元素（R17 AC1）</li>
+  <li><a href="/cookie.html">cookie.html</a>：設定、讀取 cookie（R18 AC2、AC3）</li>
+</ul>

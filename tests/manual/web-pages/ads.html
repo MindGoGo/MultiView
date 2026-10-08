@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>ads</title>
+<style>
+  body { font: 16px sans-serif; padding: 12px; background: #fff; color: #000; }
+</style>
+<h2>廣告阻擋測試（用整頁模式看結果）</h2>
+<p>請用 <code>http://mv.localtest.me:8701/ads.html</code> 開啟：廣告清單的通用隱藏規則不適用於 IP 位址和 localhost。</p>
+<p>廣告網址：<b id="ad">檢查中…</b></p>
+<p>一般網址：<b id="normal">檢查中…</b></p>
+<div class="ADBox" style="width: 300px; height: 60px; background: #fc0">.ADBox 廣告區塊（開啟阻擋時應該被隱藏）</div>
+<p>廣告區塊：<b id="box">檢查中…</b></p>
+<script>
+  function probe(id, src) {
+    const s = document.createElement('script')
+    s.src = src
+    s.onload = () => (document.getElementById(id).textContent = '已載入（沒有被擋）')
+    s.onerror = () => (document.getElementById(id).textContent = '被擋下或載入失敗')
+    document.head.appendChild(s)
+  }
+  probe('ad', 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js')
+  probe('normal', '/fake-video.js')
+  setInterval(() => (box.textContent = getComputedStyle(document.querySelector('.ADBox')).display === 'none' ? '被隱藏' : '顯示中'), 500)
+</script>

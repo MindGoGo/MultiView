@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>novideo</title>
+<script src="fake-video.js"></script>
+<style>
+  body { font: 16px sans-serif; padding: 12px; background: #fff; color: #000; }
+</style>
+<h2>這一頁沒有影片</h2>
+<p><a href="/multi.html">同一格換頁到 multi.html</a></p>
+<p><a href="/multi.html" target="_blank">開新視窗的連結（應該被擋下）</a></p>
+<p><input id="text" placeholder="在這裡打字，Space / M / 數字鍵不應觸發快捷鍵" style="width: 90%" /></p>
+<p><button id="show">顯示影片</button>（按下後再按「只顯示影片」）</p>
+<div id="late" hidden><video width="400" height="225"></video></div>
+<div style="height: 2000px; background: linear-gradient(#fff, #ccc)">往下捲動</div>
+<script>
+  show.onclick = () => {
+    late.hidden = false
+    fakeVideo(late.querySelector('video'), 'LATE', '#06a')
+  }
+</script>

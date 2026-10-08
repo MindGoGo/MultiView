@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>multi</title>
+<script src="fake-video.js"></script>
+<style>
+  body { margin: 0; background: #333; color: #fff; font: 14px sans-serif; }
+  video { display: block; margin: 4px; }
+</style>
+<header style="height: 30px">網站選單（影片模式下不應該看到）</header>
+<div style="display: flex">
+  <video id="small" width="240" height="135" muted></video>
+  <video id="big" width="400" height="225" muted></video>
+  <video id="tiny" width="150" height="84" muted></video>
+</div>
+<video id="hidden" width="900" height="500" muted style="display: none"></video>
+<video id="transparent" width="900" height="500" muted style="opacity: 0; position: absolute; top: 0; left: 0; pointer-events: none"></video>
+<div style="height: 3000px"></div>
+<video id="below" width="900" height="500" muted></video>
+<script>
+  fakeVideo(small, 'SMALL', '#555')
+  fakeVideo(big, 'BIG 主要影片', '#0a6')
+  fakeVideo(tiny, 'TINY', '#a50')
+  fakeVideo(hidden, 'HIDDEN', '#a00')
+  fakeVideo(transparent, 'TRANSPARENT', '#a00')
+  fakeVideo(below, 'BELOW', '#a00')
+</script>

@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>swap</title>
+<script src="fake-video.js"></script>
+<div id="box"><video id="a" width="400" height="225"></video></div>
+<script>
+  fakeVideo(a, '廣告 A', '#a60')
+  setTimeout(() => {
+    a.remove()
+    const b = document.createElement('video')
+    b.width = 400
+    b.height = 225
+    box.appendChild(b)
+    fakeVideo(b, '正片 B', '#06a')
+  }, 3000)
+</script>

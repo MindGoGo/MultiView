@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>autoplay</title>
+<script src="fake-video.js"></script>
+<video id="v" width="400" height="225"></video>
+<p><button id="toggle">網站自己的播放 / 暫停</button> 目前：<b id="state"></b></p>
+<script>
+  fakeVideo(v, '網站自動播放', '#06a')
+  toggle.onclick = () => (v.paused ? v.play() : v.pause())
+  // 網站在載入後 3 秒內一直試著自動播放（R15 AC5）
+  const start = Date.now()
+  const timer = setInterval(() => {
+    if (Date.now() - start > 3000) clearInterval(timer)
+    else if (v.paused) v.play().catch(() => undefined)
+  }, 300)
+  setInterval(() => (state.textContent = v.paused ? '暫停' : '播放'), 200)
+</script>

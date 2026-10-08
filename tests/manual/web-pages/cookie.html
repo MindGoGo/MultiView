@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>cookie</title>
+<style>
+  body { font: 16px sans-serif; padding: 12px; background: #fff; color: #000; }
+</style>
+<h2>Cookie 測試（用整頁模式操作）</h2>
+<p>目前的 cookie：<b id="out"></b></p>
+<button id="set">設定一天有效的 cookie</button>
+<button id="del">刪除</button>
+<script>
+  function show() {
+    out.textContent = document.cookie || '（沒有）'
+  }
+  set.onclick = () => {
+    document.cookie = 'mv_test=' + Date.now() + '; max-age=86400; path=/'
+    show()
+  }
+  del.onclick = () => {
+    document.cookie = 'mv_test=; max-age=0; path=/'
+    show()
+  }
+  show()
+</script>
