@@ -67,6 +67,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const players = useRef(new Map<number, PlayerHandle>())
   const [move, setMove] = useState<{ from: number; over: number | null } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  /** 單格全螢幕（R20）：放大的格位、進入前視窗是否已經全螢幕、離開時要恢復播放的來源 id */
+  const [solo, setSolo] = useState<{ index: number; wasFullscreen: boolean; resume: number[] } | null>(null)
+  const soloIndex = solo?.index ?? null
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const showToast = (message: string) => {
@@ -104,7 +107,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         url: text.trim(),
         parsed,
         // 更換網址時保留原本的聲音設定（R2 AC8）
-        muted: existing ? existing.muted : initialMuted(slots, layout),
+        muted: existing ? existing.muted : initialMuted(slots, layout, soloIndex),
         volume: existing ? existing.volume : 100,
         autoplay: true,
         // 廣告阻擋預設開啟（R17）
@@ -114,7 +117,35 @@ export default function App({ initial }: { initial: ViewSettings }) {
     return null
   }
 
-  const onRemove = (index: number) => setSlots(setSlot(slots, index, null))
+  const onRemove = (index: number) => {
+    // 移除放大的那一格時離開單格全螢幕（R20 AC7）
+    if (solo?.index === index) exitSolo()
+    setSlots(setSlot(slots, index, null))
+  }
+
+  // ---- 單格全螢幕（R20） ----
+  const enterSolo = (index: number) => {
+    if (!slots[index] || solo) return
+    // 只記下「顯示中、而且正在播放」的其他來源，離開時恢復（R20 AC2、AC3、AC9）
+    const resume = slots.flatMap((s, i) =>
+      s && i !== index && isVisible(i, layout) && statuses[s.id] === 'playing' ? [s.id] : []
+    )
+    // 視窗狀態向主程序查詢：畫面這邊記的狀態可能還沒更新（R20 AC4）
+    void window.multiview.getWindowState().then(({ fullscreen }) => {
+      setSolo({ index, wasFullscreen: fullscreen, resume })
+      if (!fullscreen) window.multiview.toggleFullscreen()
+    })
+  }
+  const exitSolo = () => {
+    if (!solo) return
+    if (!solo.wasFullscreen) window.multiview.exitFullscreen()
+    const ids = new Set(slots.map((s) => s?.id))
+    solo.resume.forEach((id) => ids.has(id) && players.current.get(id)?.play())
+    setSolo(null)
+  }
+  const exitSoloRef = useRef(exitSolo)
+  exitSoloRef.current = exitSolo
+
 
   const onRetry = (index: number) => {
     const s = slots[index]
@@ -170,7 +201,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (s) players.current.get(s.id)?.seek(seconds)
   }
 
-  const controllable = controllableIndices(slots, layout, statuses)
+  const controllable = controllableIndices(slots, layout, statuses, soloIndex)
   const playAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.play())
   const pauseAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.pause())
 
@@ -180,20 +211,24 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (!action) return false
     switch (action.type) {
       case 'toggleAll':
-        if (toggleAllAction(slots, layout, statuses) === 'pause') pauseAll()
+        if (toggleAllAction(slots, layout, statuses, soloIndex) === 'pause') pauseAll()
         else playAll()
         break
       case 'muteAll':
         setSlots(muteAll(slots))
         break
       case 'focusAudio':
-        if (isVisible(action.index, layout)) onFocusAudio(action.index)
+        // 單格全螢幕時數字鍵不作用（R20 AC5）
+        if (soloIndex === null && isVisible(action.index, layout)) onFocusAudio(action.index)
         break
       case 'toggleFullscreen':
-        window.multiview.toggleFullscreen()
+        // 單格全螢幕時 F11、Esc 先離開單格全螢幕（R20）
+        if (solo) exitSolo()
+        else window.multiview.toggleFullscreen()
         break
       case 'exitFullscreen':
-        window.multiview.exitFullscreen()
+        if (solo) exitSolo()
+        else window.multiview.exitFullscreen()
         break
     }
     return true
@@ -225,6 +260,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   }, [])
 
   const changeLayout = (next: LayoutId) => {
+    // 單格全螢幕時先回到分割畫面，再切換版型（R20 AC6）
+    exitSoloRef.current()
     setLayout(next)
     const n = hiddenCount(slots, next)
     if (n > 0) showToast(`有 ${n} 個來源暫時隱藏`)
@@ -258,6 +295,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onWebMode={onWebMode}
         onToggleWebMode={onToggleWebMode}
         onToggleAdblock={onToggleAdblock}
+        solo={soloIndex}
+        onToggleSolo={(i) => (solo ? exitSolo() : enterSolo(i))}
         getProgress={getProgress}
         onSeek={onSeek}
       />

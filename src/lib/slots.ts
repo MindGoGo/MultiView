@@ -24,7 +24,12 @@ export const newSourceId = () => ++lastId
 
 export const emptySlots = (): Slots => Array.from({ length: SLOT_COUNT }, () => null)
 
-export const isVisible = (index: number, layout: LayoutId) => index < cellCount(layout)
+/**
+ * 是否為顯示中的格位。單格全螢幕時（solo 為放大的格位）只有那一格顯示中，
+ * 其他都視為隱藏的來源（R20 共用定義）。
+ */
+export const isVisible = (index: number, layout: LayoutId, solo: number | null = null) =>
+  solo !== null ? index === solo : index < cellCount(layout)
 
 export function setSlot(slots: Slots, index: number, source: Source | null): Slots {
   const next = [...slots]

@@ -5,8 +5,8 @@ import { isVisible, type Slots, type Source } from './slots'
 export const isAudible = (s: Source) => !s.muted && s.volume > 0
 
 /** 新來源是否靜音：已經有顯示中的來源有聲音時就靜音（R7 AC1）。 */
-export function initialMuted(slots: Slots, layout: LayoutId): boolean {
-  return slots.some((s, i) => s !== null && isVisible(i, layout) && isAudible(s))
+export function initialMuted(slots: Slots, layout: LayoutId, solo: number | null = null): boolean {
+  return slots.some((s, i) => s !== null && isVisible(i, layout, solo) && isAudible(s))
 }
 
 const mapSources = (slots: Slots, fn: (s: Source, i: number) => Source): Slots =>

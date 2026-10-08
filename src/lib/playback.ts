@@ -1,4 +1,4 @@
-// 全部播放／暫停的對象（R8、R9）
+// 全部播放／暫停的對象（R8、R9、R20）
 import type { LayoutId } from './layout'
 import { isVisible, type Slots } from './slots'
 import type { PlayStatus } from '../players/types'
@@ -7,11 +7,12 @@ import type { PlayStatus } from '../players/types'
 export function controllableIndices(
   slots: Slots,
   layout: LayoutId,
-  statuses: Record<number, PlayStatus>
+  statuses: Record<number, PlayStatus>,
+  solo: number | null = null
 ): number[] {
   const out: number[] = []
   slots.forEach((s, i) => {
-    if (s && isVisible(i, layout) && statuses[s.id] !== 'error') out.push(i)
+    if (s && isVisible(i, layout, solo) && statuses[s.id] !== 'error') out.push(i)
   })
   return out
 }
@@ -20,9 +21,10 @@ export function controllableIndices(
 export function toggleAllAction(
   slots: Slots,
   layout: LayoutId,
-  statuses: Record<number, PlayStatus>
+  statuses: Record<number, PlayStatus>,
+  solo: number | null = null
 ): 'play' | 'pause' {
-  const anyPlaying = controllableIndices(slots, layout, statuses).some(
+  const anyPlaying = controllableIndices(slots, layout, statuses, solo).some(
     (i) => statuses[slots[i]!.id] === 'playing'
   )
   return anyPlaying ? 'pause' : 'play'

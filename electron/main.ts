@@ -214,10 +214,8 @@ function attachWebGuest(guest: Electron.WebContents) {
   guest.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.isAutoRepeat) return
     const action = guestKeyAction(input.key, webModes.get(id))
-    if (action === 'fullscreen') {
-      event.preventDefault()
-      toggleFullscreen()
-    } else if (action === 'forward') {
+    // F11 也交給畫面處理：單格全螢幕時要先離開單格全螢幕（R20）
+    if (action === 'fullscreen' || action === 'forward') {
       event.preventDefault()
       win?.webContents.send('shortcut', input.key)
     }

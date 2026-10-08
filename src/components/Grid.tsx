@@ -58,14 +58,21 @@ interface Props {
   onToggleAdblock(index: number): void
   getProgress(index: number): Progress | null
   onSeek(index: number, seconds: number): void
+  /** 單格全螢幕的格位（R20） */
+  solo: number | null
+  onToggleSolo(index: number): void
 }
+
+const FULL: FracRect = { x: 0, y: 0, w: 1, h: 1 }
 
 /** 隱藏的網頁來源不能用 display: none，<webview> 會因此重新載入，改成看不見（R4 AC3） */
 const HIDDEN_WEB_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0, width: '100%', height: '100%' }
 
 export function Grid(props: Props) {
-  const { layout, ratios, slots, statuses } = props
-  const rects = cellRects(layout, ratios)
+  const { layout, ratios, slots, statuses, solo } = props
+  // 單格全螢幕時放大的那一格填滿整個畫面，其他格不顯示（R20）
+  const layoutRects = cellRects(layout, ratios)
+  const rects = solo === null ? layoutRects : layoutRects.map((_, i) => (i === solo ? FULL : null))
 
   // 播放器依 id 排序並固定在同一層，換位或切換版型時只改位置，不搬動 DOM，所以不會重新載入
   const placed = slots
@@ -76,7 +83,7 @@ export function Grid(props: Props) {
   return (
     <div className="grid">
       {placed.map(({ source, index }) => {
-        const visible = isVisible(index, layout)
+        const visible = isVisible(index, layout, solo)
         const common = {
           ref: (h: PlayerHandle | null) => props.registerPlayer(source.id, h),
           muted: source.muted,
@@ -92,7 +99,7 @@ export function Grid(props: Props) {
             data-slot={index}
             style={
               visible
-                ? rectStyle(rects[index])
+                ? rectStyle(rects[index] ?? FULL)
                 : source.parsed.kind === 'web'
                   ? HIDDEN_WEB_STYLE
                   : { display: 'none' }
@@ -116,6 +123,7 @@ export function Grid(props: Props) {
       })}
 
       {rects.map((r, index) => {
+        if (!r) return null
         const source = slots[index]
         return (
           <Cell
@@ -128,7 +136,7 @@ export function Grid(props: Props) {
             onSubmitUrl={props.onSubmitUrl}
             onRemove={props.onRemove}
             onRetry={props.onRetry}
-            canMove={layout !== '1'}
+            canMove={layout !== '1' && solo === null}
             moving={props.move?.from === index}
             dropTarget={props.move !== null && props.move.over === index && props.move.from !== index}
             onMoveStart={props.onMoveStart}
@@ -142,13 +150,15 @@ export function Grid(props: Props) {
             webMode={source ? (props.webModes[source.id] ?? 'video') : 'video'}
             onToggleWebMode={props.onToggleWebMode}
             onToggleAdblock={props.onToggleAdblock}
+            isSolo={solo === index}
+            onToggleSolo={props.onToggleSolo}
             getProgress={props.getProgress}
             onSeek={props.onSeek}
           />
         )
       })}
 
-      {dividers(layout, ratios).map((d) => (
+      {(solo === null ? dividers(layout, ratios) : []).map((d) => (
         <Divider
           key={`${d.axis}-${d.index}`}
           def={d}

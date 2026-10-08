@@ -35,6 +35,9 @@ interface Props {
   onToggleAdblock(index: number): void
   getProgress(index: number): Progress | null
   onSeek(index: number, seconds: number): void
+  /** 這一格正在單格全螢幕（R20） */
+  isSolo: boolean
+  onToggleSolo(index: number): void
 }
 
 /** 格子窄的時候只顯示圖示，完整名稱放在 title（R14 AC7） */
@@ -254,6 +257,13 @@ export function Cell(props: Props) {
               <Label full={source.adblock ? '廣告阻擋：開' : '廣告阻擋：關'} icon={source.adblock ? '🛡' : '⊘'} />
             </button>
           )}
+          <button
+            className={props.isSolo ? 'active' : ''}
+            title={props.isSolo ? '離開全螢幕，回到分割畫面' : '把這一格放大到整個螢幕，其他格暫停'}
+            onClick={() => props.onToggleSolo(index)}
+          >
+            {props.isSolo ? <Label full="離開全螢幕" icon="⤡" /> : <Label full="全螢幕" icon="⤢" />}
+          </button>
           <button title="更換網址" onClick={() => setEditing(true)}>
             <Label full="更換網址" icon="✎" />
           </button>
