@@ -11,6 +11,19 @@ export interface Rect {
 export const MIN_VIDEO_W = 200
 export const MIN_VIDEO_H = 112
 
+/** 影片模式下網頁至少以這個大小排版，再縮小顯示在格子裡（R13） */
+export const VIDEO_LAYOUT_MIN_W = 1280
+export const VIDEO_LAYOUT_MIN_H = 720
+
+/**
+ * 影片模式的縮小比例：格子比 1280×720 小時，網頁以 (w / 比例) × (h / 比例) 排版再縮小，
+ * 長寬比和格子相同；格子夠大時不縮放（1）。
+ */
+export function videoModeScale(w: number, h: number): number {
+  if (w <= 0 || h <= 0) return 1
+  return Math.min(1, w / VIDEO_LAYOUT_MIN_W, h / VIDEO_LAYOUT_MIN_H)
+}
+
 /** 和可視範圍 (0, 0, vw, vh) 重疊的部分；沒有重疊時回傳 null */
 export function clipToViewport(r: Rect, vw: number, vh: number): Rect | null {
   const x1 = Math.max(r.x, 0)

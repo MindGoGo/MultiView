@@ -310,11 +310,15 @@ button.link {
 /* ---- 網頁來源（R13、R14） ---- */
 .web-host {
   position: relative;
+  overflow: hidden;
 }
 
+/* 大小由 WebPlayer 依格子大小設定（R13 影片模式會放大排版再縮小） */
 .web-view {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
 }
 
 .web-notice {

@@ -3,6 +3,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import type { WebviewTag } from 'electron'
 import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
 import { isHttpFailure, isLoadFailure, LOAD_TIMEOUT_MS, type WebFailure } from '../lib/webErrors'
+import { videoModeScale } from '../lib/webVideo'
 import { WEB_PARTITION, type WebMode, type WebReport, type WebState } from './webTypes'
 
 interface Props extends PlayerProps {
@@ -204,6 +205,25 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   }, [active])
 
   useEffect(() => () => clearTimeout(noticeTimer.current), [])
+
+  // 影片模式下網頁以較大的尺寸排版再縮小；整頁模式以格子大小排版、不縮放（R13、R14）
+  useEffect(() => {
+    const host = hostRef.current!
+    const layout = () => {
+      const view = viewRef.current
+      if (!view) return
+      const w = host.clientWidth
+      const h = host.clientHeight
+      const f = mode === 'video' ? videoModeScale(w, h) : 1
+      view.style.width = `${w / f}px`
+      view.style.height = `${h / f}px`
+      view.style.transform = f === 1 ? '' : `scale(${f})`
+    }
+    layout()
+    const ro = new ResizeObserver(layout)
+    ro.observe(host)
+    return () => ro.disconnect()
+  }, [mode, url])
 
   useImperativeHandle(ref, () => ({
     play: () => updateStateRef.current({ intent: 'play' }),
