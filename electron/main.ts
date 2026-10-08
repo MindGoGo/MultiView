@@ -4,7 +4,7 @@ import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
 import { normalizeView, type Settings } from '../src/lib/settings'
-import { shortcutFor } from '../src/lib/shortcuts'
+import { guestKeyAction, shortcutFor } from '../src/lib/shortcuts'
 import { WEB_PARTITION, type WebMode } from '../src/players/webTypes'
 import { forgetWebContents, installAdblock, loadAdblockList, setAdblockEnabled } from './adblock'
 
@@ -213,18 +213,14 @@ function attachWebGuest(guest: Electron.WebContents) {
   guest.setWindowOpenHandler(() => ({ action: 'deny' }))
   guest.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.isAutoRepeat) return
-    // F11 一律切換全螢幕（R14 AC6）
-    if (input.key === 'F11') {
+    const action = guestKeyAction(input.key, webModes.get(id))
+    if (action === 'fullscreen') {
       event.preventDefault()
       toggleFullscreen()
-      return
+    } else if (action === 'forward') {
+      event.preventDefault()
+      win?.webContents.send('shortcut', input.key)
     }
-    // 整頁模式：其他按鍵（包括 Esc）都交給網頁（R14 AC4、AC6）
-    if (webModes.get(id) === 'page') return
-    // 影片模式下焦點只會因為「直接操作」進到網頁，比照 YouTube 播放器把快捷鍵轉給畫面（R9 AC3）
-    if (!shortcutFor(input.key)) return
-    event.preventDefault()
-    win?.webContents.send('shortcut', input.key)
   })
   guest.once('destroyed', () => {
     webModes.delete(id)

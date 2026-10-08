@@ -4,6 +4,7 @@ import type { WebviewTag } from 'electron'
 import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
 import { isHttpFailure, isLoadFailure, LOAD_TIMEOUT_MS, type WebFailure } from '../lib/webErrors'
 import { videoModeScale } from '../lib/webVideo'
+import { intentFromReport, shouldWaitForVideo } from '../lib/webPlayback'
 import { WEB_PARTITION, type WebMode, type WebReport, type WebState } from './webTypes'
 
 interface Props extends PlayerProps {
@@ -62,8 +63,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
 
   /** 影片模式、網頁已載入、但沒有主要影片時開始計時，否則取消（R13 AC4、AC3-3） */
   const checkNoVideo = () => {
-    const { loaded, found, failed } = page.current
-    if (latest.current.mode === 'video' && loaded && !found && !failed) {
+    if (shouldWaitForVideo({ mode: latest.current.mode, ...page.current })) {
       noVideoTimer.current ??= setTimeout(() => {
         noVideoTimer.current = null
         latest.current.onModeChange('page')
@@ -152,13 +152,9 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
         page.current.found = r.found
         checkNoVideoRef.current()
         report(r.status ?? 'loading')
-        // 整頁模式中使用者直接按網站的播放 / 暫停，也算播放意圖（R15 AC7）。
-        // 只採用網頁已經收到最新狀態後的回報，避免蓋掉剛送出的操作。
-        const st = stateRef.current
-        if (st.mode === 'page' && r.v === st.v) {
-          if (r.status === 'playing' && st.intent === 'pause') updateStateRef.current({ intent: 'play' })
-          else if (r.status === 'paused' && st.intent === 'play') updateStateRef.current({ intent: 'pause' })
-        }
+        // 整頁模式中使用者直接按網站的播放 / 暫停，也算播放意圖（R15 AC7）
+        const intent = intentFromReport(stateRef.current, r)
+        if (intent) updateStateRef.current({ intent })
       }
     }
     view.addEventListener('dom-ready', onDomReady)
