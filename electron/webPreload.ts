@@ -131,9 +131,14 @@ window.addEventListener(
 
 // ---------- 影片模式的樣式 ----------
 
+// 用一層黑色遮罩蓋住整個網頁，主要影片放在遮罩上面。
+// 不能把其他元素設成看不見：有些網站（例如 Twitch）偵測到自己被隱藏時，會連影片一起藏起來。
 const GLOBAL_CSS = `
-html, body { overflow: hidden !important; background: #000 !important; }
-html * { visibility: hidden !important; }
+html, body { overflow: hidden !important; }
+html::after {
+  content: "" !important; position: fixed !important; inset: 0 !important; display: block !important;
+  background: #000 !important; z-index: 2147483646 !important; pointer-events: none !important;
+}
 `
 const CHOSEN_CSS: [string, string][] = [
   ['position', 'fixed'],
@@ -158,7 +163,10 @@ const CHOSEN_CSS: [string, string][] = [
   ['object-fit', 'contain'],
   ['background', '#000']
 ]
-/** 上層元素有這些屬性時，position: fixed 會以它為基準而不是整個畫面，所以一併拿掉 */
+/**
+ * 上層元素有這些屬性時，position: fixed 會以它為基準而不是整個畫面，
+ * 或是形成獨立的堆疊層級、讓主要影片被困在遮罩下面，所以一併拿掉
+ */
 const ANCESTOR_CSS: [string, string][] = [
   ['transform', 'none'],
   ['filter', 'none'],
@@ -168,7 +176,10 @@ const ANCESTOR_CSS: [string, string][] = [
   ['will-change', 'auto'],
   ['clip-path', 'none'],
   ['mask', 'none'],
-  ['opacity', '1']
+  ['opacity', '1'],
+  ['z-index', 'auto'],
+  ['isolation', 'auto'],
+  ['mix-blend-mode', 'normal']
 ]
 
 let globalStyle: HTMLStyleElement | null = null
@@ -203,7 +214,7 @@ function applyStyles() {
     globalStyle = null
     return
   }
-  // 還沒找到主要影片時整頁都是黑色（R13）
+  // 還沒找到主要影片時，遮罩讓整頁都是黑色（R13）
   if (!globalStyle && document.documentElement) {
     globalStyle = document.createElement('style')
     globalStyle.textContent = GLOBAL_CSS
@@ -214,8 +225,12 @@ function applyStyles() {
   if (best && !styled) {
     const saved: [HTMLElement, string | null][] = []
     setStyles(best.el, CHOSEN_CSS, saved)
-    for (let p = parentOf(best.el); p; p = parentOf(p))
-      if (p instanceof HTMLElement) setStyles(p, ANCESTOR_CSS, saved)
+    for (let p = parentOf(best.el); p; p = parentOf(p)) {
+      if (!(p instanceof HTMLElement)) continue
+      // fixed / sticky 一定會形成堆疊層級，改成一般定位（網頁其他部分已經被遮罩蓋住，版面改變看不到）
+      const pos = getComputedStyle(p).position
+      setStyles(p, pos === 'fixed' || pos === 'sticky' ? [...ANCESTOR_CSS, ['position', 'static']] : ANCESTOR_CSS, saved)
+    }
     styled = { el: best.el, rect: best.rect, saved }
   }
 }
