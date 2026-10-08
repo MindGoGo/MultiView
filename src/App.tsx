@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Toolbar } from './components/Toolbar'
 import { Grid } from './components/Grid'
 import { useWindowState } from './hooks/useWindowState'
+import { usePointerZones } from './hooks/usePointerZones'
 import {
   DEFAULT_LAYOUT,
   defaultRatios,
@@ -18,14 +19,11 @@ import { focusAudio, initialMuted, muteAll, setVolume, toggleMute } from './lib/
 import { controllableIndices } from './lib/playback'
 import type { PlayerHandle, PlayStatus } from './players/types'
 
-const TOOLBAR_ZONE_PX = 40
-const TOOLBAR_HIDE_MS = 1000
 const TOAST_MS = 3000
 
 export default function App() {
   const win = useWindowState()
-  const [toolbarVisible, setToolbarVisible] = useState(false)
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { toolbarVisible, direct, setDirect } = usePointerZones()
 
   const [layout, setLayout] = useState<LayoutId>(DEFAULT_LAYOUT)
   const [ratiosMap, setRatiosMap] = useState<Partial<Record<LayoutId, Ratios>>>({})
@@ -42,23 +40,6 @@ export default function App() {
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
   }
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (e.clientY < TOOLBAR_ZONE_PX) {
-        if (hideTimer.current) clearTimeout(hideTimer.current)
-        hideTimer.current = null
-        setToolbarVisible(true)
-      } else if (!hideTimer.current) {
-        hideTimer.current = setTimeout(() => {
-          hideTimer.current = null
-          setToolbarVisible(false)
-        }, TOOLBAR_HIDE_MS)
-      }
-    }
-    window.addEventListener('mousemove', onMove)
-    return () => window.removeEventListener('mousemove', onMove)
-  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -160,6 +141,8 @@ export default function App() {
         onFocusAudio={onFocusAudio}
         onToggleMute={(i) => setSlots(toggleMute(slots, i))}
         onVolume={(i, v) => setSlots(setVolume(slots, i, v))}
+        direct={direct}
+        onDirect={setDirect}
       />
       <Toolbar
         visible={toolbarVisible || toast !== null}

@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+export interface CursorPos {
+  x: number
+  y: number
+  inside: boolean
+}
+
 export interface WinState {
   fullscreen: boolean
   alwaysOnTop: boolean
@@ -18,6 +24,14 @@ const api = {
   exitFullscreen: () => ipcRenderer.send('win:exitFullscreen'),
   toggleAlwaysOnTop: () => ipcRenderer.send('win:toggleAlwaysOnTop'),
   minimize: () => ipcRenderer.send('win:minimize'),
+  watchCursor: (on: boolean) => ipcRenderer.send('cursor:watch', on),
+  onCursor: (cb: (pos: CursorPos) => void) => {
+    const listener = (_: unknown, pos: CursorPos) => cb(pos)
+    ipcRenderer.on('cursor:pos', listener)
+    return () => {
+      ipcRenderer.removeListener('cursor:pos', listener)
+    }
+  },
   close: () => ipcRenderer.send('win:close')
 }
 

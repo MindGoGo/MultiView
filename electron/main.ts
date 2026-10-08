@@ -89,6 +89,25 @@ ipcMain.on('win:toggleAlwaysOnTop', () => {
   saveSoon()
 })
 ipcMain.on('win:minimize', () => win?.minimize())
+
+// 游標在拖曳區或 iframe 上時，網頁收不到滑鼠事件。
+// 需要時由主程序定時回報游標位置（R3：工具列隱藏、直接操作模式結束）。
+const CURSOR_POLL_MS = 150
+let cursorTimer: ReturnType<typeof setInterval> | null = null
+ipcMain.on('cursor:watch', (_, on: boolean) => {
+  if (cursorTimer) clearInterval(cursorTimer)
+  cursorTimer = null
+  if (!on) return
+  cursorTimer = setInterval(() => {
+    if (!win || win.isDestroyed()) return
+    const p = screen.getCursorScreenPoint()
+    const b = win.getContentBounds()
+    const x = p.x - b.x
+    const y = p.y - b.y
+    const inside = x >= 0 && y >= 0 && x < b.width && y < b.height
+    win.webContents.send('cursor:pos', { x, y, inside })
+  }, CURSOR_POLL_MS)
+})
 ipcMain.on('win:close', () => win?.close())
 
 app.whenReady().then(() => {

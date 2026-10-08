@@ -42,6 +42,9 @@ interface Props {
   onFocusAudio(index: number): void
   onToggleMute(index: number): void
   onVolume(index: number, volume: number): void
+  /** 處於「直接操作播放器」的格子（R3） */
+  direct: number | null
+  onDirect(index: number): void
 }
 
 export function Grid(props: Props) {
@@ -103,6 +106,8 @@ export function Grid(props: Props) {
             onFocusAudio={props.onFocusAudio}
             onToggleMute={props.onToggleMute}
             onVolume={props.onVolume}
+            direct={props.direct === index}
+            onDirect={props.onDirect}
           />
         )
       })}

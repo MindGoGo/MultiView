@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Source } from '../lib/slots'
 import { isAudible } from '../lib/audio'
 import type { PlayStatus } from '../players/types'
@@ -22,7 +22,12 @@ interface Props {
   onFocusAudio(index: number): void
   onToggleMute(index: number): void
   onVolume(index: number, volume: number): void
+  direct: boolean
+  onDirect(index: number): void
 }
+
+/** 滑鼠靜止多久後隱藏操作按鈕（R3 AC2） */
+const CONTROLS_IDLE_MS = 2000
 
 /** 游標下的格子編號；不在任何格子上時回傳 null */
 function cellIndexAt(x: number, y: number): number | null {
@@ -38,6 +43,19 @@ export function Cell(props: Props) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [hover, setHover] = useState(false)
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(idleTimer.current), [])
+
+  const onMouseMove = () => {
+    setHover(true)
+    clearTimeout(idleTimer.current)
+    idleTimer.current = setTimeout(() => setHover(false), CONTROLS_IDLE_MS)
+  }
+  const onMouseLeave = () => {
+    clearTimeout(idleTimer.current)
+    setHover(false)
+  }
 
   const showInput = !source || editing
   const failed = source !== null && status === 'error' && !editing
@@ -57,9 +75,11 @@ export function Cell(props: Props) {
 
   return (
     <div
-      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''}`}
+      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''} ${props.direct ? 'direct' : ''}`}
       style={style}
       data-index={index}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
       onClick={(e) => {
         // 只有點在格子本身（影片區域）才算，按鈕和輸入框不算（R7 獨占聲音）
         if (e.target === e.currentTarget) props.onFocusAudio(index)
@@ -111,7 +131,7 @@ export function Cell(props: Props) {
       )}
 
       {source && !editing && (
-        <div className="cell-controls">
+        <div className={`cell-controls ${hover || props.moving ? 'show' : ''}`} onMouseMove={onMouseMove}>
           {props.canMove && (
             <button
               className="move-handle"
@@ -147,6 +167,15 @@ export function Cell(props: Props) {
             title={`音量 ${source.volume}`}
             onChange={(e) => props.onVolume(index, Number(e.target.value))}
           />
+          {source.parsed.kind === 'youtube' && (
+            <button
+              className={props.direct ? 'active' : ''}
+              title="暫時讓滑鼠直接操作 YouTube 播放器（例如略過廣告），移出這一格後恢復"
+              onClick={() => props.onDirect(index)}
+            >
+              直接操作
+            </button>
+          )}
           <button title="更換網址" onClick={() => setEditing(true)}>
             更換網址
           </button>

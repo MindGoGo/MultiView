@@ -198,8 +198,22 @@ button.link {
   transition: opacity 0.15s;
 }
 
-.cell:hover .cell-controls {
+/* 隱藏時也不接收點擊，避免誤按（R3 AC2） */
+.cell-controls:not(.show) {
+  pointer-events: none;
+}
+
+.cell-controls.show {
   opacity: 1;
+}
+
+/* 直接操作播放器：拿掉攔截層，只保留操作按鈕（R3） */
+.cell.direct {
+  pointer-events: none;
+}
+
+.cell.direct .cell-controls.show {
+  pointer-events: auto;
 }
 
 /* ---- 分隔線（R5） ---- */
@@ -242,9 +256,7 @@ button.link {
   background: rgba(61, 139, 253, 0.15);
 }
 
-.cell.moving .cell-controls {
-  opacity: 1;
-}
+
 
 /* ---- 聲音（R7） ---- */
 .audio-indicator {
