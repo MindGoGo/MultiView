@@ -10,7 +10,9 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dist": "electron-vite build && electron-builder --win portable --x64",
+    "icon": "node scripts/make-icon.mjs"
   },
   "dependencies": {
     "hls.js": "^1.7.3",
@@ -23,9 +25,29 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "typescript": "^7.0.2",
     "vite": "^7.3.7",
     "vitest": "^5.0.3"
+  },
+  "build": {
+    "appId": "local.multiview",
+    "productName": "MultiView",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "electronDist": "node_modules/electron/dist",
+    "win": {
+      "icon": "build/icon.png"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    }
   }
 }
