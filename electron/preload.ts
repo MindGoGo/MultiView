@@ -25,6 +25,13 @@ const api = {
   toggleAlwaysOnTop: () => ipcRenderer.send('win:toggleAlwaysOnTop'),
   minimize: () => ipcRenderer.send('win:minimize'),
   watchCursor: (on: boolean) => ipcRenderer.send('cursor:watch', on),
+  onShortcut: (cb: (key: string) => void) => {
+    const listener = (_: unknown, key: string) => cb(key)
+    ipcRenderer.on('shortcut', listener)
+    return () => {
+      ipcRenderer.removeListener('shortcut', listener)
+    }
+  },
   onCursor: (cb: (pos: CursorPos) => void) => {
     const listener = (_: unknown, pos: CursorPos) => cb(pos)
     ipcRenderer.on('cursor:pos', listener)

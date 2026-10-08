@@ -4,6 +4,7 @@ import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
 import type { Settings } from '../src/lib/settings'
+import { shortcutFor } from '../src/lib/shortcuts'
 
 // 測試時用獨立的資料夾，不動到正式的設定檔
 if (process.env['MULTIVIEW_USER_DATA']) app.setPath('userData', process.env['MULTIVIEW_USER_DATA'])
@@ -65,6 +66,16 @@ async function createWindow() {
   win.on('always-on-top-changed', sendWindowState)
   win.on('close', () => saver.flush())
   win.on('closed', () => (win = null))
+
+  // 焦點在 YouTube 播放器（iframe）裡時，按鍵不會傳到畫面，在這裡攔下來轉給畫面（R9 AC3）
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.isAutoRepeat) return
+    const focused = win?.webContents.focusedFrame
+    if (!focused || focused === win?.webContents.mainFrame) return
+    if (!shortcutFor(input.key)) return
+    event.preventDefault()
+    win?.webContents.send('shortcut', input.key)
+  })
 
   // 不讓網頁開新視窗（例如點到 YouTube 標誌）
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))

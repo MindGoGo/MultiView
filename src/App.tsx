@@ -13,10 +13,19 @@ import {
   type LayoutId,
   type Ratios
 } from './lib/layout'
-import { emptySlots, hiddenCount, newSourceId, setSlot, swapSlots, type Slots } from './lib/slots'
+import {
+  emptySlots,
+  hiddenCount,
+  isVisible,
+  newSourceId,
+  setSlot,
+  swapSlots,
+  type Slots
+} from './lib/slots'
 import { parseSource } from './lib/source'
 import { focusAudio, initialMuted, muteAll, setVolume, toggleMute } from './lib/audio'
-import { controllableIndices } from './lib/playback'
+import { controllableIndices, toggleAllAction } from './lib/playback'
+import { shortcutFor } from './lib/shortcuts'
 import type { PlayerHandle, PlayStatus } from './players/types'
 
 const TOAST_MS = 3000
@@ -40,19 +49,6 @@ export default function App() {
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
   }
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'F11') {
-        e.preventDefault()
-        window.multiview.toggleFullscreen()
-      } else if (e.key === 'Escape') {
-        window.multiview.exitFullscreen()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
     if (handle) players.current.set(id, handle)
@@ -113,6 +109,49 @@ export default function App() {
   const controllable = controllableIndices(slots, layout, statuses)
   const playAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.play())
   const pauseAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.pause())
+
+  // 快捷鍵（R9）。網址輸入框自己處理按鍵，不會傳到這裡。
+  const runShortcut = (key: string): boolean => {
+    const action = shortcutFor(key)
+    if (!action) return false
+    switch (action.type) {
+      case 'toggleAll':
+        if (toggleAllAction(slots, layout, statuses) === 'pause') pauseAll()
+        else playAll()
+        break
+      case 'muteAll':
+        setSlots(muteAll(slots))
+        break
+      case 'focusAudio':
+        if (isVisible(action.index, layout)) onFocusAudio(action.index)
+        break
+      case 'toggleFullscreen':
+        window.multiview.toggleFullscreen()
+        break
+      case 'exitFullscreen':
+        window.multiview.exitFullscreen()
+        break
+    }
+    return true
+  }
+  const runShortcutRef = useRef(runShortcut)
+  runShortcutRef.current = runShortcut
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      // 只排除文字輸入框；音量滑桿有焦點時快捷鍵照樣有效
+      const typing = t instanceof HTMLInputElement ? t.type !== 'range' : t.tagName === 'TEXTAREA'
+      if (e.repeat || typing) return
+      if (runShortcutRef.current(e.key)) e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    const offShortcut = window.multiview.onShortcut((key) => runShortcutRef.current(key))
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      offShortcut()
+    }
+  }, [])
 
   const changeLayout = (next: LayoutId) => {
     setLayout(next)
