@@ -31,5 +31,8 @@ export interface WebReport {
   http: number | null
 }
 
-/** 網頁來源使用的網站資料區（R18） */
-export const WEB_PARTITION = 'web'
+/**
+ * 網頁來源共用的網站資料區（R18）：persist: 開頭會存到磁碟（%APPDATA%\MultiView\Partitions\web），
+ * 關閉程式後保留登入狀態與 cookie；和 YouTube 播放器使用的預設資料區分開。
+ */
+export const WEB_PARTITION = 'persist:web'
