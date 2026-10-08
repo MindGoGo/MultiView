@@ -5,6 +5,7 @@ import type { NavState, PlayerHandle, PlayStatus } from '../players/types'
 import type { WebFailure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import type { CaptionTrack } from '../lib/captions'
+import type { Quality } from '../lib/quality'
 import { YouTubePlayer } from '../players/YouTubePlayer'
 import { VideoPlayer } from '../players/VideoPlayer'
 import { WebPlayer } from '../players/WebPlayer'
@@ -72,7 +73,8 @@ interface Props {
   listOver: number | null
   isFavorite(url: string): boolean
   onToggleFavorite(index: number): void
-  onToggleQuality(index: number): void
+  onQuality(index: number, quality: Quality): void
+  getQualityOptions(index: number): number[]
   onCaptions(index: number, key: string | null): void
   getCaptionTracks(index: number): CaptionTrack[] | null
 }
@@ -176,7 +178,8 @@ export function Grid(props: Props) {
             isSolo={solo === index}
             favorite={source ? props.isFavorite(source.url) : false}
             onToggleFavorite={props.onToggleFavorite}
-            onToggleQuality={props.onToggleQuality}
+            onQuality={props.onQuality}
+            getQualityOptions={props.getQualityOptions}
             onCaptions={props.onCaptions}
             getCaptionTracks={props.getCaptionTracks}
             onToggleSolo={props.onToggleSolo}

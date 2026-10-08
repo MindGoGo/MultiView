@@ -12,6 +12,7 @@ export interface YTPlayer {
   seekTo(seconds: number, allowSeekAhead: boolean): void
   getPlayerState(): number
   getPlaybackQuality(): string
+  getAvailableQualityLevels(): string[]
   /** 字幕（R31）：沒有正式文件，loadModule('captions') 後用 getOption / setOption('captions', ...) 控制 */
   loadModule(module: string): void
   getOption(module: string, option: string): unknown

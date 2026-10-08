@@ -23,7 +23,8 @@ export interface Source {
   captions: string | null
 }
 
-export type Quality = 'auto' | 'high'
+export type { Quality } from './quality'
+import type { Quality } from './quality'
 
 export type Slots = (Source | null)[]
 

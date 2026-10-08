@@ -9,6 +9,7 @@ import type { Progress } from '../lib/progress'
 import { ProgressBar } from './ProgressBar'
 import { isPlayingStatus } from '../lib/playback'
 import type { CaptionTrack } from '../lib/captions'
+import { qualityLabel, type Quality } from '../lib/quality'
 import { PopupMenu, type PopupItem } from './PopupMenu'
 
 interface Props {
@@ -49,9 +50,21 @@ interface Props {
   /** 這一格的網址在最愛中（R22） */
   favorite: boolean
   onToggleFavorite(index: number): void
-  onToggleQuality(index: number): void
+  onQuality(index: number, quality: Quality): void
+  getQualityOptions(index: number): number[]
   onCaptions(index: number, key: string | null): void
   getCaptionTracks(index: number): CaptionTrack[] | null
+}
+
+/** 畫質選單：自動＋可用畫質（由高到低）；還不知道可用畫質時列出目前的選擇（R32） */
+function qualityItems(options: number[], selected: Quality): PopupItem[] {
+  const heights = [...options]
+  if (selected !== 'auto' && !heights.includes(selected)) heights.push(selected)
+  heights.sort((a, b) => b - a)
+  return [
+    { key: 'auto', label: '自動', checked: selected === 'auto' },
+    ...heights.map((h) => ({ key: String(h), label: qualityLabel(h), checked: selected === h }))
+  ]
 }
 
 /** 字幕選單：關閉＋這部影片的字幕軌（R31） */
@@ -322,15 +335,15 @@ export function Cell(props: Props) {
           )}
           {(source.parsed.kind === 'youtube' || source.parsed.kind === 'hls') && (
             <button
-              className={source.quality === 'high' ? 'active' : ''}
-              title={
-                source.quality === 'high'
-                  ? '畫質：高（按一下改成自動）'
-                  : '畫質：自動，依格子大小決定（按一下改成高畫質，較耗網路和電腦資源）'
-              }
-              onClick={() => props.onToggleQuality(index)}
+              className={source.quality !== 'auto' ? 'active' : ''}
+              title={`畫質：${qualityLabel(source.quality)}（按一下選擇畫質）`}
+              onPointerDown={(e) => menu?.kind === 'quality' && e.stopPropagation()}
+              onClick={(e) => toggleMenu('quality', e)}
             >
-              {source.quality === 'high' ? <Label full="畫質：高" icon="HD" /> : <Label full="畫質：自動" icon="A" />}
+              <Label
+                full={`畫質：${qualityLabel(source.quality)}`}
+                icon={source.quality === 'auto' ? 'A' : String(source.quality)}
+              />
             </button>
           )}
           <button
@@ -353,6 +366,14 @@ export function Cell(props: Props) {
           <button title="移除" onClick={() => onRemove(index)}>
             <Label full="移除" icon="✕" />
           </button>
+          {menu?.kind === 'quality' && (
+            <PopupMenu
+              anchor={menu.anchor}
+              items={qualityItems(props.getQualityOptions(index), source.quality)}
+              onSelect={(key) => props.onQuality(index, key === 'auto' ? 'auto' : Number(key))}
+              onClose={() => setMenu(null)}
+            />
+          )}
           {menu?.kind === 'captions' && (
             <PopupMenu
               anchor={menu.anchor}

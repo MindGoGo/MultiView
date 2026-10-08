@@ -2,6 +2,7 @@
 import { DEFAULT_LAYOUT, isValidRatios, LAYOUT_IDS, type LayoutId, type Ratios } from './layout'
 import { parseSource } from './source'
 import { SLOT_COUNT, type Quality } from './slots'
+import { normalizeQuality } from './quality'
 
 export interface WindowState {
   x?: number
@@ -84,7 +85,7 @@ function normalizeSource(raw: unknown): SavedSource | null {
     muted: raw.muted === true,
     volume,
     adblock: raw.adblock !== false,
-    quality: raw.quality === 'high' ? 'high' : 'auto',
+    quality: normalizeQuality(raw.quality),
     captions: typeof raw.captions === 'string' && raw.captions ? raw.captions : null
   }
 }

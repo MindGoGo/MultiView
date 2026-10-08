@@ -4,11 +4,11 @@ import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
 import type { Progress } from '../lib/progress'
 import type { Quality } from '../lib/slots'
 import { findCaptionTrack, toCaptionTracks, type CaptionTrack, type RawCaptionTrack } from '../lib/captions'
-import { HIGH_QUALITY_H, HIGH_QUALITY_W, layoutScale } from '../lib/webVideo'
+import { qualityScale, youtubeHeights } from '../lib/quality'
 
 interface Props extends PlayerProps {
   videoId: string
-  /** 「高」時播放器以至少 1920×1080 的大小載入再縮小（R24） */
+  /** 選擇特定畫質時，播放器以該畫質的大小排版再縮放到格子（R32） */
   quality: Quality
   /** 字幕的選擇；null 為關閉（R31） */
   captions: string | null
@@ -154,6 +154,8 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
     play: () => readyRef.current && playerRef.current?.playVideo(),
     pause: () => readyRef.current && playerRef.current?.pauseVideo(),
     getTitle: () => (readyRef.current && playerRef.current?.getVideoData().title) || null,
+    getQualityOptions: () =>
+      readyRef.current && playerRef.current ? youtubeHeights(playerRef.current.getAvailableQualityLevels()) : [],
     getCaptionTracks: () => {
       const p = playerRef.current
       if (tracksRef.current || !p || !readyRef.current) return tracksRef.current
@@ -191,14 +193,14 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
     }
   }))
 
-  // 「畫質：高」：YouTube 依播放器大小決定畫質，放大播放器再縮小顯示（R24）。改變大小不會重新載入
+  // 選擇特定畫質：YouTube 依播放器大小決定畫質，以該畫質的大小排版再縮放（R32）。改變大小不會重新載入
   useEffect(() => {
     const outer = outerRef.current!
     const host = hostRef.current!
     const layout = () => {
       const w = outer.clientWidth
       const h = outer.clientHeight
-      const f = quality === 'high' ? layoutScale(w, h, HIGH_QUALITY_W, HIGH_QUALITY_H) : 1
+      const f = qualityScale(quality, w, h)
       host.style.width = `${w / f}px`
       host.style.height = `${h / f}px`
       host.style.transform = f === 1 ? '' : `scale(${f})`

@@ -4,12 +4,12 @@ import Hls from 'hls.js'
 import { MAX_RETRIES, RETRY_DELAY_MS, type PlayerHandle, type PlayerProps } from './types'
 import { progressFromMedia, rangesOf } from '../lib/progress'
 import type { Quality } from '../lib/slots'
-import { capLevelFor } from '../lib/quality'
+import { capLevelFor, hlsHeights, pickHlsLevel } from '../lib/quality'
 
 interface Props extends PlayerProps {
   kind: 'hls' | 'mp4'
   url: string
-  /** m3u8 的畫質：「高」固定最高畫質，「自動」依網路速度（R24）；mp4 不使用 */
+  /** m3u8 的畫質：選擇特定畫質時固定使用，「自動」依格子大小和網路速度（R24、R32）；mp4 不使用 */
   quality: Quality
 }
 
@@ -115,8 +115,8 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
   }, [kind, url])
 
   /**
-   * 套用畫質（R24）：
-   * - 高：不限制、固定最高畫質（hls.js 依位元率由低到高排序，最後一個最高）
+   * 套用畫質（R24、R32）：
+   * - 特定畫質：不限制，固定使用不高於選擇的最高畫質
    * - 自動：上限依格子大小，在上限內依網路速度自動選擇。
    *   不用 hls.js 的 capLevelToPlayerSize：1.7.3 在播放中把它打開不會生效
    */
@@ -124,9 +124,10 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
     const hls = hlsRef.current
     const video = videoRef.current
     if (!hls || !video || hls.levels.length === 0) return
-    if (qualityRef.current === 'high') {
+    const q = qualityRef.current
+    if (q !== 'auto') {
       hls.autoLevelCapping = -1
-      hls.nextLevel = hls.levels.length - 1
+      hls.nextLevel = pickHlsLevel(hls.levels, q)
     } else {
       const dpr = window.devicePixelRatio || 1
       hls.autoLevelCapping = capLevelFor(hls.levels, video.clientWidth * dpr, video.clientHeight * dpr)
@@ -168,6 +169,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       wantPlay.current = false
       videoRef.current!.pause()
     },
+    getQualityOptions: () => (hlsRef.current ? hlsHeights(hlsRef.current.levels) : []),
     // mp4 / m3u8 沒有標題，由清單依網址取檔名（R22 共用定義）
     getTitle: () => null,
     getProgress: () => {

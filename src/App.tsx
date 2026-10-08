@@ -29,6 +29,7 @@ import type { ViewSettings } from './lib/settings'
 import type { NavState, PlayerHandle, PlayStatus } from './players/types'
 import type { WebMode } from './players/webTypes'
 import type { WebFailure } from './lib/webErrors'
+import type { Quality } from './lib/quality'
 import {
   addFavorite,
   clearHistory,
@@ -184,10 +185,14 @@ export default function App({ initial }: { initial: ViewSettings }) {
     setSlots(setSlot(slots, index, null))
   }
 
-  // 切換畫質：不換 id，不重新載入（R24）
-  const onToggleQuality = (index: number) => {
+  // 選擇畫質：不換 id，不重新載入（R32）
+  const onQuality = (index: number, quality: Quality) => {
     const s = slots[index]
-    if (s) setSlots(setSlot(slots, index, { ...s, quality: s.quality === 'high' ? 'auto' : 'high' }))
+    if (s) setSlots(setSlot(slots, index, { ...s, quality }))
+  }
+  const getQualityOptions = (index: number) => {
+    const s = slots[index]
+    return (s && players.current.get(s.id)?.getQualityOptions?.()) ?? []
   }
 
   // 字幕（R31）：不換 id，不重新載入
@@ -441,7 +446,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         listOver={listOver}
         isFavorite={(url) => isFavorite(lists, url)}
         onToggleFavorite={onToggleFavorite}
-        onToggleQuality={onToggleQuality}
+        onQuality={onQuality}
+        getQualityOptions={getQualityOptions}
         onCaptions={onCaptions}
         getCaptionTracks={getCaptionTracks}
         getProgress={getProgress}

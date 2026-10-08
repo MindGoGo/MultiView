@@ -49,8 +49,9 @@ describe('layoutScale（R24 YouTube 高畫質）', () => {
 describe('設定檔中的畫質（R24 AC4、AC5）', () => {
   const YT = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ'
 
-  it('AC4：高畫質原樣讀回', () => {
-    expect(normalizeView({ slots: [{ url: YT, quality: 'high' }] }).slots[0]?.quality).toBe('high')
+  // R32 AC5：舊版的「高」改讀成 1080p（取代 R24 的「高」）
+  it('R32 AC5：舊版設定檔的「高」讀成 1080p', () => {
+    expect(normalizeView({ slots: [{ url: YT, quality: 'high' }] }).slots[0]?.quality).toBe(1080)
   })
 
   it('AC5：舊版設定檔沒有畫質欄位時是自動；不合法的值也是自動', () => {
