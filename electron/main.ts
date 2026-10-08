@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { app, BrowserWindow, ipcMain, screen, session, type Rectangle } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, Menu, screen, session, type Rectangle } from 'electron'
 import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
@@ -9,6 +9,7 @@ import { WEB_PARTITION, type WebMode } from '../src/players/webTypes'
 import { forgetWebContents, installAdblock, loadAdblockList, setAdblockEnabled } from './adblock'
 import { createListsSaver, loadLists } from './listsStore'
 import { normalizeLists, type Lists } from '../src/lib/lists'
+import { pageMenuItems, type PageMenuAction } from '../src/lib/pageMenu'
 
 // 測試時用獨立的資料夾，不動到正式的設定檔
 if (process.env['MULTIVIEW_USER_DATA']) app.setPath('userData', process.env['MULTIVIEW_USER_DATA'])
@@ -233,6 +234,32 @@ function attachWebGuest(guest: Electron.WebContents) {
       event.preventDefault()
       win?.webContents.send('shortcut', input.key)
     }
+  })
+  // 整頁模式的右鍵選單（R27）；影片模式（包括「直接操作」）不出現
+  guest.on('context-menu', (_, params) => {
+    if (webModes.get(id) !== 'page' || !win) return
+    const nav = guest.navigationHistory
+    const actions: Record<PageMenuAction, () => void> = {
+      cut: () => guest.cut(),
+      copy: () => guest.copy(),
+      paste: () => guest.paste(),
+      selectAll: () => guest.selectAll(),
+      back: () => nav.goBack(),
+      forward: () => nav.goForward(),
+      reload: () => guest.reload(),
+      copyLink: () => clipboard.writeText(params.linkURL)
+    }
+    const items = pageMenuItems({
+      editFlags: params.editFlags,
+      linkURL: params.linkURL,
+      canGoBack: nav.canGoBack(),
+      canGoForward: nav.canGoForward()
+    })
+    Menu.buildFromTemplate(
+      items.map((i) =>
+        i.type === 'separator' ? { type: 'separator' as const } : { label: i.label, enabled: i.enabled, click: actions[i.action] }
+      )
+    ).popup({ window: win })
   })
   guest.once('destroyed', () => {
     webModes.delete(id)
