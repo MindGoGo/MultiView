@@ -12,11 +12,13 @@ interface Props {
   /** 這一格正在播放或緩衝（R26） */
   playing: boolean
   onTogglePlay(): void
+  /** 有沒有進度（有進度才顯示播放鈕，R26、R30） */
+  onAvailable?(available: boolean): void
 }
 
 const POLL_MS = 250
 
-export function ProgressBar({ active, getProgress, onSeek, onDragChange, playing, onTogglePlay }: Props) {
+export function ProgressBar({ active, getProgress, onSeek, onDragChange, playing, onTogglePlay, onAvailable }: Props) {
   const [progress, setProgress] = useState<Progress | null>(null)
   /** 拖曳中游標所在的比例；沒有拖曳時為 null */
   const [drag, setDrag] = useState<number | null>(null)
@@ -31,6 +33,11 @@ export function ProgressBar({ active, getProgress, onSeek, onDragChange, playing
     const timer = setInterval(update, POLL_MS)
     return () => clearInterval(timer)
   }, [active])
+
+  const available = progress !== null
+  const onAvailableRef = useRef(onAvailable)
+  onAvailableRef.current = onAvailable
+  useEffect(() => onAvailableRef.current?.(available), [available])
 
   if (!progress) return null
   const view = progressView(progress)

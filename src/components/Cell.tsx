@@ -80,6 +80,8 @@ export function Cell(props: Props) {
   const [hover, setHover] = useState(false)
   /** 拖曳進度條中，操作區不隱藏（R19） */
   const [seeking, setSeeking] = useState(false)
+  /** 有進度時才顯示播放鈕（R26、R30） */
+  const [hasProgress, setHasProgress] = useState(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cellRef = useRef<HTMLDivElement>(null)
   useEffect(() => () => clearTimeout(idleTimer.current), [])
@@ -192,6 +194,17 @@ export function Cell(props: Props) {
         </div>
       )}
 
+      {/* 中央的半透明播放／暫停鈕：只有按鈕本身播放／暫停，其他影片區域仍然切換聲音（R30） */}
+      {source && !editing && hover && hasProgress && !failed && !pageMode && !props.direct && (
+        <button
+          className="center-play"
+          title={isPlayingStatus(status) ? '暫停這一格' : '播放這一格'}
+          onClick={() => props.onTogglePlay(index)}
+          onMouseMove={onMouseMove}
+        >
+          {isPlayingStatus(status) ? '❚❚' : '▶'}
+        </button>
+      )}
       {source && !editing && (
         <div className={`cell-controls ${hover || props.moving || seeking ? 'show' : ''}`} onMouseMove={onMouseMove}>
           {!failed && (
@@ -202,6 +215,7 @@ export function Cell(props: Props) {
               onDragChange={setSeeking}
               playing={isPlayingStatus(status)}
               onTogglePlay={() => props.onTogglePlay(index)}
+              onAvailable={setHasProgress}
             />
           )}
           {props.canMove && (
