@@ -41,6 +41,7 @@ interface Props {
   /** 這一格的網址在最愛中（R22） */
   favorite: boolean
   onToggleFavorite(index: number): void
+  onToggleQuality(index: number): void
 }
 
 /** 格子窄的時候只顯示圖示，完整名稱放在 title（R14 AC7） */
@@ -258,6 +259,19 @@ export function Cell(props: Props) {
               onClick={() => props.onToggleAdblock(index)}
             >
               <Label full={source.adblock ? '廣告阻擋：開' : '廣告阻擋：關'} icon={source.adblock ? '🛡' : '⊘'} />
+            </button>
+          )}
+          {(source.parsed.kind === 'youtube' || source.parsed.kind === 'hls') && (
+            <button
+              className={source.quality === 'high' ? 'active' : ''}
+              title={
+                source.quality === 'high'
+                  ? '畫質：高（按一下改成自動）'
+                  : '畫質：自動，依格子大小決定（按一下改成高畫質，較耗網路和電腦資源）'
+              }
+              onClick={() => props.onToggleQuality(index)}
+            >
+              {source.quality === 'high' ? <Label full="畫質：高" icon="HD" /> : <Label full="畫質：自動" icon="A" />}
             </button>
           )}
           <button

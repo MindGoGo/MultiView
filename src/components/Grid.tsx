@@ -66,6 +66,7 @@ interface Props {
   listOver: number | null
   isFavorite(url: string): boolean
   onToggleFavorite(index: number): void
+  onToggleQuality(index: number): void
 }
 
 const FULL: FracRect = { x: 0, y: 0, w: 1, h: 1 }
@@ -112,7 +113,7 @@ export function Grid(props: Props) {
             }
           >
             {source.parsed.kind === 'youtube' ? (
-              <YouTubePlayer videoId={source.parsed.videoId} {...common} />
+              <YouTubePlayer videoId={source.parsed.videoId} quality={source.quality} {...common} />
             ) : source.parsed.kind === 'web' ? (
               <WebPlayer
                 url={source.parsed.url}
@@ -122,7 +123,7 @@ export function Grid(props: Props) {
                 {...common}
               />
             ) : (
-              <VideoPlayer kind={source.parsed.kind} url={source.parsed.url} {...common} />
+              <VideoPlayer kind={source.parsed.kind} url={source.parsed.url} quality={source.quality} {...common} />
             )}
           </div>
         )
@@ -161,6 +162,7 @@ export function Grid(props: Props) {
             isSolo={solo === index}
             favorite={source ? props.isFavorite(source.url) : false}
             onToggleFavorite={props.onToggleFavorite}
+            onToggleQuality={props.onToggleQuality}
             onToggleSolo={props.onToggleSolo}
             getProgress={props.getProgress}
             onSeek={props.onSeek}

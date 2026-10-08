@@ -15,7 +15,7 @@ describe('parseSettings（R10）', () => {
       ...defaultSettings(),
       layout: '3x3',
       ratios: { '2': { cols: [0.7, 0.3], rows: [1] } },
-      slots: [{ url: YT, muted: false, volume: 40, adblock: true }, null, null, null, null, null, null, null, null]
+      slots: [{ url: YT, muted: false, volume: 40, adblock: true, quality: 'auto' }, null, null, null, null, null, null, null, null]
     }
     const { settings, corrupt } = parseSettings(JSON.stringify(s))
     expect(corrupt).toBe(false)
@@ -54,7 +54,7 @@ describe('parseSettings（R10）', () => {
     expect(settings.layout).toBe('2x2')
     expect(settings.ratios).toEqual({ '2x2': { cols: [0.6, 0.4], rows: [0.5, 0.5] } })
     expect(settings.slots[0]).toBeNull() // 不支援的網址
-    expect(settings.slots[1]).toEqual({ url: YT, muted: false, volume: 100, adblock: true })
+    expect(settings.slots[1]).toEqual({ url: YT, muted: false, volume: 100, adblock: true, quality: 'auto' })
     expect(settings.slots[2]).toBeNull()
     expect(settings.slots).toHaveLength(9)
   })

@@ -1,7 +1,7 @@
 // 設定檔的資料結構與驗證（R10）。主程序與畫面共用，不依賴 Electron。
 import { DEFAULT_LAYOUT, isValidRatios, LAYOUT_IDS, type LayoutId, type Ratios } from './layout'
 import { parseSource } from './source'
-import { SLOT_COUNT } from './slots'
+import { SLOT_COUNT, type Quality } from './slots'
 
 export interface WindowState {
   x?: number
@@ -17,6 +17,8 @@ export interface SavedSource {
   volume: number
   /** 廣告阻擋（R17）；舊的設定檔沒有這個欄位時視為開啟 */
   adblock: boolean
+  /** 畫質（R24）；舊的設定檔沒有這個欄位時視為自動 */
+  quality: Quality
 }
 
 /** 畫面這一側的設定，由畫面送給主程序保存 */
@@ -75,7 +77,13 @@ function normalizeRatios(raw: unknown): Partial<Record<LayoutId, Ratios>> {
 function normalizeSource(raw: unknown): SavedSource | null {
   if (!isObject(raw) || typeof raw.url !== 'string' || !parseSource(raw.url)) return null
   const volume = isFiniteNumber(raw.volume) ? Math.round(Math.min(Math.max(raw.volume, 0), 100)) : 100
-  return { url: raw.url, muted: raw.muted === true, volume, adblock: raw.adblock !== false }
+  return {
+    url: raw.url,
+    muted: raw.muted === true,
+    volume,
+    adblock: raw.adblock !== false,
+    quality: raw.quality === 'high' ? 'high' : 'auto'
+  }
 }
 
 function normalizeSlots(raw: unknown): (SavedSource | null)[] {

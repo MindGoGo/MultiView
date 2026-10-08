@@ -126,6 +126,19 @@ button.active {
   background: #000;
 }
 
+.yt-outer {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 大小由 YouTubePlayer 設定（R24 畫質：高時放大再縮小） */
+.yt-host {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
 .yt-host iframe {
   display: block;
   width: 100%;

@@ -20,9 +20,18 @@ export const VIDEO_LAYOUT_MIN_H = 720
  * 長寬比和格子相同；格子夠大時不縮放（1）。
  */
 export function videoModeScale(w: number, h: number): number {
-  if (w <= 0 || h <= 0) return 1
-  return Math.min(1, w / VIDEO_LAYOUT_MIN_W, h / VIDEO_LAYOUT_MIN_H)
+  return layoutScale(w, h, VIDEO_LAYOUT_MIN_W, VIDEO_LAYOUT_MIN_H)
 }
+
+/** 以至少 minW × minH 排版再縮小時的比例；格子夠大時為 1（R13、R24 共用） */
+export function layoutScale(w: number, h: number, minW: number, minH: number): number {
+  if (w <= 0 || h <= 0) return 1
+  return Math.min(1, w / minW, h / minH)
+}
+
+/** 「畫質：高」時 YouTube 播放器至少以這個大小載入（R24） */
+export const HIGH_QUALITY_W = 1920
+export const HIGH_QUALITY_H = 1080
 
 /** 和可視範圍 (0, 0, vw, vh) 重疊的部分；沒有重疊時回傳 null */
 export function clipToViewport(r: Rect, vw: number, vh: number): Rect | null {

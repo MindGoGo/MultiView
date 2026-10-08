@@ -61,7 +61,8 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
         muted: s.muted,
         volume: s.volume,
         autoplay: false,
-        adblock: s.adblock
+        adblock: s.adblock,
+        quality: s.quality
       }
   })
   return slots
@@ -117,7 +118,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
     window.multiview.saveView({
       layout,
       ratios: ratiosMap,
-      slots: slots.map((s) => (s ? { url: s.url, muted: s.muted, volume: s.volume, adblock: s.adblock } : null))
+      slots: slots.map((s) =>
+        s ? { url: s.url, muted: s.muted, volume: s.volume, adblock: s.adblock, quality: s.quality } : null
+      )
     })
   }, [layout, ratiosMap, slots])
 
@@ -160,7 +163,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         autoplay: true,
         // 廣告阻擋預設開啟（R17）
         adblock: true,
-        record: true
+        record: true,
+        // 更換網址時保留原本的畫質設定，新的格子預設自動（R24）
+        quality: existing ? existing.quality : 'auto'
       })
     )
     return null
@@ -170,6 +175,12 @@ export default function App({ initial }: { initial: ViewSettings }) {
     // 移除放大的那一格時離開單格全螢幕（R20 AC7）
     if (solo?.index === index) exitSolo()
     setSlots(setSlot(slots, index, null))
+  }
+
+  // 切換畫質：不換 id，不重新載入（R24）
+  const onToggleQuality = (index: number) => {
+    const s = slots[index]
+    if (s) setSlots(setSlot(slots, index, { ...s, quality: s.quality === 'high' ? 'auto' : 'high' }))
   }
 
   // ---- 清單操作（R21–R23） ----
@@ -391,6 +402,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         listOver={listOver}
         isFavorite={(url) => isFavorite(lists, url)}
         onToggleFavorite={onToggleFavorite}
+        onToggleQuality={onToggleQuality}
         getProgress={getProgress}
         onSeek={onSeek}
       />

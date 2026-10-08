@@ -3,20 +3,26 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import Hls from 'hls.js'
 import { MAX_RETRIES, RETRY_DELAY_MS, type PlayerHandle, type PlayerProps } from './types'
 import { progressFromMedia, rangesOf } from '../lib/progress'
+import type { Quality } from '../lib/slots'
+import { capLevelFor } from '../lib/quality'
 
 interface Props extends PlayerProps {
   kind: 'hls' | 'mp4'
   url: string
+  /** m3u8 的畫質：「高」固定最高畫質，「自動」依網路速度（R24）；mp4 不使用 */
+  quality: Quality
 }
 
 export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
-  { kind, url, muted, volume, autoplay, active, onStatus },
+  { kind, url, quality, muted, volume, autoplay, active, onStatus },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null)
   /** 使用者希望的播放狀態；重試重新載入後依此決定要不要繼續播放 */
   const wantPlay = useRef(autoplay)
   const hlsRef = useRef<Hls | null>(null)
+  const qualityRef = useRef(quality)
+  qualityRef.current = quality
   const onStatusRef = useRef(onStatus)
   onStatusRef.current = onStatus
 
@@ -41,6 +47,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
           if (data.fatal) fail()
         })
         hls.on(Hls.Events.FRAG_LOADED, () => (retries = 0))
+        hls.on(Hls.Events.MANIFEST_PARSED, () => applyQuality())
         hls.loadSource(url)
         hls.attachMedia(video)
       } else {
@@ -106,6 +113,36 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       video.load()
     }
   }, [kind, url])
+
+  /**
+   * 套用畫質（R24）：
+   * - 高：不限制、固定最高畫質（hls.js 依位元率由低到高排序，最後一個最高）
+   * - 自動：上限依格子大小，在上限內依網路速度自動選擇。
+   *   不用 hls.js 的 capLevelToPlayerSize：1.7.3 在播放中把它打開不會生效
+   */
+  const applyQuality = () => {
+    const hls = hlsRef.current
+    const video = videoRef.current
+    if (!hls || !video || hls.levels.length === 0) return
+    if (qualityRef.current === 'high') {
+      hls.autoLevelCapping = -1
+      hls.nextLevel = hls.levels.length - 1
+    } else {
+      const dpr = window.devicePixelRatio || 1
+      hls.autoLevelCapping = capLevelFor(hls.levels, video.clientWidth * dpr, video.clientHeight * dpr)
+      if (!hls.autoLevelEnabled) hls.nextLevel = -1
+    }
+  }
+  const applyQualityRef = useRef(applyQuality)
+  applyQualityRef.current = applyQuality
+  useEffect(applyQuality, [quality])
+  // 格子大小改變時重新計算自動的上限
+  useEffect(() => {
+    if (kind !== 'hls') return
+    const ro = new ResizeObserver(() => qualityRef.current === 'auto' && applyQualityRef.current())
+    ro.observe(videoRef.current!)
+    return () => ro.disconnect()
+  }, [kind])
 
   useEffect(() => {
     videoRef.current!.muted = muted

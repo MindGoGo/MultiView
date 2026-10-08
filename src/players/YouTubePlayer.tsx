@@ -2,15 +2,20 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { loadYouTubeApi, YT_STATE, type YTPlayer } from './youtubeApi'
 import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
 import type { Progress } from '../lib/progress'
+import type { Quality } from '../lib/slots'
+import { HIGH_QUALITY_H, HIGH_QUALITY_W, layoutScale } from '../lib/webVideo'
 
 interface Props extends PlayerProps {
   videoId: string
+  /** 「高」時播放器以至少 1920×1080 的大小載入再縮小（R24） */
+  quality: Quality
 }
 
 export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
-  { videoId, muted, volume, autoplay, active, onStatus },
+  { videoId, quality, muted, volume, autoplay, active, onStatus },
   ref
 ) {
+  const outerRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<YTPlayer | null>(null)
   const readyRef = useRef(false)
@@ -129,5 +134,27 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
     }
   }))
 
-  return <div className="player yt-host" ref={hostRef} />
+  // 「畫質：高」：YouTube 依播放器大小決定畫質，放大播放器再縮小顯示（R24）。改變大小不會重新載入
+  useEffect(() => {
+    const outer = outerRef.current!
+    const host = hostRef.current!
+    const layout = () => {
+      const w = outer.clientWidth
+      const h = outer.clientHeight
+      const f = quality === 'high' ? layoutScale(w, h, HIGH_QUALITY_W, HIGH_QUALITY_H) : 1
+      host.style.width = `${w / f}px`
+      host.style.height = `${h / f}px`
+      host.style.transform = f === 1 ? '' : `scale(${f})`
+    }
+    layout()
+    const ro = new ResizeObserver(layout)
+    ro.observe(outer)
+    return () => ro.disconnect()
+  }, [quality])
+
+  return (
+    <div className="player yt-outer" ref={outerRef}>
+      <div className="yt-host" ref={hostRef} />
+    </div>
+  )
 })
