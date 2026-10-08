@@ -4,6 +4,7 @@ import { isVisible, type Slots } from '../lib/slots'
 import type { NavState, PlayerHandle, PlayStatus } from '../players/types'
 import type { WebFailure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
+import type { CaptionTrack } from '../lib/captions'
 import { YouTubePlayer } from '../players/YouTubePlayer'
 import { VideoPlayer } from '../players/VideoPlayer'
 import { WebPlayer } from '../players/WebPlayer'
@@ -72,6 +73,8 @@ interface Props {
   isFavorite(url: string): boolean
   onToggleFavorite(index: number): void
   onToggleQuality(index: number): void
+  onCaptions(index: number, key: string | null): void
+  getCaptionTracks(index: number): CaptionTrack[] | null
 }
 
 const FULL: FracRect = { x: 0, y: 0, w: 1, h: 1 }
@@ -118,7 +121,12 @@ export function Grid(props: Props) {
             }
           >
             {source.parsed.kind === 'youtube' ? (
-              <YouTubePlayer videoId={source.parsed.videoId} quality={source.quality} {...common} />
+              <YouTubePlayer
+                videoId={source.parsed.videoId}
+                quality={source.quality}
+                captions={source.captions}
+                {...common}
+              />
             ) : source.parsed.kind === 'web' ? (
               <WebPlayer
                 url={source.parsed.url}
@@ -169,6 +177,8 @@ export function Grid(props: Props) {
             favorite={source ? props.isFavorite(source.url) : false}
             onToggleFavorite={props.onToggleFavorite}
             onToggleQuality={props.onToggleQuality}
+            onCaptions={props.onCaptions}
+            getCaptionTracks={props.getCaptionTracks}
             onToggleSolo={props.onToggleSolo}
             onTogglePlay={props.onTogglePlay}
             nav={source ? props.navStates[source.id] : undefined}

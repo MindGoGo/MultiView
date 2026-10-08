@@ -8,6 +8,8 @@ import { WEB_FAILURE_TEXT, type WebFailure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import { ProgressBar } from './ProgressBar'
 import { isPlayingStatus } from '../lib/playback'
+import type { CaptionTrack } from '../lib/captions'
+import { PopupMenu, type PopupItem } from './PopupMenu'
 
 interface Props {
   index: number
@@ -48,6 +50,17 @@ interface Props {
   favorite: boolean
   onToggleFavorite(index: number): void
   onToggleQuality(index: number): void
+  onCaptions(index: number, key: string | null): void
+  getCaptionTracks(index: number): CaptionTrack[] | null
+}
+
+/** 字幕選單：關閉＋這部影片的字幕軌（R31） */
+function captionItems(tracks: CaptionTrack[] | null, selected: string | null): PopupItem[] {
+  const items: PopupItem[] = [{ key: 'off', label: '關閉', checked: !selected }]
+  if (tracks === null) items.push({ key: 'loading', label: '播放後才能選擇字幕', disabled: true })
+  else if (tracks.length === 0) items.push({ key: 'none', label: '這部影片沒有字幕', disabled: true })
+  else for (const t of tracks) items.push({ key: t.key, label: t.label, checked: t.key === selected })
+  return items
 }
 
 /** 格子窄的時候只顯示圖示，完整名稱放在 title（R14 AC7） */
@@ -82,6 +95,10 @@ export function Cell(props: Props) {
   const [seeking, setSeeking] = useState(false)
   /** 有進度時才顯示播放鈕（R26、R30） */
   const [hasProgress, setHasProgress] = useState(false)
+  /** 開著的格子選單與它的按鈕位置（R31、R32）；選單開著時操作區不隱藏 */
+  const [menu, setMenu] = useState<{ kind: 'captions' | 'quality'; anchor: DOMRect } | null>(null)
+  const toggleMenu = (kind: 'captions' | 'quality', e: React.MouseEvent<HTMLButtonElement>) =>
+    setMenu(menu?.kind === kind ? null : { kind, anchor: e.currentTarget.getBoundingClientRect() })
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cellRef = useRef<HTMLDivElement>(null)
   useEffect(() => () => clearTimeout(idleTimer.current), [])
@@ -206,7 +223,7 @@ export function Cell(props: Props) {
         </button>
       )}
       {source && !editing && (
-        <div className={`cell-controls ${hover || props.moving || seeking ? 'show' : ''}`} onMouseMove={onMouseMove}>
+        <div className={`cell-controls ${hover || props.moving || seeking || menu ? 'show' : ''}`} onMouseMove={onMouseMove}>
           {!failed && (
             <ProgressBar
               active={hover || seeking}
@@ -293,6 +310,16 @@ export function Cell(props: Props) {
               <Label full={source.adblock ? '廣告阻擋：開' : '廣告阻擋：關'} icon={source.adblock ? '🛡' : '⊘'} />
             </button>
           )}
+          {source.parsed.kind === 'youtube' && (
+            <button
+              className={source.captions ? 'active' : ''}
+              title="字幕"
+              onPointerDown={(e) => menu?.kind === 'captions' && e.stopPropagation()}
+              onClick={(e) => toggleMenu('captions', e)}
+            >
+              CC
+            </button>
+          )}
           {(source.parsed.kind === 'youtube' || source.parsed.kind === 'hls') && (
             <button
               className={source.quality === 'high' ? 'active' : ''}
@@ -326,6 +353,14 @@ export function Cell(props: Props) {
           <button title="移除" onClick={() => onRemove(index)}>
             <Label full="移除" icon="✕" />
           </button>
+          {menu?.kind === 'captions' && (
+            <PopupMenu
+              anchor={menu.anchor}
+              items={captionItems(props.getCaptionTracks(index), source.captions)}
+              onSelect={(key) => props.onCaptions(index, key === 'off' ? null : key)}
+              onClose={() => setMenu(null)}
+            />
+          )}
         </div>
       )}
     </div>

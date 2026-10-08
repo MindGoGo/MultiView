@@ -12,6 +12,10 @@ export interface YTPlayer {
   seekTo(seconds: number, allowSeekAhead: boolean): void
   getPlayerState(): number
   getPlaybackQuality(): string
+  /** 字幕（R31）：沒有正式文件，loadModule('captions') 後用 getOption / setOption('captions', ...) 控制 */
+  loadModule(module: string): void
+  getOption(module: string, option: string): unknown
+  setOption(module: string, option: string, value: unknown): void
   /** 沒有公開文件，但實際有 title；直播時 isLive 為 true，allowLiveDvr 表示能不能倒轉 */
   getVideoData(): { title?: string; isLive?: boolean; allowLiveDvr?: boolean }
   /**
@@ -35,6 +39,8 @@ export interface YTNamespace {
         onReady?: (e: { target: YTPlayer }) => void
         onStateChange?: (e: { data: number; target: YTPlayer }) => void
         onError?: (e: { data: number }) => void
+        /** 載入或卸載模組（例如字幕）後觸發 */
+        onApiChange?: () => void
       }
     }
   ) => YTPlayer

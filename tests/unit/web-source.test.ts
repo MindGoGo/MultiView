@@ -60,8 +60,8 @@ describe('設定檔中的網頁來源（R12 AC6、AC7，R17 AC3）', () => {
     const s = {
       ...defaultSettings(),
       slots: [
-        { url: WEB, muted: false, volume: 30, adblock: false, quality: 'auto' },
-        { url: WEB, muted: true, volume: 100, adblock: true, quality: 'auto' },
+        { url: WEB, muted: false, volume: 30, adblock: false, quality: 'auto', captions: null },
+        { url: WEB, muted: true, volume: 100, adblock: true, quality: 'auto', captions: null },
         null,
         null,
         null,
@@ -73,8 +73,8 @@ describe('設定檔中的網頁來源（R12 AC6、AC7，R17 AC3）', () => {
     }
     const { settings, corrupt } = parseSettings(JSON.stringify(s))
     expect(corrupt).toBe(false)
-    expect(settings.slots[0]).toEqual({ url: WEB, muted: false, volume: 30, adblock: false, quality: 'auto' })
-    expect(settings.slots[1]).toEqual({ url: WEB, muted: true, volume: 100, adblock: true, quality: 'auto' })
+    expect(settings.slots[0]).toEqual({ url: WEB, muted: false, volume: 30, adblock: false, quality: 'auto', captions: null })
+    expect(settings.slots[1]).toEqual({ url: WEB, muted: true, volume: 100, adblock: true, quality: 'auto', captions: null })
   })
 
   it('AC7：第一版的設定檔（沒有 adblock 欄位）照樣讀取，廣告阻擋視為開啟', () => {
@@ -93,7 +93,8 @@ describe('設定檔中的網頁來源（R12 AC6、AC7，R17 AC3）', () => {
       muted: false,
       volume: 40,
       adblock: true,
-      quality: 'auto'
+      quality: 'auto',
+      captions: null
     })
   })
 

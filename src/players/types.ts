@@ -1,5 +1,6 @@
 import type { WebFailure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
+import type { CaptionTrack } from '../lib/captions'
 
 export type PlayStatus = 'loading' | 'playing' | 'paused' | 'ended' | 'error'
 
@@ -14,6 +15,8 @@ export interface PlayerHandle {
   seek(seconds: number): void
   /** 影片名稱的來源（YouTube 標題、網頁標題）；取不到時回傳 null（R22、R23） */
   getTitle(): string | null
+  /** YouTube 這部影片的字幕軌；還不知道時回傳 null（R31） */
+  getCaptionTracks?(): CaptionTrack[] | null
   /** 網頁來源的上一頁／下一頁（R28） */
   goBack?(): void
   goForward?(): void

@@ -19,6 +19,8 @@ export interface SavedSource {
   adblock: boolean
   /** 畫質（R24）；舊的設定檔沒有這個欄位時視為自動 */
   quality: Quality
+  /** 字幕的選擇（R31）；舊的設定檔沒有這個欄位時視為關閉 */
+  captions: string | null
 }
 
 /** 畫面這一側的設定，由畫面送給主程序保存 */
@@ -82,7 +84,8 @@ function normalizeSource(raw: unknown): SavedSource | null {
     muted: raw.muted === true,
     volume,
     adblock: raw.adblock !== false,
-    quality: raw.quality === 'high' ? 'high' : 'auto'
+    quality: raw.quality === 'high' ? 'high' : 'auto',
+    captions: typeof raw.captions === 'string' && raw.captions ? raw.captions : null
   }
 }
 

@@ -62,7 +62,8 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
         volume: s.volume,
         autoplay: false,
         adblock: s.adblock,
-        quality: s.quality
+        quality: s.quality,
+        captions: s.captions
       }
   })
   return slots
@@ -121,7 +122,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
       layout,
       ratios: ratiosMap,
       slots: slots.map((s) =>
-        s ? { url: s.url, muted: s.muted, volume: s.volume, adblock: s.adblock, quality: s.quality } : null
+        s
+          ? { url: s.url, muted: s.muted, volume: s.volume, adblock: s.adblock, quality: s.quality, captions: s.captions }
+          : null
       )
     })
   }, [layout, ratiosMap, slots])
@@ -167,7 +170,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         adblock: true,
         record: true,
         // 更換網址時保留原本的畫質設定，新的格子預設自動（R24）
-        quality: existing ? existing.quality : 'auto'
+        quality: existing ? existing.quality : 'auto',
+        // 更換網址時保留字幕的選擇，新影片有同一種語言就自動開啟（R31）
+        captions: existing ? existing.captions : null
       })
     )
     return null
@@ -183,6 +188,16 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const onToggleQuality = (index: number) => {
     const s = slots[index]
     if (s) setSlots(setSlot(slots, index, { ...s, quality: s.quality === 'high' ? 'auto' : 'high' }))
+  }
+
+  // 字幕（R31）：不換 id，不重新載入
+  const onCaptions = (index: number, key: string | null) => {
+    const s = slots[index]
+    if (s) setSlots(setSlot(slots, index, { ...s, captions: key }))
+  }
+  const getCaptionTracks = (index: number) => {
+    const s = slots[index]
+    return (s && players.current.get(s.id)?.getCaptionTracks?.()) ?? null
   }
 
   // ---- 清單操作（R21–R23） ----
@@ -427,6 +442,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         isFavorite={(url) => isFavorite(lists, url)}
         onToggleFavorite={onToggleFavorite}
         onToggleQuality={onToggleQuality}
+        onCaptions={onCaptions}
+        getCaptionTracks={getCaptionTracks}
         getProgress={getProgress}
         onSeek={onSeek}
       />

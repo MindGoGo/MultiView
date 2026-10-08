@@ -19,6 +19,8 @@ export interface Source {
   record?: boolean
   /** 畫質，只用於 YouTube 和 m3u8（R24）；跟著來源移動和保存 */
   quality: Quality
+  /** 字幕的選擇，只用於 YouTube；null 為關閉（R31）。跟著來源移動和保存 */
+  captions: string | null
 }
 
 export type Quality = 'auto' | 'high'

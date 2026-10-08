@@ -3,22 +3,49 @@ import { loadYouTubeApi, YT_STATE, type YTPlayer } from './youtubeApi'
 import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
 import type { Progress } from '../lib/progress'
 import type { Quality } from '../lib/slots'
+import { findCaptionTrack, toCaptionTracks, type CaptionTrack, type RawCaptionTrack } from '../lib/captions'
 import { HIGH_QUALITY_H, HIGH_QUALITY_W, layoutScale } from '../lib/webVideo'
 
 interface Props extends PlayerProps {
   videoId: string
   /** 「高」時播放器以至少 1920×1080 的大小載入再縮小（R24） */
   quality: Quality
+  /** 字幕的選擇；null 為關閉（R31） */
+  captions: string | null
 }
 
+/** 開始播放這麼久之後還拿不到字幕清單，就當作沒有字幕（R31 AC5） */
+const NO_CAPTIONS_AFTER_MS = 3000
+
 export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
-  { videoId, quality, muted, volume, autoplay, active, onStatus },
+  { videoId, quality, captions, muted, volume, autoplay, active, onStatus },
   ref
 ) {
   const outerRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<YTPlayer | null>(null)
   const readyRef = useRef(false)
+  /**
+   * 第一次開始播放的時間：YouTube 在影片開始播放前不提供字幕清單；
+   * 沒有字幕的影片不會觸發 onApiChange，播放後一段時間還沒有清單才判斷為「沒有字幕」（R31 AC5）
+   */
+  const playedAtRef = useRef(0)
+  /** 這部影片的字幕軌；字幕模組載入前為 null（R31） */
+  const tracksRef = useRef<CaptionTrack[] | null>(null)
+  const captionsRef = useRef(captions)
+  captionsRef.current = captions
+  /**
+   * 套用字幕的選擇（R31）：沒有選擇或影片沒有那種語言時關閉，
+   * 也會蓋掉 YouTube 依系統語言或上傳者設定自動開啟的字幕
+   */
+  const applyCaptions = () => {
+    const p = playerRef.current
+    if (!p || !readyRef.current || !tracksRef.current) return
+    const track = findCaptionTrack(tracksRef.current, captionsRef.current)
+    p.setOption('captions', 'track', track ? { languageCode: track.languageCode, kind: track.auto ? 'asr' : '' } : {})
+  }
+  const applyCaptionsRef = useRef(applyCaptions)
+  applyCaptionsRef.current = applyCaptions
   // 讓 effect 內的 callback 永遠拿到最新的 props
   const latest = useRef({ muted, volume, onStatus })
   latest.current = { muted, volume, onStatus }
@@ -58,6 +85,14 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
               else p.unMute()
               if (autoplay) p.playVideo()
               else latest.current.onStatus('paused')
+              // 載入字幕模組才拿得到字幕軌，載入後在 onApiChange 套用選擇（R31）
+              p.loadModule('captions')
+            },
+            onApiChange: () => {
+              const raw = playerRef.current?.getOption('captions', 'tracklist') as RawCaptionTrack[] | undefined
+              if (!Array.isArray(raw)) return
+              tracksRef.current = toCaptionTracks(raw)
+              applyCaptionsRef.current()
             },
             onStateChange: ({ data }) => {
               const map: Record<number, PlayStatus> = {
@@ -69,6 +104,11 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
               }
               const status = map[data]
               if (status) latest.current.onStatus(status)
+              // 第一次開始播放：字幕清單在這之後才拿得到，再載入一次字幕模組（R31）
+              if (data === YT_STATE.PLAYING && !playedAtRef.current) {
+                playedAtRef.current = Date.now()
+                playerRef.current?.loadModule('captions')
+              }
             },
             // 100 找不到 / 101、150 禁止內嵌 / 2 參數錯誤 / 5 HTML5 播放器錯誤（R2 AC6）
             onError: () => latest.current.onStatus('error')
@@ -82,6 +122,8 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
     return () => {
       cancelled = true
       readyRef.current = false
+      tracksRef.current = null
+      playedAtRef.current = 0
       playerRef.current?.destroy()
       playerRef.current = null
       target.remove()
@@ -101,6 +143,9 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
     if (p && readyRef.current) p.setVolume(volume)
   }, [volume])
 
+  // 改變字幕的選擇時套用，不重新載入（R31）
+  useEffect(() => applyCaptionsRef.current(), [captions])
+
   useEffect(() => {
     if (!active && readyRef.current) playerRef.current?.pauseVideo()
   }, [active])
@@ -109,6 +154,18 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
     play: () => readyRef.current && playerRef.current?.playVideo(),
     pause: () => readyRef.current && playerRef.current?.pauseVideo(),
     getTitle: () => (readyRef.current && playerRef.current?.getVideoData().title) || null,
+    getCaptionTracks: () => {
+      const p = playerRef.current
+      if (tracksRef.current || !p || !readyRef.current) return tracksRef.current
+      // 還沒收到 onApiChange 時直接查詢；就緒 3 秒後還是沒有清單，表示這部影片沒有字幕
+      const raw = p.getOption('captions', 'tracklist') as RawCaptionTrack[] | undefined
+      if (Array.isArray(raw) && raw.length > 0) {
+        tracksRef.current = toCaptionTracks(raw)
+        applyCaptionsRef.current()
+        return tracksRef.current
+      }
+      return playedAtRef.current && Date.now() - playedAtRef.current > NO_CAPTIONS_AFTER_MS ? [] : null
+    },
     getProgress: (): Progress | null => {
       const p = playerRef.current
       if (!p || !readyRef.current) return null

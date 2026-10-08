@@ -17,6 +17,7 @@ function src(over: Partial<Source> = {}): Source {
     autoplay: true,
     adblock: true,
     quality: 'auto',
+    captions: null,
     ...over
   }
 }
