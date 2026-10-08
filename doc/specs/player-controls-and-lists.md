@@ -2,7 +2,7 @@
 
 - 功能代號：`player-controls-and-lists`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-08
 - 前置規格：[multiview-player](multiview-player.md)（R1–R11）、[web-page-source](web-page-source.md)（R12–R18）。本規格的需求編號從 R19 接續，沿用前置規格的「共用定義」。
 
@@ -149,11 +149,11 @@
 ### R24：畫質
 - 描述：
   - YouTube 和 m3u8 格子的操作按鈕多一個畫質按鈕，在「畫質：自動」和「畫質：高」之間切換。mp4 和網頁來源沒有這個按鈕。
-  - **自動**（預設）：和現在相同，由播放器依格子大小和網路速度決定。
+  - **自動**（預設）：由播放器依格子大小和網路速度決定。m3u8 的上限是第一個寬高都不小於格子的畫質等級。
   - **高**：
     - YouTube：播放器以至少 1920×1080 的大小載入，再縮小顯示在格子裡，讓 YouTube 可以選到 1080p（影片本身有提供、網路速度足夠時）。YouTube 仍然可能依網路速度降低畫質，程式無法強制。
     - m3u8：固定使用最高的畫質，不隨網路速度自動降低（網路不夠快時可能卡頓）。
-  - 切換時不重新載入影片（YouTube 調整畫質時可能短暫緩衝）。
+  - 切換時不重新載入影片（YouTube 調整畫質時可能短暫緩衝）。實際畫面要等已經緩衝的片段播完才換成新畫質（YouTube 一般影片約 40 秒到 2 分鐘），播放器回報的畫質則會先變。
   - 設定跟著來源：換位時一起移動，保存在設定檔（第一版 R10）。第一版、第二版的設定檔沒有這個欄位時視為「自動」。
   - 畫面上顯示的影片大小、比例和現在相同，只有畫質不同。YouTube 的「高」會讓播放器上的 YouTube 標誌和文字跟著縮小，這是預期的結果。
 - 驗收條件：
@@ -194,26 +194,32 @@
 - **效能：** 「畫質：高」會增加網路和電腦負擔；在 `2×2` 四格都設成「高」的 YouTube 1080p 直播連續播放 30 分鐘，程式不當掉、畫面不凍結（只能手動驗收）。
 - **技術風險（實作時處理，不影響需求）：**
   - YouTube IFrame API 沒有公開「是不是直播」和「可回放範圍」的介面。實作使用播放器回報給頁面、但沒有公開文件的欄位（影片資訊的 `isLive`、`allowLiveDvr` 和播放狀態的 `progressState`）；直播的 `getDuration` 和 `getCurrentTime` 不同步，不能用來計算。YouTube 改版拿掉這些欄位時，直播會退回只顯示「● LIVE」。
-  - YouTube 指定畫質的介面已經停用，「高」只能靠放大播放器尺寸；如果 YouTube 不因此提高畫質，要停下來回報。
-  - 網頁來源的跳轉要透過注入網頁的程式控制主要影片。
+  - YouTube 指定畫質的介面已經停用，「高」靠放大播放器尺寸；實測 YouTube 因此改選 1080p。
+  - m3u8 的「自動」上限由程式依格子大小計算，不用 hls.js 的 `capLevelToPlayerSize`：1.7.3 版在播放中打開這個選項不會生效。
+  - 網頁來源的跳轉透過注入網頁的程式，沿著框架路徑傳到主要影片所在的框架。
+  - 單格全螢幕進入時向主程序查詢視窗是否已經全螢幕：畫面這邊記錄的視窗狀態可能還沒更新。
 - **測試：** 時間格式、可回放判斷、清單的新增／編輯／去重／上限、設定檔相容寫成單元測試；需要真實播放器的驗收條件以手動驗收（本機測試頁＋實際的 YouTube 影片）。
 
-## 9. 預計影響的檔案
+## 9. 影響的檔案
 
-- `src/lib/progress.ts`（新）：時間格式、可回放判斷、進度條位置換算（R19）
-- `src/lib/lists.ts`（新）：最愛與歷史的新增、編輯、刪除、去重、上限、驗證（R21–R23）
-- `electron/listsStore.ts`（新）、`electron/main.ts`、`electron/preload.ts`：清單檔案的讀寫（R21）
-- `src/players/types.ts`、`YouTubePlayer.tsx`、`VideoPlayer.tsx`、`WebPlayer.tsx`、`electron/webPreload.ts`：進度回報、跳轉、影片名稱、畫質（R19、R22–R24）
-- `src/components/Cell.tsx`：進度條、全螢幕、最愛、畫質按鈕（R19、R20、R22、R24）
-- `src/components/ListPanel.tsx`（新）、`Toolbar.tsx`：清單面板（R21–R23）
-- `src/App.tsx`、`src/components/Grid.tsx`：單格全螢幕、清單拖放（R20、R21）
-- `src/lib/slots.ts`、`src/lib/settings.ts`：來源的畫質欄位（R24）
-- `tests/unit/`、`tests/manual/`：測試
+實際結構如下（與預計的差異：新增 `ProgressBar.tsx`、`quality.ts`；畫質的縮放和網頁來源共用 `webVideo.ts` 的 `layoutScale`）：
+- `src/lib/progress.ts`、`src/components/ProgressBar.tsx`：進度判斷、時間格式、進度條（R19）
+- `src/lib/slots.ts`、`playback.ts`、`audio.ts`：單格全螢幕時的「顯示中」判斷（R20）
+- `src/lib/lists.ts`、`electron/listsStore.ts`、`src/components/ListPanel.tsx`：清單與面板（R21–R23）
+- `src/lib/quality.ts`、`src/lib/webVideo.ts`：m3u8 自動上限、YouTube 高畫質縮放（R24）
+- `src/players/*`、`electron/webPreload.ts`：進度回報、跳轉、影片名稱、畫質（R19、R22–R24）
+- `src/App.tsx`、`src/components/Grid.tsx`、`Cell.tsx`、`Toolbar.tsx`、`src/styles.css`：各項按鈕與狀態（R19–R24）
+- `electron/main.ts`、`electron/preload.ts`：清單檔、F11 交給畫面處理（R20、R21）
+- `src/lib/settings.ts`：畫質欄位（R24）
+- `package.json`、`package-lock.json`：版本 0.2.0（R25）
+- `tests/unit/progress|solo|lists|lists-store|quality.test.ts`、`tests/manual/player-controls-and-lists.md`：測試
 
 ## 10. 未決事項
 
-- [ ] 分支：目前的程式在 `web-page-source` 分支，尚未合併到 `develop`；這個功能從 `web-page-source` 開出。
-- [ ] 驗收用的 YouTube 影片：實作時選一部有 1080p 的一般影片、一個可回放的直播，記在這裡。
+- [x] 分支：從 `web-page-source` 開出 `player-controls-and-lists`（2026-10-08）。
+- [x] 驗收用的 YouTube 影片：一般影片 `aqz-KE-bpKQ`（Big Buck Bunny，有 1080p）；可回放的直播 `LuKwFajn37U`（DW News）。原本預計的 lofi girl、France 24、NASA 直播都禁止內嵌。
+- [ ] 沒有找到可以內嵌、又不能回放的 YouTube 直播來驗證 R19 AC6 的 YouTube 情況（改以網頁中的即時串流驗證）。
+- [ ] 效能（2×2 四格高畫質 30 分鐘）尚未驗收。
 
 ## 變更紀錄
 
@@ -222,3 +228,4 @@
 | 2026-10-08 | 初版 | |
 | 2026-10-08 | 新增「網址比對」定義、R25 版本號；R19 補位置、拖曳中不隱藏、不影響聲音、播完後跳轉、整頁模式、AC10–11；R20 補 Esc 與整頁模式的衝突、隱藏來源不恢復、不顯示隱藏提示、AC9–10；R21 補被面板蓋住的格子、一次編輯一筆；R22 補重複網址 AC6；R23 補網頁來源的成功條件、廣告阻擋重新載入、時間格式；R24 補標誌縮小 | 第 2 步複查；使用者要求更新版本號 |
 | 2026-10-08 | R19 格子窄時進度條移到操作按鈕下方；技術風險補上 YouTube 直播的可回放範圍改用播放器回報的狀態 | 實作時發現：最小格子在最上排時進度條被工具列蓋住；YouTube 直播的長度和目前位置不同步 |
+| 2026-10-08 | R24 補充自動的上限規則與實際畫面切換的時間；更新技術說明、檔案結構與未決事項 | 實作完成 |
