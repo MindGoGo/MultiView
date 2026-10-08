@@ -4,6 +4,8 @@ import { isAudible } from '../lib/audio'
 import type { PlayStatus } from '../players/types'
 import type { WebMode } from '../players/webTypes'
 import { WEB_FAILURE_TEXT, type WebFailure } from '../lib/webErrors'
+import type { Progress } from '../lib/progress'
+import { ProgressBar } from './ProgressBar'
 
 interface Props {
   index: number
@@ -31,6 +33,8 @@ interface Props {
   webMode: WebMode
   onToggleWebMode(index: number): void
   onToggleAdblock(index: number): void
+  getProgress(index: number): Progress | null
+  onSeek(index: number, seconds: number): void
 }
 
 /** 格子窄的時候只顯示圖示，完整名稱放在 title（R14 AC7） */
@@ -61,6 +65,8 @@ export function Cell(props: Props) {
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [hover, setHover] = useState(false)
+  /** 拖曳進度條中，操作區不隱藏（R19） */
+  const [seeking, setSeeking] = useState(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cellRef = useRef<HTMLDivElement>(null)
   useEffect(() => () => clearTimeout(idleTimer.current), [])
@@ -174,7 +180,15 @@ export function Cell(props: Props) {
       )}
 
       {source && !editing && (
-        <div className={`cell-controls ${hover || props.moving ? 'show' : ''}`} onMouseMove={onMouseMove}>
+        <div className={`cell-controls ${hover || props.moving || seeking ? 'show' : ''}`} onMouseMove={onMouseMove}>
+          {!failed && (
+            <ProgressBar
+              active={hover || seeking}
+              getProgress={() => props.getProgress(index)}
+              onSeek={(t) => props.onSeek(index, t)}
+              onDragChange={setSeeking}
+            />
+          )}
           {props.canMove && (
             <button
               className="move-handle"

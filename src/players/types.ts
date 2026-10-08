@@ -1,4 +1,5 @@
 import type { WebFailure } from '../lib/webErrors'
+import type { Progress } from '../lib/progress'
 
 export type PlayStatus = 'loading' | 'playing' | 'paused' | 'ended' | 'error'
 
@@ -7,6 +8,10 @@ export interface PlayerHandle {
   pause(): void
   /** 網頁來源的「只顯示影片」（R14 AC2） */
   requestVideoMode?(): void
+  /** 目前的進度（R19）；還不知道長度、沒有主要影片時回傳 null */
+  getProgress(): Progress | null
+  /** 跳到指定的秒數，維持原本的播放或暫停狀態（R19） */
+  seek(seconds: number): void
 }
 
 export interface PlayerProps {

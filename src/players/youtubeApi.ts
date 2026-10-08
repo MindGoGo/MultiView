@@ -7,6 +7,20 @@ export interface YTPlayer {
   unMute(): void
   setVolume(volume: number): void
   destroy(): void
+  getCurrentTime(): number
+  getDuration(): number
+  seekTo(seconds: number, allowSeekAhead: boolean): void
+  getPlayerState(): number
+  getPlaybackQuality(): string
+  /** 沒有公開文件，但實際有 title；直播時 isLive 為 true，allowLiveDvr 表示能不能倒轉 */
+  getVideoData(): { title?: string; isLive?: boolean; allowLiveDvr?: boolean }
+  /**
+   * 沒有公開文件：播放器回報給頁面的最新狀態。直播的 getDuration 和 getCurrentTime 不同步，
+   * 可回放範圍要用 progressState（R19）。
+   */
+  playerInfo?: {
+    progressState?: { current: number; seekableStart: number; seekableEnd: number; isAtLiveHead?: boolean }
+  }
 }
 
 export interface YTNamespace {

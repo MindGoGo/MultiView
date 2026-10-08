@@ -160,6 +160,16 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (s && statuses[s.id] !== 'error') setSlots(focusAudio(slots, index))
   }
 
+  // 進度條（R19）
+  const getProgress = (index: number) => {
+    const s = slots[index]
+    return (s && players.current.get(s.id)?.getProgress()) ?? null
+  }
+  const onSeek = (index: number, seconds: number) => {
+    const s = slots[index]
+    if (s) players.current.get(s.id)?.seek(seconds)
+  }
+
   const controllable = controllableIndices(slots, layout, statuses)
   const playAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.play())
   const pauseAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.pause())
@@ -248,6 +258,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onWebMode={onWebMode}
         onToggleWebMode={onToggleWebMode}
         onToggleAdblock={onToggleAdblock}
+        getProgress={getProgress}
+        onSeek={onSeek}
       />
       <Toolbar
         visible={toolbarVisible || toast !== null}

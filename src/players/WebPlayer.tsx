@@ -34,6 +34,8 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   latest.current = { mode, onModeChange, onStatus }
   /** 網頁回報的最新結果，以及網頁是否已經載入完成 */
   const page = useRef({ loaded: false, found: false, attached: false, failed: false })
+  /** 網頁回報的主要影片進度（R19） */
+  const progressRef = useRef<WebReport['progress']>(null)
   // 新加入的來源播放意圖是「播放」，從設定檔還原的是「暫停」（R15）
   const stateRef = useRef<WebState>({ v: 0, mode, intent: autoplay ? 'play' : 'pause', volume, muted })
   const noVideoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -85,6 +87,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     view.className = 'web-view'
     viewRef.current = view
     page.current = { loaded: false, found: false, attached: false, failed: false }
+    progressRef.current = null
     let lastStatus: PlayStatus | null = null
     const report = (s: PlayStatus) => {
       if (page.current.failed) return
@@ -150,6 +153,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
         else if (r.drm) fail('drm')
         if (page.current.failed) return
         page.current.found = r.found
+        progressRef.current = r.progress
         checkNoVideoRef.current()
         report(r.status ?? 'loading')
         // 整頁模式中使用者直接按網站的播放 / 暫停，也算播放意圖（R15 AC7）
@@ -224,6 +228,11 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   useImperativeHandle(ref, () => ({
     play: () => updateStateRef.current({ intent: 'play' }),
     pause: () => updateStateRef.current({ intent: 'pause' }),
+    getProgress: () => (page.current.failed ? null : progressRef.current),
+    seek: (seconds) => {
+      const view = viewRef.current
+      if (view && page.current.attached) view.send('mv:seek', seconds)
+    },
     // 「只顯示影片」：找得到主要影片才切回影片模式（R14 AC2）
     requestVideoMode: () => {
       if (page.current.found) latest.current.onModeChange('video')

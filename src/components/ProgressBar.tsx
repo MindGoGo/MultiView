@@ -1,0 +1,98 @@
+// 每格的進度條（R19）
+import { useEffect, useRef, useState } from 'react'
+import { formatBehind, formatTime, progressView, seekTarget, type Progress } from '../lib/progress'
+
+interface Props {
+  /** 操作區顯示中才更新進度 */
+  active: boolean
+  getProgress(): Progress | null
+  onSeek(seconds: number): void
+  /** 拖曳中操作區不隱藏 */
+  onDragChange(dragging: boolean): void
+}
+
+const POLL_MS = 250
+
+export function ProgressBar({ active, getProgress, onSeek, onDragChange }: Props) {
+  const [progress, setProgress] = useState<Progress | null>(null)
+  /** 拖曳中游標所在的比例；沒有拖曳時為 null */
+  const [drag, setDrag] = useState<number | null>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
+  const getRef = useRef(getProgress)
+  getRef.current = getProgress
+
+  useEffect(() => {
+    if (!active) return
+    const update = () => setProgress(getRef.current())
+    update()
+    const timer = setInterval(update, POLL_MS)
+    return () => clearInterval(timer)
+  }, [active])
+
+  if (!progress) return null
+  const view = progressView(progress)
+  if (view.kind === 'live') {
+    return (
+      <div className="progress">
+        <span className="live-badge">● LIVE</span>
+      </div>
+    )
+  }
+
+  const fractionAt = (clientX: number) => {
+    const r = trackRef.current!.getBoundingClientRect()
+    return r.width > 0 ? Math.min(Math.max((clientX - r.left) / r.width, 0), 1) : 0
+  }
+  const shown = drag ?? view.fraction
+  const shownTime = seekTarget(progress, shown)
+  const label =
+    view.kind === 'vod'
+      ? `${formatTime(shownTime)} / ${formatTime(progress.end)}`
+      : drag === null && view.atLive
+        ? ''
+        : formatBehind(progress.end - shownTime)
+
+  return (
+    <div className="progress">
+      {label && <span className="progress-time">{label}</span>}
+      <div
+        className="progress-track"
+        ref={trackRef}
+        title={view.kind === 'vod' ? '拖曳或點擊來跳轉' : '拖曳或點擊來倒轉直播'}
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId)
+          setDrag(fractionAt(e.clientX))
+          onDragChange(true)
+        }}
+        onPointerMove={(e) => {
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) setDrag(fractionAt(e.clientX))
+        }}
+        onPointerUp={(e) => {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+          e.currentTarget.releasePointerCapture(e.pointerId)
+          // 放開才跳轉（R19 AC3）
+          onSeek(seekTarget(progress, fractionAt(e.clientX)))
+          setDrag(null)
+          onDragChange(false)
+        }}
+        onPointerCancel={() => {
+          setDrag(null)
+          onDragChange(false)
+        }}
+      >
+        <div className="progress-fill" style={{ width: `${shown * 100}%` }} />
+        <div className="progress-thumb" style={{ left: `${shown * 100}%` }} />
+      </div>
+      {view.kind === 'dvr' && (
+        <button
+          className={`live-button ${view.atLive ? 'at-live' : ''}`}
+          disabled={view.atLive && drag === null}
+          title="回到直播最新位置"
+          onClick={() => onSeek(progress.end)}
+        >
+          {view.atLive && drag === null ? '● LIVE' : '回到直播'}
+        </button>
+      )}
+    </div>
+  )
+}

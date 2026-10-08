@@ -1,4 +1,5 @@
-// 程式和注入網頁的程式之間傳遞的資料（R13–R16）
+// 程式和注入網頁的程式之間傳遞的資料（R13–R16、R19）
+import type { Progress } from '../lib/progress'
 
 /** 影片模式 / 整頁模式（R13、R14） */
 export type WebMode = 'video' | 'page'
@@ -29,6 +30,8 @@ export interface WebReport {
   drm: boolean
   /** 主文件的 HTTP 狀態碼；拿不到時為 null（R16 AC2） */
   http: number | null
+  /** 主要影片的進度；沒有主要影片或還不知道長度時為 null（R19） */
+  progress: Progress | null
 }
 
 /**

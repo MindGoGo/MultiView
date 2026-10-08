@@ -195,13 +195,13 @@ button.link {
 
 .cell-controls {
   position: absolute;
+  left: 6px;
   right: 6px;
   bottom: 6px;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  max-width: calc(100% - 12px);
   gap: 2px;
   padding: 2px;
   border-radius: 6px;
@@ -287,6 +287,76 @@ button.link {
   accent-color: var(--accent);
 }
 
+/* ---- 進度條（R19） ---- */
+.progress {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  min-width: 0;
+}
+
+.progress-time {
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.progress-track::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.progress-fill {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.progress-thumb {
+  position: absolute;
+  top: 3px;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.live-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.live-button {
+  font-size: 12px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.live-button.at-live:disabled {
+  color: var(--danger);
+}
+
 /* ---- 格子窄的時候只顯示圖示（R14 AC7） ---- */
 .lbl-icon {
   display: none;
@@ -301,6 +371,13 @@ button.link {
   }
   .cell-controls button {
     padding: 2px 6px;
+  }
+  .progress-time {
+    display: none;
+  }
+  /* 最小的格子操作區有三列高，進度條在上方會被工具列蓋住，移到最下面（R19） */
+  .progress {
+    order: 99;
   }
   .volume {
     width: 56px;

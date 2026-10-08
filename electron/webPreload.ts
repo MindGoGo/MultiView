@@ -7,6 +7,7 @@
 // 影片模式時，從最上層沿著主要影片所在的框架一路往下，每一層只顯示主要影片（或包著它的子框架）並填滿畫面。
 import { ipcRenderer } from 'electron'
 import { pickMain, toParentRect, type Candidate, type Rect } from '../src/lib/webVideo'
+import { progressFromMedia, rangesOf, type Progress } from '../src/lib/progress'
 import type { WebReport, WebState, WebVideoStatus } from '../src/players/webTypes'
 
 const MARK = '__multiview__'
@@ -21,6 +22,7 @@ interface ChildReport {
   vh: number
   status: WebVideoStatus | null
   drm: boolean
+  progress: Progress | null
   v: number
 }
 
@@ -198,7 +200,7 @@ const watched = new WeakSet<HTMLVideoElement>()
 function watchVideo(v: HTMLVideoElement) {
   if (watched.has(v)) return
   watched.add(v)
-  for (const type of ['play', 'pause', 'playing', 'waiting', 'ended', 'emptied', 'loadedmetadata'])
+  for (const type of ['play', 'pause', 'playing', 'waiting', 'ended', 'emptied', 'loadedmetadata', 'seeked'])
     v.addEventListener(type, scheduleScan)
   v.addEventListener('play', () => {
     if (v === leafVideo && state.mode === 'video' && state.intent === 'pause') v.pause()
@@ -372,6 +374,23 @@ function leafDrm(): boolean {
   return childReport(best.el)?.drm ?? false
 }
 
+/** 主要影片的進度（R19）：影片在這個框架就直接算，在跨網域子框架就用子框架回報的 */
+function leafProgress(): Progress | null {
+  if (!best) return null
+  if (isVideo(best.el)) {
+    const v = best.el
+    if (v.readyState === 0) return null
+    return progressFromMedia({ duration: v.duration, currentTime: v.currentTime, seekable: rangesOf(v.seekable) })
+  }
+  return childReport(best.el)?.progress ?? null
+}
+
+/** 跳轉主要影片（R19）：影片在這個框架就直接設定，在跨網域子框架就往下傳 */
+function seekLeaf(seconds: number) {
+  if (leafVideo) leafVideo.currentTime = seconds
+  else pathFrame(best)?.contentWindow?.postMessage({ [MARK]: 'seek', seconds }, '*')
+}
+
 function httpStatus(): number | null {
   const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
   return nav?.responseStatus || null
@@ -380,11 +399,12 @@ function httpStatus(): number | null {
 function report(vw: number, vh: number) {
   const status = leafStatus()
   const drm = leafDrm()
+  const progress = leafProgress()
   if (isTop) {
-    const r: WebReport = { found: best !== null, status, v: state.v, drm, http: httpStatus() }
+    const r: WebReport = { found: best !== null, status, v: state.v, drm, http: httpStatus(), progress }
     ipcRenderer.sendToHost('mv:report', r)
   } else {
-    const r: ChildReport = { best: best?.rect ?? null, vw, vh, status, drm, v: state.v }
+    const r: ChildReport = { best: best?.rect ?? null, vw, vh, status, drm, progress, v: state.v }
     window.parent.postMessage({ [MARK]: 'report', ...r }, '*')
   }
 }
@@ -444,12 +464,18 @@ function onMessage(e: MessageEvent) {
     }
   } else if (d[MARK] === 'sync' && !isTop && e.currentTarget === window && isAncestor(source)) {
     setState(d.state as WebState, d.onPath === true)
+  } else if (d[MARK] === 'seek' && !isTop && e.currentTarget === window && isAncestor(source) && onPath) {
+    seekLeaf(Number(d.seconds))
   }
 }
 window.addEventListener('message', onMessage)
 
 if (isTop) {
   ipcRenderer.on('mv:state', (_, next: WebState) => setState(next, true))
+  ipcRenderer.on('mv:seek', (_, seconds: number) => {
+    seekLeaf(seconds)
+    scheduleScan()
+  })
   // 網頁重新載入後狀態會遺失，向程式要一次
   ipcRenderer.sendToHost('mv:hello')
 }

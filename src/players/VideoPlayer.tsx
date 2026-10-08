@@ -2,6 +2,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import Hls from 'hls.js'
 import { MAX_RETRIES, RETRY_DELAY_MS, type PlayerHandle, type PlayerProps } from './types'
+import { progressFromMedia, rangesOf } from '../lib/progress'
 
 interface Props extends PlayerProps {
   kind: 'hls' | 'mp4'
@@ -15,6 +16,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
   const videoRef = useRef<HTMLVideoElement>(null)
   /** 使用者希望的播放狀態；重試重新載入後依此決定要不要繼續播放 */
   const wantPlay = useRef(autoplay)
+  const hlsRef = useRef<Hls | null>(null)
   const onStatusRef = useRef(onStatus)
   onStatusRef.current = onStatus
 
@@ -34,6 +36,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       if (kind === 'hls' && Hls.isSupported()) {
         hls?.destroy()
         hls = new Hls()
+        hlsRef.current = hls
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) fail()
         })
@@ -92,6 +95,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       disposed = true
       clearTimeout(retryTimer)
       hls?.destroy()
+      hlsRef.current = null
       video.removeEventListener('playing', onPlaying)
       video.removeEventListener('pause', onPause)
       video.removeEventListener('ended', onEnded)
@@ -126,6 +130,22 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
     pause: () => {
       wantPlay.current = false
       videoRef.current!.pause()
+    },
+    getProgress: () => {
+      const v = videoRef.current
+      if (!v || v.readyState === 0) return null
+      // m3u8 以播放清單判斷是不是直播；mp4 依長度判斷
+      const details = hlsRef.current?.levels[Math.max(hlsRef.current.currentLevel, 0)]?.details
+      return progressFromMedia({
+        duration: v.duration,
+        currentTime: v.currentTime,
+        seekable: rangesOf(v.seekable),
+        live: kind === 'hls' && details ? details.live : undefined
+      })
+    },
+    // 設定 currentTime 不改變播放或暫停狀態；播完的影片跳轉後維持暫停（R19 AC11）
+    seek: (seconds) => {
+      videoRef.current!.currentTime = seconds
     }
   }))
 

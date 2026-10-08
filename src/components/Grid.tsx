@@ -3,6 +3,7 @@ import { cellRects, dividers, type Axis, type FracRect, type LayoutId, type Rati
 import { isVisible, type Slots } from '../lib/slots'
 import type { PlayerHandle, PlayStatus } from '../players/types'
 import type { WebFailure } from '../lib/webErrors'
+import type { Progress } from '../lib/progress'
 import { YouTubePlayer } from '../players/YouTubePlayer'
 import { VideoPlayer } from '../players/VideoPlayer'
 import { WebPlayer } from '../players/WebPlayer'
@@ -55,6 +56,8 @@ interface Props {
   onWebMode(id: number, mode: WebMode): void
   onToggleWebMode(index: number): void
   onToggleAdblock(index: number): void
+  getProgress(index: number): Progress | null
+  onSeek(index: number, seconds: number): void
 }
 
 /** 隱藏的網頁來源不能用 display: none，<webview> 會因此重新載入，改成看不見（R4 AC3） */
@@ -139,6 +142,8 @@ export function Grid(props: Props) {
             webMode={source ? (props.webModes[source.id] ?? 'video') : 'video'}
             onToggleWebMode={props.onToggleWebMode}
             onToggleAdblock={props.onToggleAdblock}
+            getProgress={props.getProgress}
+            onSeek={props.onSeek}
           />
         )
       })}

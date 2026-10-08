@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { loadYouTubeApi, YT_STATE, type YTPlayer } from './youtubeApi'
 import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
+import type { Progress } from '../lib/progress'
 
 interface Props extends PlayerProps {
   videoId: string
@@ -101,7 +102,30 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
 
   useImperativeHandle(ref, () => ({
     play: () => readyRef.current && playerRef.current?.playVideo(),
-    pause: () => readyRef.current && playerRef.current?.pauseVideo()
+    pause: () => readyRef.current && playerRef.current?.pauseVideo(),
+    getProgress: (): Progress | null => {
+      const p = playerRef.current
+      if (!p || !readyRef.current) return null
+      const current = p.getCurrentTime()
+      const data = p.getVideoData()
+      if (data.isLive) {
+        // 直播的 getDuration 和 getCurrentTime 不同步，用播放器回報的可回放範圍；不能倒轉時只顯示 LIVE
+        const ps = p.playerInfo?.progressState
+        if (data.allowLiveDvr === false || !ps || !(ps.seekableEnd > ps.seekableStart))
+          return { current, start: current, end: current, live: true }
+        return { current: ps.current, start: ps.seekableStart, end: Math.max(ps.seekableEnd, ps.current), live: true }
+      }
+      const duration = p.getDuration()
+      return duration > 0 ? { current, start: 0, end: duration, live: false } : null
+    },
+    seek: (seconds) => {
+      const p = playerRef.current
+      if (!p || !readyRef.current) return
+      const wasPlaying = p.getPlayerState() === YT_STATE.PLAYING || p.getPlayerState() === YT_STATE.BUFFERING
+      p.seekTo(seconds, true)
+      // YouTube 在暫停或播完時跳轉會自動開始播放，依規格維持原本的狀態（R19 AC2、AC11）
+      if (!wasPlaying) p.pauseVideo()
+    }
   }))
 
   return <div className="player yt-host" ref={hostRef} />
