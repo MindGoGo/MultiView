@@ -354,6 +354,12 @@ button.link {
   background: #fff;
 }
 
+.play-button {
+  padding: 0 6px;
+  font-size: 12px;
+  min-width: 26px;
+}
+
 .live-badge {
   font-size: 12px;
   font-weight: 600;

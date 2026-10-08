@@ -29,3 +29,8 @@ export function toggleAllAction(
   )
   return anyPlaying ? 'pause' : 'play'
 }
+
+/** 每格的播放／暫停按鈕（R26）：播放中或緩衝中顯示暫停，其他（暫停、播完）顯示播放 */
+export function isPlayingStatus(status: PlayStatus | undefined): boolean {
+  return status === 'playing' || status === 'loading'
+}

@@ -61,6 +61,7 @@ interface Props {
   /** 單格全螢幕的格位（R20） */
   solo: number | null
   onToggleSolo(index: number): void
+  onTogglePlay(index: number): void
   onLoaded(id: number): void
   /** 從清單拖曳中、游標下的格子（R21） */
   listOver: number | null
@@ -164,6 +165,7 @@ export function Grid(props: Props) {
             onToggleFavorite={props.onToggleFavorite}
             onToggleQuality={props.onToggleQuality}
             onToggleSolo={props.onToggleSolo}
+            onTogglePlay={props.onTogglePlay}
             getProgress={props.getProgress}
             onSeek={props.onSeek}
           />

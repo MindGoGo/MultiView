@@ -429,6 +429,8 @@ function broadcast() {
 
 function setState(next: WebState, nextOnPath: boolean) {
   const changed = next.v !== state.v || nextOnPath !== onPath
+  // 播完的影片按播放時從頭播放（R26 AC4）
+  if (next.intent === 'play' && state.intent === 'pause' && leafVideo?.ended) leafVideo.currentTime = 0
   state = next
   onPath = nextOnPath
   if (changed) {

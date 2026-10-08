@@ -23,7 +23,7 @@ import {
 } from './lib/slots'
 import { parseSource } from './lib/source'
 import { focusAudio, initialMuted, muteAll, setVolume, toggleMute } from './lib/audio'
-import { controllableIndices, toggleAllAction } from './lib/playback'
+import { controllableIndices, isPlayingStatus, toggleAllAction } from './lib/playback'
 import { shortcutFor } from './lib/shortcuts'
 import type { ViewSettings } from './lib/settings'
 import type { PlayerHandle, PlayStatus } from './players/types'
@@ -302,6 +302,15 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (s) players.current.get(s.id)?.seek(seconds)
   }
 
+  // 每格的播放／暫停按鈕：只影響這一格（R26）
+  const onTogglePlay = (index: number) => {
+    const s = slots[index]
+    const p = s && players.current.get(s.id)
+    if (!p) return
+    if (isPlayingStatus(statuses[s.id])) p.pause()
+    else p.play()
+  }
+
   const controllable = controllableIndices(slots, layout, statuses, soloIndex)
   const playAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.play())
   const pauseAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.pause())
@@ -398,6 +407,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onToggleAdblock={onToggleAdblock}
         solo={soloIndex}
         onToggleSolo={(i) => (solo ? exitSolo() : enterSolo(i))}
+        onTogglePlay={onTogglePlay}
         onLoaded={onLoaded}
         listOver={listOver}
         isFavorite={(url) => isFavorite(lists, url)}

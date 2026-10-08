@@ -6,6 +6,7 @@ import type { WebMode } from '../players/webTypes'
 import { WEB_FAILURE_TEXT, type WebFailure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import { ProgressBar } from './ProgressBar'
+import { isPlayingStatus } from '../lib/playback'
 
 interface Props {
   index: number
@@ -38,6 +39,7 @@ interface Props {
   /** 這一格正在單格全螢幕（R20） */
   isSolo: boolean
   onToggleSolo(index: number): void
+  onTogglePlay(index: number): void
   /** 這一格的網址在最愛中（R22） */
   favorite: boolean
   onToggleFavorite(index: number): void
@@ -194,6 +196,8 @@ export function Cell(props: Props) {
               getProgress={() => props.getProgress(index)}
               onSeek={(t) => props.onSeek(index, t)}
               onDragChange={setSeeking}
+              playing={isPlayingStatus(status)}
+              onTogglePlay={() => props.onTogglePlay(index)}
             />
           )}
           {props.canMove && (

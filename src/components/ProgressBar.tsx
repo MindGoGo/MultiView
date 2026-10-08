@@ -1,4 +1,4 @@
-// 每格的進度條（R19）
+// 每格的進度條（R19）與播放／暫停按鈕（R26）
 import { useEffect, useRef, useState } from 'react'
 import { formatBehind, formatTime, progressView, seekTarget, type Progress } from '../lib/progress'
 
@@ -9,11 +9,14 @@ interface Props {
   onSeek(seconds: number): void
   /** 拖曳中操作區不隱藏 */
   onDragChange(dragging: boolean): void
+  /** 這一格正在播放或緩衝（R26） */
+  playing: boolean
+  onTogglePlay(): void
 }
 
 const POLL_MS = 250
 
-export function ProgressBar({ active, getProgress, onSeek, onDragChange }: Props) {
+export function ProgressBar({ active, getProgress, onSeek, onDragChange, playing, onTogglePlay }: Props) {
   const [progress, setProgress] = useState<Progress | null>(null)
   /** 拖曳中游標所在的比例；沒有拖曳時為 null */
   const [drag, setDrag] = useState<number | null>(null)
@@ -31,9 +34,16 @@ export function ProgressBar({ active, getProgress, onSeek, onDragChange }: Props
 
   if (!progress) return null
   const view = progressView(progress)
+  // 只影響這一格，不影響聲音（R26）
+  const playButton = (
+    <button className="play-button" title={playing ? '暫停這一格' : '播放這一格'} onClick={onTogglePlay}>
+      {playing ? '❚❚' : '▶'}
+    </button>
+  )
   if (view.kind === 'live') {
     return (
       <div className="progress">
+        {playButton}
         <span className="live-badge">● LIVE</span>
       </div>
     )
@@ -54,6 +64,7 @@ export function ProgressBar({ active, getProgress, onSeek, onDragChange }: Props
 
   return (
     <div className="progress">
+      {playButton}
       {label && <span className="progress-time">{label}</span>}
       <div
         className="progress-track"
