@@ -10,7 +10,13 @@ export default defineConfig({
   },
   preload: {
     build: {
-      rollupOptions: { input: { index: resolve(__dirname, 'electron/preload.ts') } }
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'electron/preload.ts'),
+          // 注入網頁來源的偵測程式（R13）
+          web: resolve(__dirname, 'electron/webPreload.ts')
+        }
+      }
     }
   },
   renderer: {

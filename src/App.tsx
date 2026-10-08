@@ -27,6 +27,7 @@ import { controllableIndices, toggleAllAction } from './lib/playback'
 import { shortcutFor } from './lib/shortcuts'
 import type { ViewSettings } from './lib/settings'
 import type { PlayerHandle, PlayStatus } from './players/types'
+import type { WebMode } from './players/webTypes'
 
 const TOAST_MS = 3000
 
@@ -43,7 +44,10 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
 
 export default function App({ initial }: { initial: ViewSettings }) {
   const win = useWindowState()
-  const { toolbarVisible, direct, setDirect } = usePointerZones()
+  // 網頁來源的顯示模式不保存，重新開啟時一律是影片模式（R14）
+  const [webModes, setWebModes] = useState<Record<number, WebMode>>({})
+  const anyPageMode = Object.values(webModes).includes('page')
+  const { toolbarVisible, direct, setDirect } = usePointerZones(anyPageMode)
 
   const [layout, setLayout] = useState<LayoutId>(initial.layout)
   const [ratiosMap, setRatiosMap] = useState<Partial<Record<LayoutId, Ratios>>>(initial.ratios)
@@ -120,6 +124,17 @@ export default function App({ initial }: { initial: ViewSettings }) {
     setMove(null)
   }
 
+  const onWebMode = useCallback((id: number, mode: WebMode) => {
+    setWebModes((prev) => (prev[id] === mode ? prev : { ...prev, [id]: mode }))
+  }, [])
+
+  const onToggleWebMode = (index: number) => {
+    const s = slots[index]
+    if (!s) return
+    if ((webModes[s.id] ?? 'video') === 'page') players.current.get(s.id)?.requestVideoMode?.()
+    else onWebMode(s.id, 'page')
+  }
+
   const onFocusAudio = (index: number) => {
     const s = slots[index]
     // 空白格或錯誤狀態的格子不影響聲音（R7）
@@ -165,10 +180,17 @@ export default function App({ initial }: { initial: ViewSettings }) {
       if (e.repeat || typing) return
       if (runShortcutRef.current(e.key)) e.preventDefault()
     }
+    // 點擊網頁以外的地方時，把焦點從整頁模式的網頁拿回來，快捷鍵才會恢復（R14 AC5）
+    const onPointerDown = () => {
+      const el = document.activeElement as HTMLElement | null
+      if (el?.tagName === 'WEBVIEW') el.blur()
+    }
     window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointerDown, true)
     const offShortcut = window.multiview.onShortcut((key) => runShortcutRef.current(key))
     return () => {
       window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointerDown, true)
       offShortcut()
     }
   }, [])
@@ -202,6 +224,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onVolume={(i, v) => setSlots(setVolume(slots, i, v))}
         direct={direct}
         onDirect={setDirect}
+        webModes={webModes}
+        onWebMode={onWebMode}
+        onToggleWebMode={onToggleWebMode}
       />
       <Toolbar
         visible={toolbarVisible || toast !== null}

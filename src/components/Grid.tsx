@@ -4,6 +4,8 @@ import { isVisible, type Slots } from '../lib/slots'
 import type { PlayerHandle, PlayStatus } from '../players/types'
 import { YouTubePlayer } from '../players/YouTubePlayer'
 import { VideoPlayer } from '../players/VideoPlayer'
+import { WebPlayer } from '../players/WebPlayer'
+import type { WebMode } from '../players/webTypes'
 import { Cell } from './Cell'
 import { Divider } from './Divider'
 
@@ -45,7 +47,14 @@ interface Props {
   /** 處於「直接操作播放器」的格子（R3） */
   direct: number | null
   onDirect(index: number): void
+  /** 網頁來源的顯示模式，依來源 id（R13、R14） */
+  webModes: Record<number, WebMode>
+  onWebMode(id: number, mode: WebMode): void
+  onToggleWebMode(index: number): void
 }
+
+/** 隱藏的網頁來源不能用 display: none，<webview> 會因此重新載入，改成看不見（R4 AC3） */
+const HIDDEN_WEB_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0, width: '100%', height: '100%' }
 
 export function Grid(props: Props) {
   const { layout, ratios, slots, statuses } = props
@@ -74,10 +83,23 @@ export function Grid(props: Props) {
             key={source.id}
             className="player-box"
             data-slot={index}
-            style={visible ? rectStyle(rects[index]) : { display: 'none' }}
+            style={
+              visible
+                ? rectStyle(rects[index])
+                : source.parsed.kind === 'web'
+                  ? HIDDEN_WEB_STYLE
+                  : { display: 'none' }
+            }
           >
             {source.parsed.kind === 'youtube' ? (
               <YouTubePlayer videoId={source.parsed.videoId} {...common} />
+            ) : source.parsed.kind === 'web' ? (
+              <WebPlayer
+                url={source.parsed.url}
+                mode={props.webModes[source.id] ?? 'video'}
+                onModeChange={(mode) => props.onWebMode(source.id, mode)}
+                {...common}
+              />
             ) : (
               <VideoPlayer kind={source.parsed.kind} url={source.parsed.url} {...common} />
             )}
@@ -108,6 +130,8 @@ export function Grid(props: Props) {
             onVolume={props.onVolume}
             direct={props.direct === index}
             onDirect={props.onDirect}
+            webMode={source ? (props.webModes[source.id] ?? 'video') : 'video'}
+            onToggleWebMode={props.onToggleWebMode}
           />
         )
       })}

@@ -5,6 +5,7 @@ import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
 import { normalizeView, type Settings } from '../src/lib/settings'
 import { shortcutFor } from '../src/lib/shortcuts'
+import { WEB_PARTITION, type WebMode } from '../src/players/webTypes'
 
 // 測試時用獨立的資料夾，不動到正式的設定檔
 if (process.env['MULTIVIEW_USER_DATA']) app.setPath('userData', process.env['MULTIVIEW_USER_DATA'])
@@ -75,7 +76,9 @@ async function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: true,
-      contextIsolation: true
+      contextIsolation: true,
+      // 網頁來源用 <webview> 顯示（R13）
+      webviewTag: true
     }
   })
 
@@ -115,6 +118,22 @@ async function createWindow() {
   // 不讓網頁開新視窗（例如點到 YouTube 標誌）
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
+  // 網頁來源一律在沙箱中執行，只載入我們的偵測程式（非功能需求：安全）
+  win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    if (params.partition !== WEB_PARTITION || !/^https?:/i.test(params.src)) {
+      event.preventDefault()
+      return
+    }
+    delete (webPreferences as { preloadURL?: string }).preloadURL
+    webPreferences.preload = path.join(__dirname, '../preload/web.js')
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+    webPreferences.sandbox = true
+    // 偵測程式也要注入子框架，主要影片可能在別家網站的播放器裡（R13）
+    webPreferences.nodeIntegrationInSubFrames = true
+  })
+  win.webContents.on('did-attach-webview', (_, guest) => attachWebGuest(guest))
+
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   const url = devUrl ?? (await startStaticServer(path.join(__dirname, '../renderer')))
   await win.loadURL(url)
@@ -142,10 +161,11 @@ function enterFullscreen() {
   fullscreenGuard = true
   win.setFullScreen(true)
 }
-ipcMain.on('win:toggleFullscreen', () => {
+function toggleFullscreen() {
   if (win?.isFullScreen()) win.setFullScreen(false)
   else enterFullscreen()
-})
+}
+ipcMain.on('win:toggleFullscreen', toggleFullscreen)
 ipcMain.on('win:exitFullscreen', () => {
   if (win?.isFullScreen()) win.setFullScreen(false)
 })
@@ -176,6 +196,34 @@ ipcMain.on('cursor:watch', (_, on: boolean) => {
   }, CURSOR_POLL_MS)
 })
 ipcMain.on('win:close', () => win?.close())
+
+// ---- 網頁來源（R13、R14） ----
+
+/** 每個網頁的顯示模式，由畫面告知；用來決定焦點在網頁裡時按鍵給誰 */
+const webModes = new Map<number, WebMode>()
+ipcMain.on('web:mode', (_, id: number, mode: WebMode) => webModes.set(id, mode))
+
+function attachWebGuest(guest: Electron.WebContents) {
+  const id = guest.id
+  // 網頁要開新視窗一律擋下（R14 AC3）
+  guest.setWindowOpenHandler(() => ({ action: 'deny' }))
+  guest.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.isAutoRepeat) return
+    // F11 一律切換全螢幕（R14 AC6）
+    if (input.key === 'F11') {
+      event.preventDefault()
+      toggleFullscreen()
+      return
+    }
+    // 整頁模式：其他按鍵（包括 Esc）都交給網頁（R14 AC4、AC6）
+    if (webModes.get(id) === 'page') return
+    // 影片模式下焦點只會因為「直接操作」進到網頁，比照 YouTube 播放器把快捷鍵轉給畫面（R9 AC3）
+    if (!shortcutFor(input.key)) return
+    event.preventDefault()
+    win?.webContents.send('shortcut', input.key)
+  })
+  guest.once('destroyed', () => webModes.delete(id))
+}
 
 app.whenReady().then(() => {
   settings = loadSettings(settingsFile())

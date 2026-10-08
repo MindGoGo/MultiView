@@ -34,10 +34,13 @@ describe('parseSource — YouTube（R2）', () => {
     ['https://www.youtube.com/watch?list=PL123', '只有播放清單、沒有 v='],
     ['https://www.youtube.com/watch?v=short', 'id 長度不對'],
     ['https://www.youtube.com/@somechannel', '頻道頁'],
-    [`https://notyoutube.com/watch?v=${ID}`, '不是 YouTube 網域'],
     [`https://youtu.be/${ID}/extra`, 'youtu.be 多餘的路徑']
   ])('拒絕 %s（%s）', (url) => {
     expect(parseSource(url)).toBeNull()
+  })
+
+  it('不是 YouTube 網域的不當成 YouTube，改為網頁來源（R12）', () => {
+    expect(parseSource(`https://notyoutube.com/watch?v=${ID}`)?.kind).toBe('web')
   })
 })
 
@@ -61,14 +64,14 @@ describe('parseSource — 直接連結（R2）', () => {
     expect(parseSource('https://x.com/v/Clip.MP4?x=1#t=5')?.kind).toBe('mp4')
   })
 
-  it('副檔名只出現在 query 中不算', () => {
-    expect(parseSource('https://x.com/play?file=a.mp4')).toBeNull()
+  it('副檔名只出現在 query 中不算直接連結，改為網頁來源（R12）', () => {
+    expect(parseSource('https://x.com/play?file=a.mp4')?.kind).toBe('web')
   })
 })
 
 describe('parseSource — 不支援的輸入（R2 AC4）', () => {
+  // https://example.com 這類一般網址改為網頁來源（R12 AC2），見下方 R12 的測試
   it.each([
-    'https://example.com',
     'example.com/video.mp4',
     '這不是網址',
     '',

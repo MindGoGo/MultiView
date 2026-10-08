@@ -3,6 +3,8 @@ export type PlayStatus = 'loading' | 'playing' | 'paused' | 'ended' | 'error'
 export interface PlayerHandle {
   play(): void
   pause(): void
+  /** 網頁來源的「只顯示影片」（R14 AC2） */
+  requestVideoMode?(): void
 }
 
 export interface PlayerProps {

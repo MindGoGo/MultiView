@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { ViewSettings } from '../src/lib/settings'
+import type { WebMode } from '../src/players/webTypes'
 
 export interface CursorPos {
   x: number
@@ -42,7 +43,9 @@ const api = {
       ipcRenderer.removeListener('cursor:pos', listener)
     }
   },
-  close: () => ipcRenderer.send('win:close')
+  close: () => ipcRenderer.send('win:close'),
+  /** 告知主程序網頁來源的顯示模式（R14） */
+  setWebMode: (webContentsId: number, mode: WebMode) => ipcRenderer.send('web:mode', webContentsId, mode)
 }
 
 export type MultiviewApi = typeof api

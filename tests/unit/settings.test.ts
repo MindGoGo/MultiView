@@ -43,7 +43,7 @@ describe('parseSettings（R10）', () => {
         layout: '4x4',
         ratios: { '2': { cols: [0.9, 0.9], rows: [1] }, '2x2': { cols: [0.6, 0.4], rows: [0.5, 0.5] } },
         slots: [
-          { url: 'https://example.com', muted: false },
+          { url: 'ftp://example.com/a.mp4', muted: false },
           { url: YT, volume: 250 },
           'garbage'
         ]

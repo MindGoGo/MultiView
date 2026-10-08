@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Source } from '../lib/slots'
 import { isAudible } from '../lib/audio'
 import type { PlayStatus } from '../players/types'
+import type { WebMode } from '../players/webTypes'
 
 interface Props {
   index: number
@@ -24,6 +25,19 @@ interface Props {
   onVolume(index: number, volume: number): void
   direct: boolean
   onDirect(index: number): void
+  /** 網頁來源的顯示模式（R13、R14）；其他來源固定為 video */
+  webMode: WebMode
+  onToggleWebMode(index: number): void
+}
+
+/** 格子窄的時候只顯示圖示，完整名稱放在 title（R14 AC7） */
+function Label({ full, icon }: { full: string; icon: string }) {
+  return (
+    <>
+      <span className="lbl-full">{full}</span>
+      <span className="lbl-icon">{icon}</span>
+    </>
+  )
 }
 
 /** 滑鼠靜止多久後隱藏操作按鈕（R3 AC2） */
@@ -45,7 +59,10 @@ export function Cell(props: Props) {
   const [error, setError] = useState<string | null>(null)
   const [hover, setHover] = useState(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const cellRef = useRef<HTMLDivElement>(null)
   useEffect(() => () => clearTimeout(idleTimer.current), [])
+  const isWeb = source?.parsed.kind === 'web'
+  const pageMode = isWeb && props.webMode === 'page'
 
   const onMouseMove = () => {
     setHover(true)
@@ -56,6 +73,22 @@ export function Cell(props: Props) {
     clearTimeout(idleTimer.current)
     setHover(false)
   }
+
+  // 整頁模式時游標在網頁上，格子收不到滑鼠事件，改用主程序回報的游標位置顯示操作按鈕（R14）
+  const hoverHandlers = useRef({ onMouseMove, onMouseLeave })
+  hoverHandlers.current = { onMouseMove, onMouseLeave }
+  useEffect(() => {
+    if (!pageMode) return
+    let last = ''
+    return window.multiview.onCursor((p) => {
+      const r = cellRef.current?.getBoundingClientRect()
+      const inside = !!r && p.inside && p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom
+      const key = `${p.x},${p.y}`
+      if (!inside) hoverHandlers.current.onMouseLeave()
+      else if (key !== last) hoverHandlers.current.onMouseMove()
+      last = key
+    })
+  }, [pageMode])
 
   const showInput = !source || editing
   const failed = source !== null && status === 'error' && !editing
@@ -75,7 +108,8 @@ export function Cell(props: Props) {
 
   return (
     <div
-      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''} ${props.direct ? 'direct' : ''}`}
+      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''} ${props.direct || pageMode ? 'direct' : ''}`}
+      ref={cellRef}
       style={style}
       data-index={index}
       onMouseMove={onMouseMove}
@@ -96,7 +130,7 @@ export function Cell(props: Props) {
             className="url-input"
             autoFocus={editing}
             value={text}
-            placeholder="貼上 YouTube、mp4 或 m3u8 網址"
+            placeholder="貼上 YouTube、mp4、m3u8 或影片網頁的網址"
             onChange={(e) => {
               setText(e.target.value)
               setError(null)
@@ -149,7 +183,7 @@ export function Cell(props: Props) {
                 props.onMoveEnd(cellIndexAt(e.clientX, e.clientY))
               }}
             >
-              移動
+              <Label full="移動" icon="✥" />
             </button>
           )}
           <button
@@ -167,20 +201,32 @@ export function Cell(props: Props) {
             title={`音量 ${source.volume}`}
             onChange={(e) => props.onVolume(index, Number(e.target.value))}
           />
-          {source.parsed.kind === 'youtube' && (
+          {(source.parsed.kind === 'youtube' || (isWeb && !pageMode)) && (
             <button
               className={props.direct ? 'active' : ''}
-              title="暫時讓滑鼠直接操作 YouTube 播放器（例如略過廣告），移出這一格後恢復"
+              title={
+                isWeb
+                  ? '暫時讓滑鼠直接操作網頁，移出這一格後恢復'
+                  : '暫時讓滑鼠直接操作 YouTube 播放器（例如略過廣告），移出這一格後恢復'
+              }
               onClick={() => props.onDirect(index)}
             >
-              直接操作
+              <Label full="直接操作" icon="👆" />
+            </button>
+          )}
+          {isWeb && (
+            <button
+              title={pageMode ? '只顯示影片' : '顯示整個網頁，可以登入、關閉提示或按播放'}
+              onClick={() => props.onToggleWebMode(index)}
+            >
+              {pageMode ? <Label full="只顯示影片" icon="▣" /> : <Label full="顯示整個網頁" icon="⛶" />}
             </button>
           )}
           <button title="更換網址" onClick={() => setEditing(true)}>
-            更換網址
+            <Label full="更換網址" icon="✎" />
           </button>
           <button title="移除" onClick={() => onRemove(index)}>
-            移除
+            <Label full="移除" icon="✕" />
           </button>
         </div>
       )}

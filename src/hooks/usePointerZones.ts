@@ -11,7 +11,8 @@ function insideCell(index: number, x: number, y: number): boolean {
   return x >= r.left && x < r.right && y >= r.top && y < r.bottom
 }
 
-export function usePointerZones() {
+/** keepWatching：有網頁來源在整頁模式時，格子要靠游標位置顯示操作按鈕（R14） */
+export function usePointerZones(keepWatching = false) {
   const [toolbarVisible, setToolbarVisible] = useState(false)
   const [direct, setDirect] = useState<number | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -52,7 +53,7 @@ export function usePointerZones() {
   }, [])
 
   // 只在需要時請主程序回報游標位置
-  const watching = toolbarVisible || direct !== null
+  const watching = toolbarVisible || direct !== null || keepWatching
   useEffect(() => {
     window.multiview.watchCursor(watching)
   }, [watching])

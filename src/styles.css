@@ -135,6 +135,14 @@ button.active {
 
 .cell {
   z-index: 10;
+  /* 依格子寬度切換按鈕的顯示方式（R14 AC7） */
+  container-type: size;
+}
+
+/* 顯示操作按鈕的格子蓋在其他格子上面，按鈕換行超出格子時也按得到 */
+.cell:hover,
+.cell:has(.cell-controls.show) {
+  z-index: 11;
 }
 
 .cell.empty {
@@ -190,6 +198,10 @@ button.link {
   right: 6px;
   bottom: 6px;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  max-width: calc(100% - 12px);
   gap: 2px;
   padding: 2px;
   border-radius: 6px;
@@ -273,4 +285,49 @@ button.link {
 .volume {
   width: 80px;
   accent-color: var(--accent);
+}
+
+/* ---- 格子窄的時候只顯示圖示（R14 AC7） ---- */
+.lbl-icon {
+  display: none;
+}
+
+@container (max-width: 359px) {
+  .lbl-full {
+    display: none;
+  }
+  .lbl-icon {
+    display: inline;
+  }
+  .cell-controls button {
+    padding: 2px 6px;
+  }
+  .volume {
+    width: 56px;
+  }
+}
+
+/* ---- 網頁來源（R13、R14） ---- */
+.web-host {
+  position: relative;
+}
+
+.web-view {
+  width: 100%;
+  height: 100%;
+}
+
+.web-notice {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 16px);
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--panel);
+  color: #ffd166;
+  text-align: center;
+  z-index: 1;
+  pointer-events: none;
 }

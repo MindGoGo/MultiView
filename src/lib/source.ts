@@ -1,9 +1,10 @@
-// 網址解析與分類（R2）
+// 網址解析與分類（R2、R12）
 
 export type ParsedSource =
   | { kind: 'youtube'; videoId: string }
   | { kind: 'hls'; url: string }
   | { kind: 'mp4'; url: string }
+  | { kind: 'web'; url: string }
 
 const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com'])
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
@@ -22,6 +23,11 @@ function youtubeId(url: URL): string | null {
   return id && VIDEO_ID.test(id) ? id : null
 }
 
+/** youtube.com、youtu.be 和它們的子網域 */
+function isYouTubeDomain(host: string): boolean {
+  return ['youtube.com', 'youtu.be'].some((d) => host === d || host.endsWith('.' + d))
+}
+
 /** 解析使用者輸入的網址；不支援時回傳 null。 */
 export function parseSource(input: string): ParsedSource | null {
   let url: URL
@@ -38,5 +44,7 @@ export function parseSource(input: string): ParsedSource | null {
   const pathname = url.pathname.toLowerCase()
   if (pathname.endsWith('.m3u8')) return { kind: 'hls', url: url.href }
   if (pathname.endsWith('.mp4')) return { kind: 'mp4', url: url.href }
-  return null
+  // YouTube 網域但格式不支援的（Shorts、播放清單頁、頻道頁）維持不支援（R12）
+  if (isYouTubeDomain(url.hostname.toLowerCase())) return null
+  return { kind: 'web', url: url.href }
 }
