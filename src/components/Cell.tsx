@@ -11,9 +11,26 @@ interface Props {
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
+  canMove: boolean
+  moving: boolean
+  dropTarget: boolean
+  onMoveStart(index: number): void
+  onMoveOver(index: number | null): void
+  /** target：放開時游標下的格子，不在任何格子上時為 null */
+  onMoveEnd(target: number | null): void
 }
 
-export function Cell({ index, style, source, status, onSubmitUrl, onRemove, onRetry }: Props) {
+/** 游標下的格子編號；不在任何格子上時回傳 null */
+function cellIndexAt(x: number, y: number): number | null {
+  for (const el of document.elementsFromPoint(x, y)) {
+    const cell = (el as HTMLElement).closest?.('.cell') as HTMLElement | null
+    if (cell?.dataset.index) return Number(cell.dataset.index)
+  }
+  return null
+}
+
+export function Cell(props: Props) {
+  const { index, style, source, status, onSubmitUrl, onRemove, onRetry } = props
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -35,7 +52,11 @@ export function Cell({ index, style, source, status, onSubmitUrl, onRemove, onRe
   }
 
   return (
-    <div className={`cell ${source ? 'filled' : 'empty'}`} style={style}>
+    <div
+      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''}`}
+      style={style}
+      data-index={index}
+    >
       {showInput && (
         <div className="cell-center">
           <input
@@ -78,6 +99,26 @@ export function Cell({ index, style, source, status, onSubmitUrl, onRemove, onRe
 
       {source && !editing && (
         <div className="cell-controls">
+          {props.canMove && (
+            <button
+              className="move-handle"
+              title="拖曳到其他格子來交換位置"
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId)
+                props.onMoveStart(index)
+              }}
+              onPointerMove={(e) => {
+                if (e.currentTarget.hasPointerCapture(e.pointerId))
+                  props.onMoveOver(cellIndexAt(e.clientX, e.clientY))
+              }}
+              onPointerUp={(e) => {
+                e.currentTarget.releasePointerCapture(e.pointerId)
+                props.onMoveEnd(cellIndexAt(e.clientX, e.clientY))
+              }}
+            >
+              移動
+            </button>
+          )}
           <button title="更換網址" onClick={() => setEditing(true)}>
             更換網址
           </button>

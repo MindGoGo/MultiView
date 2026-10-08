@@ -1,10 +1,11 @@
 import type { CSSProperties } from 'react'
-import { cellRects, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
+import { cellRects, dividers, type Axis, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
 import { isVisible, type Slots } from '../lib/slots'
 import type { PlayerHandle, PlayStatus } from '../players/types'
 import { YouTubePlayer } from '../players/YouTubePlayer'
 import { VideoPlayer } from '../players/VideoPlayer'
 import { Cell } from './Cell'
+import { Divider } from './Divider'
 
 const EPS = 1e-6
 /** 分隔線寬 2px：每格在內側邊緣各內縮 1px（R3） */
@@ -31,6 +32,13 @@ interface Props {
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
+  onDividerDrag(axis: Axis, index: number, pos: number, containerPx: number): void
+  onDividerReset(axis: Axis, index: number, containerPx: number): void
+  /** 拖曳換位中：來源格與目前游標下的格子（R6） */
+  move: { from: number; over: number | null } | null
+  onMoveStart(index: number): void
+  onMoveOver(index: number | null): void
+  onMoveEnd(target: number | null): void
 }
 
 export function Grid(props: Props) {
@@ -82,9 +90,24 @@ export function Grid(props: Props) {
             onSubmitUrl={props.onSubmitUrl}
             onRemove={props.onRemove}
             onRetry={props.onRetry}
+            canMove={layout !== '1'}
+            moving={props.move?.from === index}
+            dropTarget={props.move !== null && props.move.over === index && props.move.from !== index}
+            onMoveStart={props.onMoveStart}
+            onMoveOver={props.onMoveOver}
+            onMoveEnd={props.onMoveEnd}
           />
         )
       })}
+
+      {dividers(layout, ratios).map((d) => (
+        <Divider
+          key={`${d.axis}-${d.index}`}
+          def={d}
+          onDrag={props.onDividerDrag}
+          onReset={props.onDividerReset}
+        />
+      ))}
     </div>
   )
 }
