@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { ViewSettings } from '../src/lib/settings'
 import type { WebMode } from '../src/players/webTypes'
+import type { Lists } from '../src/lib/lists'
 
 export interface CursorPos {
   x: number
@@ -48,7 +49,10 @@ const api = {
   setWebMode: (webContentsId: number, mode: WebMode) => ipcRenderer.send('web:mode', webContentsId, mode),
   /** 網頁載入使用者的網址前，設定這一格的廣告阻擋（R17） */
   initWeb: (webContentsId: number, opts: { adblock: boolean }): Promise<void> =>
-    ipcRenderer.invoke('web:init', webContentsId, opts)
+    ipcRenderer.invoke('web:init', webContentsId, opts),
+  /** 最愛與歷史清單（R21） */
+  getLists: (): Promise<Lists> => ipcRenderer.invoke('lists:get'),
+  saveLists: (lists: Lists) => ipcRenderer.send('lists:save', lists)
 }
 
 export type MultiviewApi = typeof api

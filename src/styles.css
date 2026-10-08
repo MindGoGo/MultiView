@@ -357,6 +357,133 @@ button.link {
   color: var(--danger);
 }
 
+/* ---- 最愛與歷史清單（R21–R23） ---- */
+.list-panel {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  background: rgba(16, 16, 16, 0.96);
+  border-left: 1px solid #333;
+  user-select: none;
+}
+
+@media (max-width: 639px) {
+  .list-panel {
+    width: 100%;
+  }
+}
+
+.list-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  border-bottom: 1px solid #333;
+}
+
+.list-head-spacer {
+  flex: 1;
+}
+
+.list-form,
+.list-item.editing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.list-form {
+  border-bottom: 1px solid #333;
+}
+
+.list-form .url-input,
+.list-item.editing .url-input {
+  width: 100%;
+}
+
+.list-form-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.list-items {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid #222;
+  cursor: grab;
+  touch-action: none;
+}
+
+.list-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.list-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-name,
+.list-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-url,
+.list-time {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+
+.list-actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-empty {
+  padding: 16px 8px;
+  color: var(--muted-text);
+}
+
+.list-confirm {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.list-confirm-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 6px;
+  background: #1c1c1c;
+}
+
+button.danger {
+  background: var(--danger);
+}
+
 /* ---- 格子窄的時候只顯示圖示（R14 AC7） ---- */
 .lbl-icon {
   display: none;

@@ -12,6 +12,8 @@ export interface PlayerHandle {
   getProgress(): Progress | null
   /** 跳到指定的秒數，維持原本的播放或暫停狀態（R19） */
   seek(seconds: number): void
+  /** 影片名稱的來源（YouTube 標題、網頁標題）；取不到時回傳 null（R22、R23） */
+  getTitle(): string | null
 }
 
 export interface PlayerProps {
@@ -22,6 +24,8 @@ export interface PlayerProps {
   active: boolean
   /** failure：網頁來源錯誤狀態的種類（R16），其他來源不使用 */
   onStatus(status: PlayStatus, failure?: WebFailure): void
+  /** 網頁來源「網頁載入完成」時呼叫，用來記錄歷史（R23）；其他來源以開始播放或暫停為準 */
+  onLoaded?(): void
 }
 
 /** 載入失敗或斷線時的自動重試次數（R2 AC7） */

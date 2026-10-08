@@ -15,6 +15,8 @@ export interface Source {
   autoplay: boolean
   /** 廣告阻擋，只用於網頁來源（R17）；跟著來源移動和保存 */
   adblock: boolean
+  /** 使用者放入的來源，第一次成功載入時記錄到歷史（R23）；自動還原、切換廣告阻擋時為 false。不保存 */
+  record?: boolean
 }
 
 export type Slots = (Source | null)[]

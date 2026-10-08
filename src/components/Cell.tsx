@@ -38,6 +38,9 @@ interface Props {
   /** 這一格正在單格全螢幕（R20） */
   isSolo: boolean
   onToggleSolo(index: number): void
+  /** 這一格的網址在最愛中（R22） */
+  favorite: boolean
+  onToggleFavorite(index: number): void
 }
 
 /** 格子窄的時候只顯示圖示，完整名稱放在 title（R14 AC7） */
@@ -257,6 +260,13 @@ export function Cell(props: Props) {
               <Label full={source.adblock ? '廣告阻擋：開' : '廣告阻擋：關'} icon={source.adblock ? '🛡' : '⊘'} />
             </button>
           )}
+          <button
+            className={props.favorite ? 'active' : ''}
+            title={props.favorite ? '從最愛移除' : '加入最愛'}
+            onClick={() => props.onToggleFavorite(index)}
+          >
+            {props.favorite ? '★' : '☆'}
+          </button>
           <button
             className={props.isSolo ? 'active' : ''}
             title={props.isSolo ? '離開全螢幕，回到分割畫面' : '把這一格放大到整個螢幕，其他格暫停'}

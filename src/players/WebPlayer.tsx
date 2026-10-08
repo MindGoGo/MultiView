@@ -23,15 +23,15 @@ export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「�
 export const NOTICE_NOT_FOUND = '找不到影片'
 
 export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
-  { url, adblock, mode, onModeChange, muted, volume, autoplay, active, onStatus },
+  { url, adblock, mode, onModeChange, muted, volume, autoplay, active, onStatus, onLoaded },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<WebviewTag | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const latest = useRef({ mode, onModeChange, onStatus })
-  latest.current = { mode, onModeChange, onStatus }
+  const latest = useRef({ mode, onModeChange, onStatus, onLoaded })
+  latest.current = { mode, onModeChange, onStatus, onLoaded }
   /** 網頁回報的最新結果，以及網頁是否已經載入完成 */
   const page = useRef({ loaded: false, found: false, attached: false, failed: false })
   /** 網頁回報的主要影片進度（R19） */
@@ -141,6 +141,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     const onFinishLoad = () => {
       if (view.getURL() === 'about:blank') return
       clearTimeout(loadTimer)
+      if (!page.current.loaded && !page.current.failed) latest.current.onLoaded?.()
       page.current.loaded = true
       checkNoVideoRef.current()
     }
@@ -229,6 +230,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     play: () => updateStateRef.current({ intent: 'play' }),
     pause: () => updateStateRef.current({ intent: 'pause' }),
     getProgress: () => (page.current.failed ? null : progressRef.current),
+    getTitle: () => (viewRef.current && page.current.attached ? viewRef.current.getTitle() || null : null),
     seek: (seconds) => {
       const view = viewRef.current
       if (view && page.current.attached) view.send('mv:seek', seconds)

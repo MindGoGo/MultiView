@@ -131,6 +131,8 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       wantPlay.current = false
       videoRef.current!.pause()
     },
+    // mp4 / m3u8 沒有標題，由清單依網址取檔名（R22 共用定義）
+    getTitle: () => null,
     getProgress: () => {
       const v = videoRef.current
       if (!v || v.readyState === 0) return null

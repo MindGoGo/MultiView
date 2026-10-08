@@ -103,6 +103,7 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
   useImperativeHandle(ref, () => ({
     play: () => readyRef.current && playerRef.current?.playVideo(),
     pause: () => readyRef.current && playerRef.current?.pauseVideo(),
+    getTitle: () => (readyRef.current && playerRef.current?.getVideoData().title) || null,
     getProgress: (): Progress | null => {
       const p = playerRef.current
       if (!p || !readyRef.current) return null

@@ -29,6 +29,22 @@ import type { ViewSettings } from './lib/settings'
 import type { PlayerHandle, PlayStatus } from './players/types'
 import type { WebMode } from './players/webTypes'
 import type { WebFailure } from './lib/webErrors'
+import {
+  addFavorite,
+  clearHistory,
+  defaultName,
+  deleteItem,
+  editItem,
+  emptyLists,
+  isFavorite,
+  recordHistory,
+  removeFavorite,
+  LIST_ERROR,
+  type ListItem,
+  type ListKind,
+  type Lists
+} from './lib/lists'
+import { ListPanel } from './components/ListPanel'
 
 const TOAST_MS = 3000
 
@@ -70,6 +86,24 @@ export default function App({ initial }: { initial: ViewSettings }) {
   /** 單格全螢幕（R20）：放大的格位、進入前視窗是否已經全螢幕、離開時要恢復播放的來源 id */
   const [solo, setSolo] = useState<{ index: number; wasFullscreen: boolean; resume: number[] } | null>(null)
   const soloIndex = solo?.index ?? null
+
+  // ---- 最愛與歷史清單（R21–R23） ----
+  const [lists, setLists] = useState<Lists>(emptyLists)
+  const listsLoaded = useRef(false)
+  const [listOpen, setListOpen] = useState(false)
+  const [listOver, setListOver] = useState<number | null>(null)
+  useEffect(() => {
+    void window.multiview.getLists().then((l) => {
+      listsLoaded.current = true
+      setLists(l)
+    })
+  }, [])
+  // 讀回清單之前不寫入，避免用空的清單蓋掉檔案
+  useEffect(() => {
+    if (listsLoaded.current) window.multiview.saveLists(lists)
+  }, [lists])
+  /** 已經記錄過歷史的來源 id（每個來源只記一次） */
+  const recorded = useRef(new Set<number>())
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const showToast = (message: string) => {
@@ -92,7 +126,21 @@ export default function App({ initial }: { initial: ViewSettings }) {
     else players.current.delete(id)
   }, [])
 
+  // 使用者放入的來源第一次成功載入時記錄到歷史（R23）
+  const slotsRef = useRef(slots)
+  slotsRef.current = slots
+  const onLoaded = useCallback((id: number) => {
+    const s = slotsRef.current.find((x) => x?.id === id)
+    if (!s || !s.record || recorded.current.has(id)) return
+    recorded.current.add(id)
+    const title = players.current.get(id)?.getTitle() ?? null
+    setLists((l) => recordHistory(l, s.url, title, Date.now()))
+  }, [])
+
   const onStatus = useCallback((id: number, status: PlayStatus, failure?: WebFailure) => {
+    // 網頁來源以「網頁載入完成」為準，其他來源以開始播放或暫停為準
+    const s = slotsRef.current.find((x) => x?.id === id)
+    if (s && s.parsed.kind !== 'web' && (status === 'playing' || status === 'paused' || status === 'ended')) onLoaded(id)
     setStatuses((prev) => (prev[id] === status ? prev : { ...prev, [id]: status }))
     if (failure) setFailures((prev) => (prev[id] === failure ? prev : { ...prev, [id]: failure }))
   }, [])
@@ -111,7 +159,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         volume: existing ? existing.volume : 100,
         autoplay: true,
         // 廣告阻擋預設開啟（R17）
-        adblock: true
+        adblock: true,
+        record: true
       })
     )
     return null
@@ -121,6 +170,47 @@ export default function App({ initial }: { initial: ViewSettings }) {
     // 移除放大的那一格時離開單格全螢幕（R20 AC7）
     if (solo?.index === index) exitSolo()
     setSlots(setSlot(slots, index, null))
+  }
+
+  // ---- 清單操作（R21–R23） ----
+  const applyResult = (r: { lists: Lists } | { error: string }): string | null => {
+    if ('error' in r) return r.error
+    setLists(r.lists)
+    return null
+  }
+  const onToggleFavorite = (index: number) => {
+    const s = slots[index]
+    if (!s) return
+    if (isFavorite(lists, s.url)) setLists(removeFavorite(lists, s.url))
+    else {
+      const title = players.current.get(s.id)?.getTitle() ?? null
+      applyResult(addFavorite(lists, s.url, defaultName(s.url, title), Date.now()))
+    }
+  }
+  /** 放進格子：空格就放入，有影片就更換網址（保留靜音和音量） */
+  const putItem = (index: number, item: ListItem) => {
+    const err = onSubmitUrl(index, item.url)
+    if (err) showToast(LIST_ERROR.unsupported)
+  }
+  // 點一下：放進第一個顯示中的空格（R21）
+  const onPickItem = (item: ListItem) => {
+    const empty = slots.findIndex((s, i) => s === null && isVisible(i, layout, soloIndex))
+    if (empty < 0) showToast('沒有空格，請拖到要更換的格子')
+    else putItem(empty, item)
+  }
+  const onDropItem = (item: ListItem, cell: number | null) => {
+    setListOver(null)
+    if (cell !== null) putItem(cell, item)
+  }
+  /** 游標下的格子；被清單面板蓋住的地方不算（R21） */
+  const cellAt = (x: number, y: number): number | null => {
+    const panel = document.querySelector('.list-panel')?.getBoundingClientRect()
+    if (panel && x >= panel.left && x < panel.right && y >= panel.top && y < panel.bottom) return null
+    for (const el of document.querySelectorAll<HTMLElement>('.cell')) {
+      const r = el.getBoundingClientRect()
+      if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) return Number(el.dataset.index)
+    }
+    return null
   }
 
   // ---- 單格全螢幕（R20） ----
@@ -149,13 +239,13 @@ export default function App({ initial }: { initial: ViewSettings }) {
 
   const onRetry = (index: number) => {
     const s = slots[index]
-    if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true }))
+    if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true, record: true }))
   }
 
   // 切換廣告阻擋：換新的 id 讓網頁重新載入，比照「重試」（R17 AC2）
   const onToggleAdblock = (index: number) => {
     const s = slots[index]
-    if (s) setSlots(setSlot(slots, index, { ...s, adblock: !s.adblock, id: newSourceId(), autoplay: true }))
+    if (s) setSlots(setSlot(slots, index, { ...s, adblock: !s.adblock, id: newSourceId(), autoplay: true, record: false }))
   }
 
   // 每種版型的比例分開記錄（R5 AC4）
@@ -297,11 +387,15 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onToggleAdblock={onToggleAdblock}
         solo={soloIndex}
         onToggleSolo={(i) => (solo ? exitSolo() : enterSolo(i))}
+        onLoaded={onLoaded}
+        listOver={listOver}
+        isFavorite={(url) => isFavorite(lists, url)}
+        onToggleFavorite={onToggleFavorite}
         getProgress={getProgress}
         onSeek={onSeek}
       />
       <Toolbar
-        visible={toolbarVisible || toast !== null}
+        visible={toolbarVisible || toast !== null || listOpen}
         win={win}
         layout={layout}
         onLayout={changeLayout}
@@ -310,7 +404,24 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onPlayAll={playAll}
         onPauseAll={pauseAll}
         onMuteAll={() => setSlots(muteAll(slots))}
+        listOpen={listOpen}
+        onToggleList={() => setListOpen((o) => !o)}
+        onToggleFullscreen={() => runShortcutRef.current('F11')}
       />
+      {listOpen && (
+        <ListPanel
+          lists={lists}
+          onClose={() => setListOpen(false)}
+          onAddFavorite={(url, name) => applyResult(addFavorite(lists, url, name, Date.now()))}
+          onEdit={(kind: ListKind, i, url, name) => applyResult(editItem(lists, kind, i, url, name))}
+          onDelete={(kind: ListKind, i) => setLists(deleteItem(lists, kind, i))}
+          onClearHistory={() => setLists(clearHistory(lists))}
+          onPick={onPickItem}
+          onDragOver={setListOver}
+          onDrop={onDropItem}
+          cellAt={cellAt}
+        />
+      )}
     </div>
   )
 }

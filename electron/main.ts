@@ -7,6 +7,8 @@ import { normalizeView, type Settings } from '../src/lib/settings'
 import { guestKeyAction, shortcutFor } from '../src/lib/shortcuts'
 import { WEB_PARTITION, type WebMode } from '../src/players/webTypes'
 import { forgetWebContents, installAdblock, loadAdblockList, setAdblockEnabled } from './adblock'
+import { createListsSaver, loadLists } from './listsStore'
+import { normalizeLists, type Lists } from '../src/lib/lists'
 
 // 測試時用獨立的資料夾，不動到正式的設定檔
 if (process.env['MULTIVIEW_USER_DATA']) app.setPath('userData', process.env['MULTIVIEW_USER_DATA'])
@@ -17,10 +19,14 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|multiview)\/\S+/gi, '')
 
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json')
+/** 最愛與歷史清單，和設定檔分開（R21） */
+const listsFile = () => path.join(app.getPath('userData'), 'lists.json')
 
 let win: BrowserWindow | null = null
 let settings: Settings
 let saver: ReturnType<typeof createSaver>
+let lists: Lists
+let listsSaver: ReturnType<typeof createListsSaver>
 
 function saveSoon() {
   saver.schedule(settings)
@@ -100,6 +106,7 @@ async function createWindow() {
   win.on('close', () => {
     trackBounds()
     saver.flush()
+    listsSaver.flush()
   })
   win.on('closed', () => (win = null))
 
@@ -150,6 +157,13 @@ ipcMain.handle('settings:getView', () => ({
 ipcMain.on('settings:saveView', (_, view: unknown) => {
   settings = { ...settings, ...normalizeView(view) }
   saveSoon()
+})
+
+// 最愛與歷史清單（R21–R23）
+ipcMain.handle('lists:get', () => lists)
+ipcMain.on('lists:save', (_, next: unknown) => {
+  lists = normalizeLists(next)
+  listsSaver.schedule(lists)
 })
 
 ipcMain.handle('win:getState', () => ({
@@ -229,6 +243,8 @@ function attachWebGuest(guest: Electron.WebContents) {
 app.whenReady().then(() => {
   settings = loadSettings(settingsFile())
   saver = createSaver(settingsFile())
+  lists = loadLists(listsFile())
+  listsSaver = createListsSaver(listsFile())
   loadAdblockList()
   installAdblock(session.fromPartition(WEB_PARTITION))
   void createWindow()

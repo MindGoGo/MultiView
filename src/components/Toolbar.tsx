@@ -12,6 +12,11 @@ interface Props {
   onPlayAll(): void
   onPauseAll(): void
   onMuteAll(): void
+  /** 清單面板（R21） */
+  listOpen: boolean
+  onToggleList(): void
+  /** 單格全螢幕時要先離開單格全螢幕（R20） */
+  onToggleFullscreen(): void
 }
 
 export function Toolbar(props: Props) {
@@ -44,6 +49,9 @@ export function Toolbar(props: Props) {
       </div>
       <div className="toolbar-drag">{toast && <span className="toast">{toast}</span>}</div>
       <div className="toolbar-group">
+        <button className={props.listOpen ? 'active' : ''} title="最愛與歷史清單" onClick={props.onToggleList}>
+          ☰ 清單
+        </button>
         <button
           className={win.alwaysOnTop ? 'active' : ''}
           title="視窗置頂"
@@ -51,7 +59,7 @@ export function Toolbar(props: Props) {
         >
           置頂
         </button>
-        <button title="全螢幕 (F11)" onClick={api.toggleFullscreen}>
+        <button title="全螢幕 (F11)" onClick={props.onToggleFullscreen}>
           {win.fullscreen ? '離開全螢幕' : '全螢幕'}
         </button>
         <button title="最小化" onClick={api.minimize}>

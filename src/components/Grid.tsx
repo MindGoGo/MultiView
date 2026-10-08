@@ -61,6 +61,11 @@ interface Props {
   /** 單格全螢幕的格位（R20） */
   solo: number | null
   onToggleSolo(index: number): void
+  onLoaded(id: number): void
+  /** 從清單拖曳中、游標下的格子（R21） */
+  listOver: number | null
+  isFavorite(url: string): boolean
+  onToggleFavorite(index: number): void
 }
 
 const FULL: FracRect = { x: 0, y: 0, w: 1, h: 1 }
@@ -90,7 +95,8 @@ export function Grid(props: Props) {
           volume: source.volume,
           autoplay: source.autoplay,
           active: visible,
-          onStatus: (s: PlayStatus, f?: WebFailure) => props.onStatus(source.id, s, f)
+          onStatus: (s: PlayStatus, f?: WebFailure) => props.onStatus(source.id, s, f),
+          onLoaded: () => props.onLoaded(source.id)
         }
         return (
           <div
@@ -138,7 +144,9 @@ export function Grid(props: Props) {
             onRetry={props.onRetry}
             canMove={layout !== '1' && solo === null}
             moving={props.move?.from === index}
-            dropTarget={props.move !== null && props.move.over === index && props.move.from !== index}
+            dropTarget={
+              (props.move !== null && props.move.over === index && props.move.from !== index) || props.listOver === index
+            }
             onMoveStart={props.onMoveStart}
             onMoveOver={props.onMoveOver}
             onMoveEnd={props.onMoveEnd}
@@ -151,6 +159,8 @@ export function Grid(props: Props) {
             onToggleWebMode={props.onToggleWebMode}
             onToggleAdblock={props.onToggleAdblock}
             isSolo={solo === index}
+            favorite={source ? props.isFavorite(source.url) : false}
+            onToggleFavorite={props.onToggleFavorite}
             onToggleSolo={props.onToggleSolo}
             getProgress={props.getProgress}
             onSeek={props.onSeek}
