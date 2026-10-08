@@ -69,7 +69,9 @@ export interface MediaInfo {
 
 /** 從 `<video>` 的資訊算出進度；還不知道長度時回傳 null */
 export function progressFromMedia(m: MediaInfo): Progress | null {
-  const live = m.live ?? (!Number.isFinite(m.duration) || m.duration > LIVE_DURATION_SECONDS)
+  // 長度是 NaN 表示還沒載入，不是直播
+  if (m.live === undefined && Number.isNaN(m.duration)) return null
+  const live = m.live ?? (m.duration === Infinity || m.duration > LIVE_DURATION_SECONDS)
   if (!live) {
     if (!(m.duration > 0)) return null
     return { current: m.currentTime, start: 0, end: m.duration, live: false }
