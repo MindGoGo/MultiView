@@ -2,7 +2,7 @@
 
 - 功能代號：`brightness-and-volume-popup`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-09
 - 前置規格：[multiview-player](multiview-player.md)（R1–R11）、[web-page-source](web-page-source.md)（R12–R18）、[player-controls-and-lists](player-controls-and-lists.md)（R19–R25）、[cell-play-and-page-menu](cell-play-and-page-menu.md)（R26–R29）、[captions-and-quality-menu](captions-and-quality-menu.md)（R30–R33）。本規格的需求編號從 R40 開始；R34–R39 保留給之後的本機播放與下載功能。
 
@@ -97,6 +97,7 @@
 - **效能：** 亮度以顯示卡處理的畫面濾鏡實作，九格同時調整時播放不卡頓（手動驗收）。
 - **技術風險：** 網頁來源的 `<webview>`、YouTube 的 iframe 套用 CSS 濾鏡後要能正常顯示；做不到時要停下來回報。
 - **測試：** 亮度、音量的數值範圍與設定檔相容、實際亮度的計算寫成單元測試；畫面效果以截圖手動驗收。
+- **實作結果：** `<webview>`、YouTube 的 iframe、m3u8 的影片套用 CSS `brightness()` 濾鏡都正常顯示，調整時不重新載入。多了「☀」按鈕後，`3×3` 最小格子的按鈕排成四列，最上面一列格子會超出視窗上緣；把窄格子的按鈕左右間距從 6px 縮成 4px 後排回三列（R42 AC4）。
 
 ## 9. 預計影響的檔案
 
@@ -105,12 +106,14 @@
 - `src/components/SliderPopup.tsx`（新）：滑桿選單（R40–R42）
 - `src/components/Cell.tsx`、`Grid.tsx`、`Toolbar.tsx`、`src/App.tsx`、`src/styles.css`：按鈕與濾鏡（R40–R42）
 - `package.json`、`package-lock.json`：版本號（R43）
-- `tests/unit/`、`tests/manual/`：測試
+- `tests/unit/brightness.test.ts`（新）、`tests/manual/brightness-and-volume-popup.md`（新）：測試；既有測試的來源資料補上亮度欄位
 
 ## 10. 未決事項
 
 - [x] 版本號：0.3.1（2026-10-09 確認）。
-- [ ] 分支：從 `captions-and-quality-menu` 開出。
+- [x] 分支：從 `captions-and-quality-menu` 開出 `brightness-and-volume-popup`（2026-10-09）。
+- [ ] R42 AC4：網頁來源格子的滑鼠移入事件由網頁接收，測試工具叫不出操作區，只確認了按鈕位置；需要使用者以真實滑鼠確認一次。
+- [ ] 九格同時調整亮度時的播放順暢度（第 8 節效能）需要使用者手動確認。
 
 ## 變更紀錄
 
@@ -118,3 +121,4 @@
 |---|---|---|
 | 2026-10-09 | 初版 | 依 2026-10-09 討論的決定 |
 | 2026-10-09 | 實際亮度範圍與不設上限；選單開著時操作區不隱藏；R40 補網頁提示文字的例外、單格全螢幕與錯誤狀態；R43 確定 0.3.1 | 第 2 步複查 |
+| 2026-10-09 | 補實作結果、實際檔案與未決事項 | 實作完成 |
