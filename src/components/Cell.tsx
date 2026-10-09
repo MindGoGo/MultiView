@@ -280,15 +280,14 @@ export function Cell(props: Props) {
           >
             {source.muted ? '🔇' : '🔊'}
           </button>
-          <input
-            className="volume"
-            type="range"
-            min={0}
-            max={100}
-            value={source.volume}
+          {/* 音量改成按鈕＋彈出滑桿，操作區更精簡（R42） */}
+          <button
             title={`音量 ${source.volume}`}
-            onChange={(e) => props.onVolume(index, Number(e.target.value))}
-          />
+            onPointerDown={(e) => menu?.kind === 'volume' && e.stopPropagation()}
+            onClick={(e) => toggleMenu('volume', e)}
+          >
+            <Label full={`🔉 ${source.volume}`} icon="🔉" />
+          </button>
           {(source.parsed.kind === 'youtube' || (isWeb && !pageMode)) && (
             <button
               className={props.direct ? 'active' : ''}
@@ -380,6 +379,21 @@ export function Cell(props: Props) {
           <button title="移除" onClick={() => onRemove(index)}>
             <Label full="移除" icon="✕" />
           </button>
+          {menu?.kind === 'volume' && (
+            <SliderPopup
+              anchor={menu.anchor}
+              placement="above"
+              title="音量"
+              min={0}
+              max={100}
+              step={1}
+              value={source.volume}
+              format={(v) => String(v)}
+              onChange={(v) => props.onVolume(index, v)}
+              onReset={() => props.onVolume(index, 100)}
+              onClose={() => setMenu(null)}
+            />
+          )}
           {menu?.kind === 'brightness' && (
             <SliderPopup
               anchor={menu.anchor}

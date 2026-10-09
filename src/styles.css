@@ -295,10 +295,6 @@ button.link {
   pointer-events: none;
 }
 
-.volume {
-  width: 80px;
-  accent-color: var(--accent);
-}
 
 /* ---- 進度條（R19） ---- */
 .progress {
@@ -605,8 +601,9 @@ button.danger {
   .lbl-icon {
     display: inline;
   }
+  /* 3×3 且視窗最小時，按鈕要排得進格子，不能超出視窗上緣（R42 AC4） */
   .cell-controls button {
-    padding: 2px 6px;
+    padding: 2px 4px;
   }
   .progress-time {
     display: none;
@@ -614,9 +611,6 @@ button.danger {
   /* 最小的格子操作區有三列高，進度條在上方會被工具列蓋住，移到最下面（R19） */
   .progress {
     order: 99;
-  }
-  .volume {
-    width: 56px;
   }
 }
 
