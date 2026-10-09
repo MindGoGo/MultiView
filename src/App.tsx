@@ -30,6 +30,7 @@ import type { NavState, PlayerHandle, PlayStatus } from './players/types'
 import type { WebMode } from './players/webTypes'
 import type { WebFailure } from './lib/webErrors'
 import type { Quality } from './lib/quality'
+import { BRIGHTNESS_DEFAULT } from './lib/brightness'
 import {
   addFavorite,
   clearHistory,
@@ -64,7 +65,8 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
         autoplay: false,
         adblock: s.adblock,
         quality: s.quality,
-        captions: s.captions
+        captions: s.captions,
+        brightness: s.brightness
       }
   })
   return slots
@@ -124,7 +126,15 @@ export default function App({ initial }: { initial: ViewSettings }) {
       ratios: ratiosMap,
       slots: slots.map((s) =>
         s
-          ? { url: s.url, muted: s.muted, volume: s.volume, adblock: s.adblock, quality: s.quality, captions: s.captions }
+          ? {
+              url: s.url,
+              muted: s.muted,
+              volume: s.volume,
+              adblock: s.adblock,
+              quality: s.quality,
+              captions: s.captions,
+              brightness: s.brightness
+            }
           : null
       )
     })
@@ -173,7 +183,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         // 更換網址時保留原本的畫質設定，新的格子預設自動（R24）
         quality: existing ? existing.quality : 'auto',
         // 更換網址時保留字幕的選擇，新影片有同一種語言就自動開啟（R31）
-        captions: existing ? existing.captions : null
+        captions: existing ? existing.captions : null,
+        // 更換網址時保留亮度（R40）
+        brightness: existing ? existing.brightness : BRIGHTNESS_DEFAULT
       })
     )
     return null
@@ -193,6 +205,12 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const getQualityOptions = (index: number) => {
     const s = slots[index]
     return (s && players.current.get(s.id)?.getQualityOptions?.()) ?? []
+  }
+
+  // 亮度（R40）：不換 id，不重新載入
+  const onBrightness = (index: number, brightness: number) => {
+    const s = slots[index]
+    if (s) setSlots(setSlot(slots, index, { ...s, brightness }))
   }
 
   // 字幕（R31）：不換 id，不重新載入
@@ -449,6 +467,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onQuality={onQuality}
         getQualityOptions={getQualityOptions}
         onCaptions={onCaptions}
+        onBrightness={onBrightness}
         getCaptionTracks={getCaptionTracks}
         getProgress={getProgress}
         onSeek={onSeek}

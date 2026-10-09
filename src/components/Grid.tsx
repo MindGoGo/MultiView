@@ -6,6 +6,7 @@ import type { WebFailure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import type { CaptionTrack } from '../lib/captions'
 import type { Quality } from '../lib/quality'
+import { brightnessFilter } from '../lib/brightness'
 import { YouTubePlayer } from '../players/YouTubePlayer'
 import { VideoPlayer } from '../players/VideoPlayer'
 import { WebPlayer } from '../players/WebPlayer'
@@ -76,6 +77,7 @@ interface Props {
   onQuality(index: number, quality: Quality): void
   getQualityOptions(index: number): number[]
   onCaptions(index: number, key: string | null): void
+  onBrightness(index: number, brightness: number): void
   getCaptionTracks(index: number): CaptionTrack[] | null
 }
 
@@ -114,13 +116,15 @@ export function Grid(props: Props) {
             key={source.id}
             className="player-box"
             data-slot={index}
-            style={
-              visible
+            style={{
+              ...(visible
                 ? rectStyle(rects[index] ?? FULL)
                 : source.parsed.kind === 'web'
                   ? HIDDEN_WEB_STYLE
-                  : { display: 'none' }
-            }
+                  : { display: 'none' }),
+              // 亮度只套在播放器上，格子的操作按鈕在另一層，不受影響（R40）
+              filter: brightnessFilter(source.brightness, 100)
+            }}
           >
             {source.parsed.kind === 'youtube' ? (
               <YouTubePlayer
@@ -181,6 +185,7 @@ export function Grid(props: Props) {
             onQuality={props.onQuality}
             getQualityOptions={props.getQualityOptions}
             onCaptions={props.onCaptions}
+            onBrightness={props.onBrightness}
             getCaptionTracks={props.getCaptionTracks}
             onToggleSolo={props.onToggleSolo}
             onTogglePlay={props.onTogglePlay}

@@ -21,6 +21,8 @@ export interface Source {
   quality: Quality
   /** 字幕的選擇，只用於 YouTube；null 為關閉（R31）。跟著來源移動和保存 */
   captions: string | null
+  /** 亮度 20–150（%）（R40）；跟著來源移動和保存 */
+  brightness: number
 }
 
 export type { Quality } from './quality'

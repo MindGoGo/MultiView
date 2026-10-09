@@ -11,6 +11,8 @@ import { isPlayingStatus } from '../lib/playback'
 import type { CaptionTrack } from '../lib/captions'
 import { qualityLabel, type Quality } from '../lib/quality'
 import { PopupMenu, type PopupItem } from './PopupMenu'
+import { SliderPopup } from './SliderPopup'
+import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } from '../lib/brightness'
 
 interface Props {
   index: number
@@ -53,8 +55,12 @@ interface Props {
   onQuality(index: number, quality: Quality): void
   getQualityOptions(index: number): number[]
   onCaptions(index: number, key: string | null): void
+  onBrightness(index: number, brightness: number): void
   getCaptionTracks(index: number): CaptionTrack[] | null
 }
+
+/** 格子裡的選單：字幕、畫質（R31、R32）；亮度、音量的滑桿選單（R40、R42） */
+type MenuKind = 'captions' | 'quality' | 'brightness' | 'volume'
 
 /** 畫質選單：自動＋可用畫質（由高到低）；還不知道可用畫質時列出目前的選擇（R32） */
 function qualityItems(options: number[], selected: Quality): PopupItem[] {
@@ -109,8 +115,8 @@ export function Cell(props: Props) {
   /** 有進度時才顯示播放鈕（R26、R30） */
   const [hasProgress, setHasProgress] = useState(false)
   /** 開著的格子選單與它的按鈕位置（R31、R32）；選單開著時操作區不隱藏 */
-  const [menu, setMenu] = useState<{ kind: 'captions' | 'quality'; anchor: DOMRect } | null>(null)
-  const toggleMenu = (kind: 'captions' | 'quality', e: React.MouseEvent<HTMLButtonElement>) =>
+  const [menu, setMenu] = useState<{ kind: MenuKind; anchor: DOMRect } | null>(null)
+  const toggleMenu = (kind: MenuKind, e: React.MouseEvent<HTMLButtonElement>) =>
     setMenu(menu?.kind === kind ? null : { kind, anchor: e.currentTarget.getBoundingClientRect() })
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cellRef = useRef<HTMLDivElement>(null)
@@ -347,6 +353,14 @@ export function Cell(props: Props) {
             </button>
           )}
           <button
+            className={source.brightness !== BRIGHTNESS_DEFAULT ? 'active' : ''}
+            title={`亮度 ${source.brightness}%`}
+            onPointerDown={(e) => menu?.kind === 'brightness' && e.stopPropagation()}
+            onClick={(e) => toggleMenu('brightness', e)}
+          >
+            ☀
+          </button>
+          <button
             className={props.favorite ? 'active' : ''}
             title={props.favorite ? '從最愛移除' : '加入最愛'}
             onClick={() => props.onToggleFavorite(index)}
@@ -366,6 +380,21 @@ export function Cell(props: Props) {
           <button title="移除" onClick={() => onRemove(index)}>
             <Label full="移除" icon="✕" />
           </button>
+          {menu?.kind === 'brightness' && (
+            <SliderPopup
+              anchor={menu.anchor}
+              placement="above"
+              title="亮度"
+              min={BRIGHTNESS_MIN}
+              max={BRIGHTNESS_MAX}
+              step={BRIGHTNESS_STEP}
+              value={source.brightness}
+              format={(v) => `${v}%`}
+              onChange={(v) => props.onBrightness(index, v)}
+              onReset={() => props.onBrightness(index, BRIGHTNESS_DEFAULT)}
+              onClose={() => setMenu(null)}
+            />
+          )}
           {menu?.kind === 'quality' && (
             <PopupMenu
               anchor={menu.anchor}

@@ -384,6 +384,39 @@ button.link {
   color: var(--accent);
 }
 
+/* ---- 滑桿選單（R40–R42） ---- */
+.slider-popup {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 200px;
+  padding: 8px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: rgba(20, 20, 20, 0.97);
+}
+
+.slider-popup-head {
+  display: flex;
+  justify-content: space-between;
+}
+
+.slider-popup-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.slider-popup input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.slider-popup-reset {
+  align-self: flex-end;
+}
+
 /* ---- 中央的半透明播放／暫停鈕（R30） ---- */
 .center-play {
   position: absolute;

@@ -3,6 +3,7 @@ import { DEFAULT_LAYOUT, isValidRatios, LAYOUT_IDS, type LayoutId, type Ratios }
 import { parseSource } from './source'
 import { SLOT_COUNT, type Quality } from './slots'
 import { normalizeQuality } from './quality'
+import { normalizeBrightness } from './brightness'
 
 export interface WindowState {
   x?: number
@@ -22,6 +23,8 @@ export interface SavedSource {
   quality: Quality
   /** 字幕的選擇（R31）；舊的設定檔沒有這個欄位時視為關閉 */
   captions: string | null
+  /** 亮度（R40）；舊的設定檔沒有這個欄位時視為 100 */
+  brightness: number
 }
 
 /** 畫面這一側的設定，由畫面送給主程序保存 */
@@ -86,7 +89,8 @@ function normalizeSource(raw: unknown): SavedSource | null {
     volume,
     adblock: raw.adblock !== false,
     quality: normalizeQuality(raw.quality),
-    captions: typeof raw.captions === 'string' && raw.captions ? raw.captions : null
+    captions: typeof raw.captions === 'string' && raw.captions ? raw.captions : null,
+    brightness: normalizeBrightness(raw.brightness)
   }
 }
 
