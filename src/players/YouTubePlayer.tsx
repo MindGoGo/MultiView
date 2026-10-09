@@ -193,7 +193,9 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
     }
   }))
 
-  // 選擇特定畫質：YouTube 依播放器大小決定畫質，以該畫質的大小排版再縮放（R32）。改變大小不會重新載入
+  // 選擇特定畫質：YouTube 依播放器大小決定畫質，以該畫質的大小排版再縮放（R32）。改變大小不會重新載入。
+  // 縮小時用 zoom：transform 縮小後 YouTube 的暫停畫面正中央會出現一條接縫（R46）。
+  // 放大時維持 transform：zoom 放大會提高畫面密度，YouTube 會因此選擇比所選更高的畫質
   useEffect(() => {
     const outer = outerRef.current!
     const host = hostRef.current!
@@ -203,7 +205,8 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
       const f = qualityScale(quality, w, h)
       host.style.width = `${w / f}px`
       host.style.height = `${h / f}px`
-      host.style.transform = f === 1 ? '' : `scale(${f})`
+      host.style.zoom = f < 1 ? String(f) : ''
+      host.style.transform = f > 1 ? `scale(${f})` : ''
     }
     layout()
     const ro = new ResizeObserver(layout)
