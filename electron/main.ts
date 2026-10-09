@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { app, BrowserWindow, clipboard, ipcMain, Menu, screen, session, type Rectangle } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, Menu, screen, session, shell, type Rectangle } from 'electron'
 import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
@@ -124,8 +124,11 @@ async function createWindow() {
   // YouTube 播放器會註冊 beforeunload，Electron 遇到時會默默取消關閉，這裡一律允許關閉（R1 AC6）
   win.webContents.on('will-prevent-unload', (event) => event.preventDefault())
 
-  // 不讓網頁開新視窗（例如點到 YouTube 標誌）
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  // 程式內不開新視窗。YouTube 播放器裡的連結交給畫面決定：影片在同一格播放，其他用瀏覽器開啟（R45）
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) win?.webContents.send('link:open', url)
+    return { action: 'deny' }
+  })
 
   // 網頁來源一律在沙箱中執行，只載入我們的偵測程式（非功能需求：安全）
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
@@ -194,6 +197,11 @@ ipcMain.on('win:toggleAlwaysOnTop', () => {
   saveSoon()
 })
 ipcMain.on('win:minimize', () => win?.minimize())
+
+// 只有 http／https 網址交給系統瀏覽器（R45，非功能需求：安全）
+ipcMain.on('link:external', (_, url: unknown) => {
+  if (typeof url === 'string' && /^https?:\/\//i.test(url)) void shell.openExternal(url)
+})
 
 // 游標在拖曳區或 iframe 上時，網頁收不到滑鼠事件。
 // 需要時由主程序定時回報游標位置（R3：工具列隱藏、直接操作模式結束）。

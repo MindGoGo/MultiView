@@ -45,6 +45,16 @@ const api = {
     }
   },
   close: () => ipcRenderer.send('win:close'),
+  /** YouTube 播放器裡要開新視窗的連結（R45） */
+  onLink: (cb: (url: string) => void) => {
+    const listener = (_: unknown, url: string) => cb(url)
+    ipcRenderer.on('link:open', listener)
+    return () => {
+      ipcRenderer.removeListener('link:open', listener)
+    }
+  },
+  /** 用系統預設的瀏覽器開啟（R45） */
+  openExternal: (url: string) => ipcRenderer.send('link:external', url),
   /** 告知主程序網頁來源的顯示模式（R14） */
   setWebMode: (webContentsId: number, mode: WebMode) => ipcRenderer.send('web:mode', webContentsId, mode),
   /** 網頁載入使用者的網址前，設定這一格的廣告阻擋（R17） */

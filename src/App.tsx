@@ -31,6 +31,7 @@ import type { WebMode } from './players/webTypes'
 import type { WebFailure } from './lib/webErrors'
 import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
+import { classifyLink } from './lib/links'
 import {
   addFavorite,
   clearHistory,
@@ -399,6 +400,18 @@ export default function App({ initial }: { initial: ViewSettings }) {
   }
   const runShortcutRef = useRef(runShortcut)
   runShortcutRef.current = runShortcut
+
+  // YouTube 播放器裡的連結：影片在直接操作中的那一格播放，其他用瀏覽器開啟（R45）
+  const onLink = (url: string) => {
+    const s = direct !== null ? slots[direct] : null
+    const youtube = s?.parsed.kind === 'youtube' ? s.parsed : null
+    const action = classifyLink(url, youtube ? direct : null, youtube?.videoId ?? null)
+    if (action.kind === 'play') onSubmitUrl(action.index, action.url)
+    else if (action.kind === 'external') window.multiview.openExternal(action.url)
+  }
+  const onLinkRef = useRef(onLink)
+  onLinkRef.current = onLink
+  useEffect(() => window.multiview.onLink((url) => onLinkRef.current(url)), [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
