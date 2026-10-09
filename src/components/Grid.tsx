@@ -78,6 +78,8 @@ interface Props {
   getQualityOptions(index: number): number[]
   onCaptions(index: number, key: string | null): void
   onBrightness(index: number, brightness: number): void
+  /** 總亮度，和各格亮度相乘（R41） */
+  masterBrightness: number
   getCaptionTracks(index: number): CaptionTrack[] | null
 }
 
@@ -123,7 +125,7 @@ export function Grid(props: Props) {
                   ? HIDDEN_WEB_STYLE
                   : { display: 'none' }),
               // 亮度只套在播放器上，格子的操作按鈕在另一層，不受影響（R40）
-              filter: brightnessFilter(source.brightness, 100)
+              filter: brightnessFilter(source.brightness, props.masterBrightness)
             }}
           >
             {source.parsed.kind === 'youtube' ? (

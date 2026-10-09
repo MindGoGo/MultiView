@@ -3,7 +3,7 @@ import { DEFAULT_LAYOUT, isValidRatios, LAYOUT_IDS, type LayoutId, type Ratios }
 import { parseSource } from './source'
 import { SLOT_COUNT, type Quality } from './slots'
 import { normalizeQuality } from './quality'
-import { normalizeBrightness } from './brightness'
+import { BRIGHTNESS_DEFAULT, normalizeBrightness } from './brightness'
 
 export interface WindowState {
   x?: number
@@ -32,6 +32,8 @@ export interface ViewSettings {
   layout: LayoutId
   ratios: Partial<Record<LayoutId, Ratios>>
   slots: (SavedSource | null)[]
+  /** 總亮度（R41）；舊的設定檔沒有這個欄位時視為 100 */
+  brightness: number
 }
 
 export interface Settings extends ViewSettings {
@@ -47,7 +49,8 @@ export function defaultSettings(): Settings {
     window: { ...DEFAULT_WINDOW },
     layout: DEFAULT_LAYOUT,
     ratios: {},
-    slots: Array.from({ length: SLOT_COUNT }, () => null)
+    slots: Array.from({ length: SLOT_COUNT }, () => null),
+    brightness: BRIGHTNESS_DEFAULT
   }
 }
 
@@ -105,7 +108,8 @@ export function normalizeView(raw: unknown): ViewSettings {
   return {
     layout: LAYOUT_IDS.includes(obj.layout as LayoutId) ? (obj.layout as LayoutId) : DEFAULT_LAYOUT,
     ratios: normalizeRatios(obj.ratios),
-    slots: normalizeSlots(obj.slots)
+    slots: normalizeSlots(obj.slots),
+    brightness: normalizeBrightness(obj.brightness)
   }
 }
 

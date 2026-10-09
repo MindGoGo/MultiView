@@ -153,7 +153,8 @@ async function createWindow() {
 ipcMain.handle('settings:getView', () => ({
   layout: settings.layout,
   ratios: settings.ratios,
-  slots: settings.slots
+  slots: settings.slots,
+  brightness: settings.brightness
 }))
 ipcMain.on('settings:saveView', (_, view: unknown) => {
   settings = { ...settings, ...normalizeView(view) }

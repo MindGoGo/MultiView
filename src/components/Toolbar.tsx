@@ -1,5 +1,8 @@
 import type { WinState } from '../../electron/preload'
+import { useState } from 'react'
 import { LAYOUT_IDS, LAYOUT_LABELS, type LayoutId } from '../lib/layout'
+import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } from '../lib/brightness'
+import { SliderPopup } from './SliderPopup'
 
 interface Props {
   visible: boolean
@@ -17,11 +20,21 @@ interface Props {
   onToggleList(): void
   /** 單格全螢幕時要先離開單格全螢幕（R20） */
   onToggleFullscreen(): void
+  /** 總亮度（R41） */
+  brightness: number
+  onBrightness(brightness: number): void
+  /** 總亮度選單開關時通知，開著時工具列不自動隱藏 */
+  onPopupChange(open: boolean): void
 }
 
 export function Toolbar(props: Props) {
   const { visible, win, layout, onLayout, toast, canControl } = props
   const api = window.multiview
+  const [popup, setPopup] = useState<DOMRect | null>(null)
+  const openPopup = (anchor: DOMRect | null) => {
+    setPopup(anchor)
+    props.onPopupChange(anchor !== null)
+  }
   return (
     <div className={`toolbar ${visible ? 'show' : ''}`}>
       <div className="toolbar-group">
@@ -49,6 +62,29 @@ export function Toolbar(props: Props) {
       </div>
       <div className="toolbar-drag">{toast && <span className="toast">{toast}</span>}</div>
       <div className="toolbar-group">
+        <button
+          className={props.brightness !== BRIGHTNESS_DEFAULT ? 'active' : ''}
+          title="總亮度：和每一格的亮度相乘"
+          onPointerDown={(e) => popup && e.stopPropagation()}
+          onClick={(e) => openPopup(popup ? null : e.currentTarget.getBoundingClientRect())}
+        >
+          ☀ {props.brightness}%
+        </button>
+        {popup && (
+          <SliderPopup
+            anchor={popup}
+            placement="below"
+            title="總亮度"
+            min={BRIGHTNESS_MIN}
+            max={BRIGHTNESS_MAX}
+            step={BRIGHTNESS_STEP}
+            value={props.brightness}
+            format={(v) => `${v}%`}
+            onChange={props.onBrightness}
+            onReset={() => props.onBrightness(BRIGHTNESS_DEFAULT)}
+            onClose={() => openPopup(null)}
+          />
+        )}
         <button className={props.listOpen ? 'active' : ''} title="最愛與歷史清單" onClick={props.onToggleList}>
           ☰ 清單
         </button>

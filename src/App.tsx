@@ -81,6 +81,10 @@ export default function App({ initial }: { initial: ViewSettings }) {
 
   const [layout, setLayout] = useState<LayoutId>(initial.layout)
   const [ratiosMap, setRatiosMap] = useState<Partial<Record<LayoutId, Ratios>>>(initial.ratios)
+  /** 總亮度（R41） */
+  const [masterBrightness, setMasterBrightness] = useState(initial.brightness)
+  /** 工具列的總亮度選單開著時，工具列不自動隱藏（R41 AC4） */
+  const [toolbarPopup, setToolbarPopup] = useState(false)
   const ratios = ratiosMap[layout] ?? defaultRatios(layout)
   const [slots, setSlots] = useState<Slots>(() => restoreSlots(initial.slots))
   const [statuses, setStatuses] = useState<Record<number, PlayStatus>>({})
@@ -124,6 +128,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     window.multiview.saveView({
       layout,
       ratios: ratiosMap,
+      brightness: masterBrightness,
       slots: slots.map((s) =>
         s
           ? {
@@ -138,7 +143,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
           : null
       )
     })
-  }, [layout, ratiosMap, slots])
+  }, [layout, ratiosMap, slots, masterBrightness])
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
     if (handle) players.current.set(id, handle)
@@ -468,12 +473,13 @@ export default function App({ initial }: { initial: ViewSettings }) {
         getQualityOptions={getQualityOptions}
         onCaptions={onCaptions}
         onBrightness={onBrightness}
+        masterBrightness={masterBrightness}
         getCaptionTracks={getCaptionTracks}
         getProgress={getProgress}
         onSeek={onSeek}
       />
       <Toolbar
-        visible={toolbarVisible || toast !== null || listOpen}
+        visible={toolbarVisible || toast !== null || listOpen || toolbarPopup}
         win={win}
         layout={layout}
         onLayout={changeLayout}
@@ -485,6 +491,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         listOpen={listOpen}
         onToggleList={() => setListOpen((o) => !o)}
         onToggleFullscreen={() => runShortcutRef.current('F11')}
+        brightness={masterBrightness}
+        onBrightness={setMasterBrightness}
+        onPopupChange={setToolbarPopup}
       />
       {listOpen && (
         <ListPanel
