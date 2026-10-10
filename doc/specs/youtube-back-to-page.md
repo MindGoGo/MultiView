@@ -2,7 +2,7 @@
 
 - 功能代號：`youtube-back-to-page`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-10
 - 前置規格：[multiview-player](multiview-player.md)（R1–R11）、[web-page-source](web-page-source.md)（R12–R18）、[player-controls-and-lists](player-controls-and-lists.md)（R19–R25）、[cell-play-and-page-menu](cell-play-and-page-menu.md)（R26–R29）、[captions-and-quality-menu](captions-and-quality-menu.md)（R30–R33）、[brightness-and-volume-popup](brightness-and-volume-popup.md)（R40–R43）、[installer-and-youtube-fixes](installer-and-youtube-fixes.md)（R44–R47）、[youtube-web-and-seek](youtube-web-and-seek.md)（R48–R52）、[resume-and-play-fixes](resume-and-play-fixes.md)（R53–R56）、[youtube-browse-and-subscriptions](youtube-browse-and-subscriptions.md)（R57–R62）。本規格的需求編號從 R63 開始；R34–R39 仍保留給本機播放與下載功能。
 
@@ -36,7 +36,7 @@
 
 ### R63：回到 YouTube 頁面
 - 描述：
-  - 在 YouTube 網站點了影片（第十二版 R57）時，這一格換成影片播放，來源頁面保留在背景：網頁退回點影片前的頁面、靜音、不顯示。
+  - 在 YouTube 網站點了影片（第十二版 R57）時，這一格換成影片播放，來源頁面保留在背景：網頁不換頁（停在原本的頁面）、靜音、不顯示，維持那一格的大小。
   - 從 YouTube 網站開啟的影片，可以用以下方式回到來源頁面：
     - 操作區的「← 回到 YouTube」按鈕（格子寬度小於 360px 時只顯示「←」）。
     - 滑鼠在這一格上時，按滑鼠的「上一頁」側鍵（直接操作 YouTube 時游標在播放器裡，也要能作用）。
@@ -105,6 +105,11 @@
 ## 8. 非功能需求
 
 - **效能：** 背景的來源頁面退回點影片前的頁面，不在背景播放影片；每一格最多保留一個來源頁面。
+- **實作結果：**
+  - 最初讓 YouTube 網頁換到影片頁後再退回上一頁，但 YouTube 退回時會留下迷你播放器、捲動位置歸零。改成在網頁裡（最上層框架、YouTube 自己的處理之前）攔下影片連結的點擊：網頁不換頁，交給程式播放；原本在換頁時才處理的方式保留作為備援。
+  - 背景的頁面最初使用「隱藏的網頁」的樣式（整個畫面大小），YouTube 因此重新排版、捲動位置跑掉；改成維持原本那一格的大小、只是看不見。實測點影片前、背景時、回去後捲動位置都是 4180。
+  - 背景的頁面和其他播放器放在同一層、依 id 排序，回到前景時 id 不變，網頁不會重新載入。
+  - 滑鼠「上一頁」側鍵：在程式畫面上聽 `mouseup`（button 3）；另外加上視窗的 `app-command`（`browser-backward`）作為「直接操作」時的備援，但第四版 R28 已記錄 Chromium 不會把側鍵轉成 app-command，所以直接操作時可能收不到，需要真實滑鼠確認。
 - **技術風險：**
   - YouTube 網站退回上一頁時能不能維持捲動位置，取決於 YouTube 自己；實作時驗證，做不到時記錄在未決事項。
   - 滑鼠側鍵在嵌入播放的 YouTube 格子上能不能收到，實作時驗證；收不到時改由主程序的視窗事件處理。
@@ -114,14 +119,17 @@
 
 - `src/lib/slots.ts`、`src/lib/settings.ts`：來源頁面（R63）
 - `src/lib/shortcuts.ts`：Backspace（R63）
-- `src/players/WebPlayer.tsx`：點影片時退回、靜音；回到前景時恢復（R63）
-- `src/components/Grid.tsx`、`Cell.tsx`、`src/App.tsx`：背景頁面的顯示、按鈕、側鍵（R63）；選擇要取代的格子（R64，可能新增 `CellPicker.tsx`）
+- `src/players/WebPlayer.tsx`、`src/players/webTypes.ts`、`electron/webPreload.ts`：攔下影片連結的點擊、背景時靜音、回到前景時恢復（R63）
+- `electron/main.ts`：滑鼠側鍵的視窗事件（R63）
+- `src/components/Grid.tsx`、`Cell.tsx`、`src/App.tsx`：背景頁面的顯示、按鈕、側鍵（R63）；選擇要取代的格子（R64）
+- `src/components/CellPicker.tsx`（新）、`src/styles.css`：選擇框（R64）
 - `package.json`、`package-lock.json`：版本號（R65）
-- `tests/unit/`、`tests/manual/`：測試
+- `tests/unit/back-to-page.test.ts`（新）、`tests/manual/youtube-back-to-page.md`（新）：測試；既有測試的來源資料補上來源頁面欄位
 
 ## 10. 未決事項
 
-- [ ] 分支：從 `youtube-browse-and-subscriptions` 開出 `youtube-back-to-page`。
+- [x] 分支：從 `youtube-browse-and-subscriptions` 開出 `youtube-back-to-page`（2026-10-10）。
+- [ ] R63 AC3：「直接操作」時游標在 YouTube 播放器裡按滑鼠側鍵，需要使用者以真實滑鼠確認；收不到時可以先移出播放器再按，或用「← 回到 YouTube」按鈕、Backspace。
 - [x] 版本號：0.5.1（2026-10-10 確認）。
 
 ## 變更紀錄
@@ -132,3 +140,4 @@
 | 2026-10-10 | 新增 R64 單格顯示時「開啟 YouTube」取代那一格；版本號改為 R65 | 使用者在檢查點 A 追加 |
 | 2026-10-10 | R64 改成沒有空格時跳出選擇要取代的格子（清單裡所有點一下的項目都適用），單格顯示時直接取代 | 使用者在檢查點 A 追加 |
 | 2026-10-10 | 選擇框蓋在清單面板與網頁上面（新增 R64 AC7）；格子編號 1～9；直接操作時滑鼠側鍵也要作用；背景頁面不記錄歷史與進度；版本號確定 0.5.1 | 第 2 步複查 |
+| 2026-10-10 | 背景的來源頁面改成網頁不換頁（攔下影片連結的點擊）、維持那一格的大小；補實作結果、實際檔案與未決事項 | 實作時發現：YouTube 退回上一頁會留下迷你播放器、捲動位置歸零 |
