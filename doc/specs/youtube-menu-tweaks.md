@@ -2,7 +2,7 @@
 
 - 功能代號：`youtube-menu-tweaks`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-11
 - 前置規格：[multiview-player](multiview-player.md)（R1–R11）、[web-page-source](web-page-source.md)（R12–R18）、[player-controls-and-lists](player-controls-and-lists.md)（R19–R25）、[cell-play-and-page-menu](cell-play-and-page-menu.md)（R26–R29）、[captions-and-quality-menu](captions-and-quality-menu.md)（R30–R33）、[brightness-and-volume-popup](brightness-and-volume-popup.md)（R40–R43）、[installer-and-youtube-fixes](installer-and-youtube-fixes.md)（R44–R47）、[youtube-web-and-seek](youtube-web-and-seek.md)（R48–R52）、[resume-and-play-fixes](resume-and-play-fixes.md)（R53–R56）、[youtube-browse-and-subscriptions](youtube-browse-and-subscriptions.md)（R57–R62）、[youtube-back-to-page](youtube-back-to-page.md)（R63–R65）、[youtube-page-mode](youtube-page-mode.md)（R66–R68）。本規格的需求編號從 R69 開始；R34–R39 仍保留給本機播放與下載功能。
 
@@ -99,7 +99,8 @@
 
 ## 10. 未決事項
 
-- [ ] 分支：從 `youtube-page-mode` 開出 `youtube-menu-tweaks`。
+- [x] 分支：從 `youtube-page-mode` 開出 `youtube-menu-tweaks`（2026-10-11）。
+- [ ] R72：打包完成（0.5.3），使用者的 MultiView 正在執行，尚未安裝。
 - [x] 版本號：0.5.3（2026-10-11 確認）。
 - [ ] 第十四版 R67（工具列全螢幕文字）仍待驗收：需要實際切換視窗全螢幕，等使用者同意或手動確認。
 
@@ -109,3 +110,4 @@
 |---|---|---|
 | 2026-10-11 | 初版 | 依 2026-10-11 使用者回饋 |
 | 2026-10-11 | 重新載入時暫停的處理與不記錄歷史；背景的 YouTube 網站頁面不受影響；輸入框操作不變；版本號確定 0.5.3 | 第 2 步複查 |
+| 2026-10-11 | 實作完成；驗收：選單「回到網頁」；網頁模式廣告阻擋預設「開」，關掉後網頁從 7:02 接著播、回到播放器再切回仍是「關」；空格的「開啟 YouTube」開啟首頁 | 實作完成 |
