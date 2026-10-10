@@ -178,6 +178,21 @@ export function addChannel(lists: Lists, channel: Omit<Channel, 'time'>, now: nu
   return { lists: { ...lists, channels: [...lists.channels, { ...channel, time: now }] } }
 }
 
+/** 一次加入多個頻道（R61），已經訂閱的略過 */
+export function addChannels(
+  lists: Lists,
+  channels: Omit<Channel, 'time'>[],
+  now: number
+): { lists: Lists; added: number; skipped: number } {
+  const known = new Set(lists.channels.map((c) => c.id))
+  const fresh = channels.filter((c) => !known.has(c.id))
+  return {
+    lists: { ...lists, channels: [...lists.channels, ...fresh.map((c) => ({ ...c, time: now }))] },
+    added: fresh.length,
+    skipped: channels.length - fresh.length
+  }
+}
+
 export function removeChannel(lists: Lists, id: string): Lists {
   return { ...lists, channels: lists.channels.filter((c) => c.id !== id) }
 }

@@ -33,6 +33,8 @@ interface Props {
   /** 訂閱頻道（R59）：回傳錯誤訊息，成功時回傳 null */
   onAddChannel(input: string): Promise<string | null>
   onRemoveChannel(id: string): void
+  /** 從 Google Takeout 匯入訂閱（R61） */
+  onImportChannels(): void
   isFavorite(url: string): boolean
   onToggleFavoriteUrl(url: string, name: string): void
 }
@@ -207,6 +209,7 @@ export function ListPanel(props: Props) {
           pick={pickHandlers}
           onAdd={props.onAddChannel}
           onRemove={props.onRemoveChannel}
+          onImport={props.onImportChannels}
           isFavorite={props.isFavorite}
           onToggleFavorite={props.onToggleFavoriteUrl}
         />

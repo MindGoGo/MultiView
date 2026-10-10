@@ -1,5 +1,6 @@
+import fs from 'node:fs'
 import path from 'node:path'
-import { app, BrowserWindow, clipboard, ipcMain, Menu, net, screen, session, shell, type Rectangle } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, screen, session, shell, type Rectangle } from 'electron'
 import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
@@ -263,6 +264,22 @@ ipcMain.handle('yt:feed', async (_, id: unknown) => {
   const xml = await fetchText(channelFeedUrl(id))
   return xml ? parseFeed(xml) : null
 })
+// 選擇 Google Takeout 的訂閱檔並讀取內容（R61）；取消或讀取失敗時為 null
+ipcMain.handle('yt:pickTakeout', async () => {
+  if (!win) return null
+  const r = await dialog.showOpenDialog(win, {
+    title: '選擇 Google Takeout 匯出的 subscriptions.csv',
+    filters: [{ name: 'CSV', extensions: ['csv'] }],
+    properties: ['openFile']
+  })
+  if (r.canceled || !r.filePaths[0]) return null
+  try {
+    return await fs.promises.readFile(r.filePaths[0], 'utf8')
+  } catch {
+    return null
+  }
+})
+
 // 正在直播的影片代碼（R60）；沒有直播或判斷不了時為 null
 ipcMain.handle('yt:live', async (_, id: unknown) => {
   if (!isChannelId(id)) return null

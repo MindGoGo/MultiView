@@ -10,6 +10,8 @@ interface Props {
   /** 回傳錯誤訊息，成功時回傳 null */
   onAdd(input: string): Promise<string | null>
   onRemove(id: string): void
+  /** 從 Google Takeout 匯入（R61） */
+  onImport(): void
   isFavorite(url: string): boolean
   onToggleFavorite(url: string, name: string): void
 }
@@ -115,6 +117,9 @@ export function SubscriptionList(props: Props) {
           ＋ 加入頻道
         </button>
         <div className="list-head-spacer" />
+        <button title="匯入 Google Takeout 匯出的 YouTube 訂閱清單（subscriptions.csv）" onClick={props.onImport}>
+          匯入…
+        </button>
         <button
           title="重新讀取每個頻道的最新影片"
           disabled={anyLoading || channels.length === 0}
@@ -152,7 +157,13 @@ export function SubscriptionList(props: Props) {
       )}
 
       <ul className="list-items">
-        {channels.length === 0 && <li className="list-empty">還沒有訂閱的頻道，按「＋ 加入頻道」貼上頻道網址</li>}
+        {channels.length === 0 && (
+          <li className="list-empty">
+            還沒有訂閱的頻道，按「＋ 加入頻道」貼上頻道網址。
+            <br />
+            要匯入現有的 YouTube 訂閱：到 Google Takeout（takeout.google.com）只勾選「YouTube 和 YouTube Music」，在選項中只保留「訂閱內容」，匯出後解壓縮，按「匯入…」選擇裡面的 subscriptions.csv。
+          </li>
+        )}
         {sorted.map((ch) => {
           const feed = feeds.get(ch.id)
           const videos = feed?.videos ?? []

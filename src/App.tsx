@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { parseTakeoutCsv } from './lib/youtubeFeed'
 import { Toolbar } from './components/Toolbar'
 import { Grid } from './components/Grid'
 import { useWindowState } from './hooks/useWindowState'
@@ -36,6 +37,7 @@ import { canonicalYouTubeUrl, classifyLink } from './lib/links'
 import { skipTarget, resumePosition } from './lib/progress'
 import {
   addChannel,
+  addChannels,
   addFavorite,
   CHANNEL_ERROR,
   removeChannel,
@@ -336,6 +338,19 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if ('error' in r) return r.error
     setLists(r.lists)
     return null
+  }
+  // 從 Google Takeout 匯入訂閱（R61）
+  const onImportChannels = async () => {
+    const text = await window.multiview.pickTakeout()
+    if (text === null) return
+    const channels = parseTakeoutCsv(text)
+    if (!channels) {
+      showToast('這個檔案不是 YouTube 訂閱清單')
+      return
+    }
+    const r = addChannels(listsRef.current, channels, Date.now())
+    setLists(r.lists)
+    showToast(`已匯入 ${r.added} 個頻道（略過 ${r.skipped} 個已訂閱）`)
   }
   /** 放進格子：空格就放入，有影片就更換網址（保留靜音和音量） */
   const putItem = (index: number, item: ListItem) => {
@@ -691,6 +706,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
           onClearHistory={(group) => setLists(clearHistory(lists, group))}
           onAddChannel={onAddChannel}
           onRemoveChannel={(id) => setLists((l) => removeChannel(l, id))}
+          onImportChannels={() => void onImportChannels()}
           isFavorite={(url) => isFavorite(lists, url)}
           onToggleFavoriteUrl={onToggleFavoriteUrl}
           onPick={onPickItem}

@@ -108,6 +108,48 @@ export function parseLiveStatus(html: string): string | null {
   return id
 }
 
+/** 拆開一行 CSV（支援引號、引號內的逗號與 "" 跳脫） */
+function splitCsvLine(line: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let quoted = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
+        cur += '"'
+        i++
+      } else if (ch === '"') quoted = false
+      else cur += ch
+    } else if (ch === '"') quoted = true
+    else if (ch === ',') {
+      out.push(cur)
+      cur = ''
+    } else cur += ch
+  }
+  out.push(cur)
+  return out.map((s) => s.trim())
+}
+
+/**
+ * Google Takeout 匯出的 YouTube 訂閱檔（subscriptions.csv，R61）。
+ * 不同語言的欄位名稱不同，所以用內容辨識：頻道代碼欄、網址欄，其餘的是名稱。
+ * 找不到任何頻道時回傳 null（不是訂閱檔）。
+ */
+export function parseTakeoutCsv(text: string): Omit<Channel, 'time'>[] | null {
+  const out: Omit<Channel, 'time'>[] = []
+  // 去掉檔案開頭的 BOM，Windows 與 Unix 的換行都可以
+  for (const line of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    if (!line.trim()) continue
+    const cells = splitCsvLine(line)
+    const id = cells.find(isChannelId)
+    if (!id || out.some((c) => c.id === id)) continue
+    const name = cells.find((c) => c && c !== id && !/^https?:\/\//i.test(c)) ?? id
+    out.push({ id, name, url: channelPageUrl(id) })
+  }
+  return out.length ? out : null
+}
+
 /** 名稱旁顯示的新影片：24 小時內發布的（R59） */
 export const NEW_VIDEO_MS = 24 * 3600 * 1000
 
