@@ -515,6 +515,13 @@ button.link {
   }
 }
 
+/* 空白格子的「開啟 YouTube」（R71）：格子太矮時不顯示 */
+@container (max-height: 119px) {
+  .open-youtube {
+    display: none;
+  }
+}
+
 /* 選擇要取代的格子（R64）：蓋在清單面板與網頁上面 */
 .cell-picker {
   position: fixed;

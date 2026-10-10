@@ -243,6 +243,12 @@ export function Cell(props: Props) {
             }}
           />
           {error && <div className="url-error">{error}</div>}
+          {/* 空白格子直接開啟 YouTube 首頁（R71）；更換網址時不顯示 */}
+          {!source && (
+            <button className="open-youtube" onClick={() => onSubmitUrl(index, 'https://www.youtube.com/')}>
+              開啟 YouTube
+            </button>
+          )}
           {editing && (
             <button className="link" onClick={closeInput}>
               取消
@@ -323,7 +329,7 @@ export function Cell(props: Props) {
           {(source.parsed.kind === 'youtube' || source.youtubePage) && (
             <button
               className={source.youtubePage ? 'active' : ''}
-              title="YouTube：看這部影片的網頁（留言、推薦）、回到播放器、回到剛才的 YouTube 頁面"
+              title="YouTube：回到網頁（留言、推薦）、回到播放器、回到剛才的 YouTube 頁面"
               onPointerDown={(e) => menu?.kind === 'youtube' && e.stopPropagation()}
               onClick={(e) => toggleMenu('youtube', e)}
             >
@@ -492,7 +498,7 @@ export function Cell(props: Props) {
               items={[
                 source.youtubePage
                   ? { key: 'player', label: '回到播放器' }
-                  : { key: 'page', label: '看這部影片的網頁（留言、推薦）' },
+                  : { key: 'page', label: '回到網頁' },
                 ...(source.back || source.backUrl ? [{ key: 'back', label: '回到剛才的 YouTube 頁面' }] : [])
               ]}
               onSelect={(key) => props.onYouTubeMenu(index, key)}
