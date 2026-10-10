@@ -1,5 +1,6 @@
 // 最愛清單與歷史紀錄（R21–R23）。主程序與畫面共用，不依賴 Electron。
 import { isYouTubeSite, parseSource } from './source'
+import { isChannelId, type Channel } from './youtubeFeed'
 
 export interface ListItem {
   url: string
@@ -11,9 +12,11 @@ export interface ListItem {
 export interface Lists {
   favorites: ListItem[]
   history: ListItem[]
+  /** 訂閱的 YouTube 頻道（R59） */
+  channels: Channel[]
 }
 
-export type ListKind = keyof Lists
+export type ListKind = 'favorites' | 'history'
 
 /** 清單的兩邊（R58）：YouTube 影片與 YouTube 網站頁面、其他網站 */
 export type ListGroup = 'youtube' | 'other'
@@ -39,7 +42,7 @@ export const LIST_ERROR = {
 
 export type ListResult = { lists: Lists } | { error: string }
 
-export const emptyLists = (): Lists => ({ favorites: [], history: [] })
+export const emptyLists = (): Lists => ({ favorites: [], history: [], channels: [] })
 
 /** 以去掉前後空白後的完整網址比對（共用定義「網址比對」） */
 export const sameUrl = (a: string, b: string) => a.trim() === b.trim()
@@ -76,7 +79,25 @@ function normalizeItems(raw: unknown, max = Infinity): ListItem[] {
 /** 只留下合法的項目（網址必須支援、不重複）；歷史最多 200 筆 */
 export function normalizeLists(raw: unknown): Lists {
   const obj = isObject(raw) ? raw : {}
-  return { favorites: normalizeItems(obj.favorites), history: capPerGroup(normalizeItems(obj.history), HISTORY_MAX) }
+  return {
+    favorites: normalizeItems(obj.favorites),
+    history: capPerGroup(normalizeItems(obj.history), HISTORY_MAX),
+    channels: normalizeChannels(obj.channels)
+  }
+}
+
+/** 只留下合法、不重複的頻道（舊的清單檔沒有訂閱時為空） */
+function normalizeChannels(raw: unknown): Channel[] {
+  if (!Array.isArray(raw)) return []
+  const out: Channel[] = []
+  for (const r of raw) {
+    if (!isObject(r) || !isChannelId(r.id) || out.some((c) => c.id === r.id)) continue
+    const name = typeof r.name === 'string' && r.name.trim() ? r.name.trim() : r.id
+    const url = typeof r.url === 'string' && r.url ? r.url : `https://www.youtube.com/channel/${r.id}`
+    const time = typeof r.time === 'number' && Number.isFinite(r.time) ? r.time : 0
+    out.push({ id: r.id, name, url, time })
+  }
+  return out
 }
 
 /** 讀取清單檔；JSON 格式錯誤或整體結構不對時視為損毀（R21 AC11） */
@@ -144,6 +165,21 @@ export function recordHistory(lists: Lists, url: string, title: string | null | 
 /** 清除一邊的歷史（R58 AC3） */
 export function clearHistory(lists: Lists, group: ListGroup): Lists {
   return { ...lists, history: lists.history.filter((i) => groupOf(i.url) !== group) }
+}
+
+export const CHANNEL_ERROR = {
+  duplicate: '已經訂閱這個頻道',
+  notFound: '找不到這個頻道'
+} as const
+
+/** 訂閱頻道（R59） */
+export function addChannel(lists: Lists, channel: Omit<Channel, 'time'>, now: number): ListResult {
+  if (lists.channels.some((c) => c.id === channel.id)) return { error: CHANNEL_ERROR.duplicate }
+  return { lists: { ...lists, channels: [...lists.channels, { ...channel, time: now }] } }
+}
+
+export function removeChannel(lists: Lists, id: string): Lists {
+  return { ...lists, channels: lists.channels.filter((c) => c.id !== id) }
 }
 
 /** 歷史的最後播放時間：`YYYY/MM/DD HH:mm`（R23） */

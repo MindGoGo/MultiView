@@ -515,6 +515,43 @@ button.link {
   }
 }
 
+/* 訂閱分頁（R59） */
+.subscriptions {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.channel-row {
+  align-items: center;
+}
+
+.channel-toggle {
+  padding: 0 6px;
+  flex: none;
+}
+
+.channel-new {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.channel-videos {
+  margin: 0;
+  padding: 0 0 4px 24px;
+  list-style: none;
+}
+
+.channel-video .list-name {
+  font-size: 12px;
+}
+
 /* 清單的兩邊：YouTube、其他網站（R58） */
 .list-groups {
   display: flex;

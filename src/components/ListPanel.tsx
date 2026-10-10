@@ -1,11 +1,12 @@
 // 最愛與歷史清單面板（R21–R23）；分成 YouTube 和其他網站（R58）
 import { useState } from 'react'
 import { formatListTime, groupOf, type ListGroup, type ListItem, type ListKind, type Lists } from '../lib/lists'
+import { SubscriptionList } from './SubscriptionList'
 
-/** 面板的那一邊和分頁（R58） */
+/** 面板的那一邊和分頁（R58）；訂閱只在 YouTube 那一邊（R59） */
 export interface ListTab {
   group: ListGroup
-  tab: ListKind
+  tab: ListKind | 'subscriptions'
 }
 
 interface Props {
@@ -29,6 +30,11 @@ interface Props {
   cellAt(x: number, y: number): number | null
   /** 視窗上方的短暫提示 */
   onToast(message: string): void
+  /** 訂閱頻道（R59）：回傳錯誤訊息，成功時回傳 null */
+  onAddChannel(input: string): Promise<string | null>
+  onRemoveChannel(id: string): void
+  isFavorite(url: string): boolean
+  onToggleFavoriteUrl(url: string, name: string): void
 }
 
 /** 按下後移動超過這個距離才算拖曳，否則算點一下 */
@@ -44,13 +50,15 @@ export const YOUTUBE_HOME: ListItem = { url: 'https://www.youtube.com/', name: '
 export function ListPanel(props: Props) {
   const { lists } = props
   const [group, setGroup] = useState<ListGroup>(props.initialTab.group)
-  const [tab, setTab] = useState<ListKind>(props.initialTab.tab)
+  const [tab, setTab] = useState<ListTab['tab']>(props.initialTab.tab)
   const [editing, setEditing] = useState<{ kind: ListKind; index: number; url: string; name: string; error: string | null } | null>(null)
   const [adding, setAdding] = useState<{ url: string; name: string; error: string | null } | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const [press, setPress] = useState<{ key: string; x: number; y: number; dragging: boolean } | null>(null)
 
-  const choose = (next: ListTab) => {
+  const choose = (wanted: ListTab) => {
+    // 其他網站沒有訂閱分頁
+    const next: ListTab = wanted.group === 'other' && wanted.tab === 'subscriptions' ? { ...wanted, tab: 'favorites' } : wanted
     setGroup(next.group)
     setTab(next.tab)
     setEditing(null)
@@ -59,7 +67,10 @@ export function ListPanel(props: Props) {
   }
 
   /** 這一邊的項目，附上在完整清單中的位置（編輯、刪除用） */
-  const items = lists[tab].map((item, index) => ({ item, index })).filter((x) => groupOf(x.item.url) === group)
+  const items =
+    tab === 'subscriptions'
+      ? []
+      : lists[tab].map((item, index) => ({ item, index })).filter((x) => groupOf(x.item.url) === group)
 
   const saveEdit = () => {
     if (!editing) return
@@ -116,7 +127,8 @@ export function ListPanel(props: Props) {
     }
   })
 
-  const tabs: { kind: ListKind; label: string }[] = [
+  const tabs: { kind: ListTab['tab']; label: string }[] = [
+    ...(group === 'youtube' ? [{ kind: 'subscriptions' as const, label: '訂閱' }] : []),
     { kind: 'favorites', label: '最愛' },
     { kind: 'history', label: '歷史' }
   ]
@@ -189,63 +201,76 @@ export function ListPanel(props: Props) {
         </div>
       )}
 
-      <ul className="list-items">
-        {items.length === 0 && (
-          <li className="list-empty">{tab === 'favorites' ? '還沒有最愛的影片，按格子上的 ☆ 加入' : '還沒有歷史紀錄'}</li>
-        )}
-        {items.map(({ item, index }) =>
-          editing && editing.kind === tab && editing.index === index ? (
-            <li key={item.url} className="list-item editing">
-              <input
-                className="url-input"
-                autoFocus
-                placeholder="名稱"
-                value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value, error: null })}
-                onKeyDown={keys(saveEdit, () => setEditing(null))}
-              />
-              <input
-                className="url-input"
-                placeholder="網址"
-                value={editing.url}
-                onChange={(e) => setEditing({ ...editing, url: e.target.value, error: null })}
-                onKeyDown={keys(saveEdit, () => setEditing(null))}
-              />
-              {editing.error && <div className="url-error">{editing.error}</div>}
-              <div className="list-form-buttons">
-                <button onClick={saveEdit}>儲存</button>
-                <button className="link" onClick={() => setEditing(null)}>
-                  取消
-                </button>
-              </div>
-            </li>
-          ) : (
-            <li
-              key={item.url}
-              className="list-item"
-              title="點一下放進空格，或拖到要放的格子"
-              {...pickHandlers(`${tab}:${item.url}`, item)}
-            >
-              <div className="list-text">
-                <div className="list-name">{item.name}</div>
-                <div className="list-url">{item.url}</div>
-                {tab === 'history' && <div className="list-time">{formatListTime(item.time)}</div>}
-              </div>
-              <div className="list-actions">
-                <button
-                  title="編輯名稱和網址"
-                  onClick={() => setEditing({ kind: tab, index, url: item.url, name: item.name, error: null })}
-                >
-                  編輯
-                </button>
-                <button title="刪除" onClick={() => props.onDelete(tab, index)}>
-                  刪除
-                </button>
-              </div>
-            </li>
-          )
-        )}
-      </ul>
+      {tab === 'subscriptions' && (
+        <SubscriptionList
+          channels={lists.channels}
+          pick={pickHandlers}
+          onAdd={props.onAddChannel}
+          onRemove={props.onRemoveChannel}
+          isFavorite={props.isFavorite}
+          onToggleFavorite={props.onToggleFavoriteUrl}
+        />
+      )}
+
+      {tab !== 'subscriptions' && (
+        <ul className="list-items">
+          {items.length === 0 && (
+            <li className="list-empty">{tab === 'favorites' ? '還沒有最愛的影片，按格子上的 ☆ 加入' : '還沒有歷史紀錄'}</li>
+          )}
+          {items.map(({ item, index }) =>
+            editing && editing.kind === tab && editing.index === index ? (
+              <li key={item.url} className="list-item editing">
+                <input
+                  className="url-input"
+                  autoFocus
+                  placeholder="名稱"
+                  value={editing.name}
+                  onChange={(e) => setEditing({ ...editing, name: e.target.value, error: null })}
+                  onKeyDown={keys(saveEdit, () => setEditing(null))}
+                />
+                <input
+                  className="url-input"
+                  placeholder="網址"
+                  value={editing.url}
+                  onChange={(e) => setEditing({ ...editing, url: e.target.value, error: null })}
+                  onKeyDown={keys(saveEdit, () => setEditing(null))}
+                />
+                {editing.error && <div className="url-error">{editing.error}</div>}
+                <div className="list-form-buttons">
+                  <button onClick={saveEdit}>儲存</button>
+                  <button className="link" onClick={() => setEditing(null)}>
+                    取消
+                  </button>
+                </div>
+              </li>
+            ) : (
+              <li
+                key={item.url}
+                className="list-item"
+                title="點一下放進空格，或拖到要放的格子"
+                {...pickHandlers(`${tab}:${item.url}`, item)}
+              >
+                <div className="list-text">
+                  <div className="list-name">{item.name}</div>
+                  <div className="list-url">{item.url}</div>
+                  {tab === 'history' && <div className="list-time">{formatListTime(item.time)}</div>}
+                </div>
+                <div className="list-actions">
+                  <button
+                    title="編輯名稱和網址"
+                    onClick={() => setEditing({ kind: tab, index, url: item.url, name: item.name, error: null })}
+                  >
+                    編輯
+                  </button>
+                  <button title="刪除" onClick={() => props.onDelete(tab, index)}>
+                    刪除
+                  </button>
+                </div>
+              </li>
+            )
+          )}
+        </ul>
+      )}
 
       {confirmClear && (
         <div className="list-confirm">

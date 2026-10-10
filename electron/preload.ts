@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { ViewSettings } from '../src/lib/settings'
 import type { WebMode } from '../src/players/webTypes'
 import type { Lists } from '../src/lib/lists'
+import type { FeedVideo } from '../src/lib/youtubeFeed'
 
 export interface CursorPos {
   x: number
@@ -64,6 +65,10 @@ const api = {
   },
   /** YouTube 預覽縮圖的資訊；取不到時為 null（R50） */
   getStoryboard: (videoId: string): Promise<string | null> => ipcRenderer.invoke('youtube:storyboard', videoId),
+  /** YouTube 訂閱（R59）：由網址取得頻道代碼與名稱、讀取頻道的最新影片；失敗時為 null */
+  ytChannelInfo: (input: string): Promise<{ id: string; name: string; url: string } | null> =>
+    ipcRenderer.invoke('yt:channelInfo', input),
+  ytFeed: (id: string): Promise<FeedVideo[] | null> => ipcRenderer.invoke('yt:feed', id),
   /** 用系統預設的瀏覽器開啟（R45） */
   openExternal: (url: string) => ipcRenderer.send('link:external', url),
   /** 告知主程序網頁來源的顯示模式（R14） */

@@ -41,7 +41,7 @@ export interface ViewSettings {
   /** YouTube 無法嵌入時自動改用網頁播放（R49）；舊的設定檔沒有這個欄位時視為否 */
   autoYoutubeWeb: boolean
   /** 清單面板上次的那一邊和分頁（R58）；舊的設定檔視為 YouTube 的最愛 */
-  listTab: { group: 'youtube' | 'other'; tab: 'favorites' | 'history' }
+  listTab: { group: 'youtube' | 'other'; tab: 'subscriptions' | 'favorites' | 'history' }
 }
 
 export interface Settings extends ViewSettings {
@@ -69,7 +69,9 @@ const DEFAULT_LIST_TAB: ViewSettings['listTab'] = { group: 'youtube', tab: 'favo
 function normalizeListTab(raw: unknown): ViewSettings['listTab'] {
   if (!isObject(raw)) return DEFAULT_LIST_TAB
   const group = raw.group === 'other' ? 'other' : raw.group === 'youtube' ? 'youtube' : null
-  const tab = raw.tab === 'favorites' || raw.tab === 'history' ? raw.tab : null
+  // 訂閱只在 YouTube 那一邊（R59）
+  const tab =
+    raw.tab === 'favorites' || raw.tab === 'history' || (raw.tab === 'subscriptions' && group === 'youtube') ? raw.tab : null
   return group && tab ? { group, tab } : DEFAULT_LIST_TAB
 }
 

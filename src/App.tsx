@@ -35,7 +35,10 @@ import { BRIGHTNESS_DEFAULT } from './lib/brightness'
 import { canonicalYouTubeUrl, classifyLink } from './lib/links'
 import { skipTarget, resumePosition } from './lib/progress'
 import {
+  addChannel,
   addFavorite,
+  CHANNEL_ERROR,
+  removeChannel,
   clearHistory,
   defaultName,
   deleteItem,
@@ -317,6 +320,22 @@ export default function App({ initial }: { initial: ViewSettings }) {
       const title = players.current.get(s.id)?.getTitle() ?? null
       applyResult(addFavorite(lists, s.url, defaultName(s.url, title), Date.now()))
     }
+  }
+  // 清單面板裡的 ☆（訂閱的最新影片，R59）
+  const onToggleFavoriteUrl = (url: string, name: string) => {
+    if (isFavorite(lists, url)) setLists(removeFavorite(lists, url))
+    else applyResult(addFavorite(lists, url, name, Date.now()))
+  }
+  // 訂閱頻道（R59）：由網址取得頻道代碼與名稱；讀取期間清單可能改變，所以用最新的清單加入
+  const listsRef = useRef(lists)
+  listsRef.current = lists
+  const onAddChannel = async (input: string): Promise<string | null> => {
+    const info = await window.multiview.ytChannelInfo(input.trim())
+    if (!info) return CHANNEL_ERROR.notFound
+    const r = addChannel(listsRef.current, info, Date.now())
+    if ('error' in r) return r.error
+    setLists(r.lists)
+    return null
   }
   /** 放進格子：空格就放入，有影片就更換網址（保留靜音和音量） */
   const putItem = (index: number, item: ListItem) => {
@@ -670,6 +689,10 @@ export default function App({ initial }: { initial: ViewSettings }) {
           onEdit={(kind: ListKind, i, url, name) => applyResult(editItem(lists, kind, i, url, name))}
           onDelete={(kind: ListKind, i) => setLists(deleteItem(lists, kind, i))}
           onClearHistory={(group) => setLists(clearHistory(lists, group))}
+          onAddChannel={onAddChannel}
+          onRemoveChannel={(id) => setLists((l) => removeChannel(l, id))}
+          isFavorite={(url) => isFavorite(lists, url)}
+          onToggleFavoriteUrl={onToggleFavoriteUrl}
           onPick={onPickItem}
           onDragOver={setListOver}
           onDrop={onDropItem}

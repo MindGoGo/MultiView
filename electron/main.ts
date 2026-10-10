@@ -11,6 +11,7 @@ import { createListsSaver, loadLists } from './listsStore'
 import { normalizeLists, type Lists } from '../src/lib/lists'
 import { pageMenuItems, type PageMenuAction } from '../src/lib/pageMenu'
 import { extractStoryboardSpec } from '../src/lib/storyboard'
+import { channelFeedUrl, channelLookupUrl, channelPageUrl, extractChannelInfo, isChannelId, parseFeed } from '../src/lib/youtubeFeed'
 
 // 測試時用獨立的資料夾，不動到正式的設定檔
 if (process.env['MULTIVIEW_USER_DATA']) app.setPath('userData', process.env['MULTIVIEW_USER_DATA'])
@@ -230,6 +231,28 @@ ipcMain.handle('youtube:storyboard', (_, videoId: unknown) => {
     storyboardSpecs.set(videoId, p)
   }
   return p
+})
+
+// YouTube 訂閱（R59）：只讀取公開的頻道網頁與頻道摘要，失敗時回傳 null
+async function fetchText(url: string): Promise<string | null> {
+  try {
+    const r = await net.fetch(url)
+    return r.ok ? await r.text() : null
+  } catch {
+    return null
+  }
+}
+ipcMain.handle('yt:channelInfo', async (_, input: unknown) => {
+  const lookup = typeof input === 'string' ? channelLookupUrl(input) : null
+  if (!lookup) return null
+  const html = await fetchText(lookup.page)
+  const info = html ? extractChannelInfo(html, lookup.kind) : null
+  return info ? { ...info, url: channelPageUrl(info.id) } : null
+})
+ipcMain.handle('yt:feed', async (_, id: unknown) => {
+  if (!isChannelId(id)) return null
+  const xml = await fetchText(channelFeedUrl(id))
+  return xml ? parseFeed(xml) : null
 })
 
 // 只有 http／https 網址交給系統瀏覽器（R45，非功能需求：安全）
