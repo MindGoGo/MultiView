@@ -2,7 +2,7 @@
 
 - 功能代號：`youtube-web-and-seek`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-10
 - 前置規格：[multiview-player](multiview-player.md)（R1–R11）、[web-page-source](web-page-source.md)（R12–R18）、[player-controls-and-lists](player-controls-and-lists.md)（R19–R25）、[cell-play-and-page-menu](cell-play-and-page-menu.md)（R26–R29）、[captions-and-quality-menu](captions-and-quality-menu.md)（R30–R33）、[brightness-and-volume-popup](brightness-and-volume-popup.md)（R40–R43）、[installer-and-youtube-fixes](installer-and-youtube-fixes.md)（R44–R47）。本規格的需求編號從 R48 開始；R34–R39 仍保留給本機播放與下載功能。
 
@@ -44,7 +44,9 @@
   - YouTube 的其他錯誤顯示不同的訊息，不顯示這個按鈕：
     - 錯誤碼 100：「找不到這部影片，可能已刪除或不公開」
     - 其他錯誤碼：「這部影片無法播放」
+  - 注意：YouTube 嵌入播放器對不存在的影片代碼也回報 150（2026-10-10 實測），所以不存在的影片也會顯示「此影片無法在外部播放」和按鈕；按下後由 YouTube 網頁顯示影片無法播放。
   - 改用網頁播放時：
+    - 影片模式也以格子大小排版、不縮小（其他網頁來源會放大排版再縮小，第二版 R13）：YouTube 網頁的影片只要被縮小顯示就會變成全黑。YouTube 依格子大小自動決定畫質。
     - 格子的網址維持原本的 YouTube 網址（清單、歷史、最愛都用這個網址）。
     - 廣告阻擋預設關閉；可以用原本的「廣告阻擋」按鈕開啟。
     - 音量、靜音、亮度保留。
@@ -57,7 +59,7 @@
   - AC2：按「改用 YouTube 網頁播放」→ 這一格載入 YouTube 網頁，以影片模式只顯示影片並開始播放；廣告阻擋是關閉的。
   - AC3：AC2 之後關閉再開啟程式 → 這一格仍是網頁播放；和另一格換位 → 跟著移動。
   - AC4：AC2 的格子可以拖曳進度條、播放／暫停、調音量和亮度。
-  - AC5：放入不存在的影片代碼 → 顯示「找不到這部影片，可能已刪除或不公開」，沒有「改用 YouTube 網頁播放」。
+  - AC5：放入不存在的影片代碼 → YouTube 回報禁止嵌入（150），顯示「此影片無法在外部播放」和按鈕；按下後 YouTube 網頁顯示影片無法播放。（原本要求顯示「找不到這部影片」，因 YouTube 的回報做不到，2026-10-10 修改）
   - AC6：AC2 的格子更換成可以嵌入的 YouTube 網址 → 用一般的嵌入播放。
   - AC7：在空白格貼上禁止嵌入的影片並改用網頁播放 → 網頁載入完成後歷史多一筆，網址是原本的 YouTube 網址。
 
@@ -85,6 +87,7 @@
   - 預覽縮圖寬 160px（依影片比例）；格子寬度放不下縮圖時只顯示時間。
   - 提示限制在格子範圍內，不會超出格子左右兩邊。
   - 沒有進度條的情況（沒有回放範圍的直播等）沒有提示。
+  - 游標在進度條上時，操作區不因滑鼠靜止而自動隱藏（否則停下來看縮圖時提示會消失）；離開進度條後重新計算靜止時間。
 - 驗收條件：
   - AC1：10 分鐘的 mp4，滑鼠移到進度條正中央 → 提示顯示 `5:00` 左右，上方有那個位置的畫面。
   - AC2：YouTube 影片 → 提示有預覽縮圖，滑鼠左右移動時縮圖跟著換。
@@ -142,6 +145,11 @@
 ## 8. 非功能需求
 
 - **效能：** mp4 的預覽縮圖只在滑鼠停在進度條上時取得，離開後釋放；不影響正在播放的影片。YouTube 預覽縮圖的資訊每部影片只取得一次。
+- **實作結果：**
+  - YouTube 網頁播放：YouTube 會不斷改寫影片元素的位置和大小，蓋掉影片模式的放大樣式；改成監看主要影片的 style，被改寫時立刻補回（所有網頁來源都適用）。另外 YouTube 網頁的影片在縮小顯示時（`transform`、CSS `zoom`、網頁縮放比例都試過）畫面全黑，但影片仍在解碼（從螢幕實際擷取確認），所以 YouTube 網頁播放不縮小。
+  - YouTube 網頁播完或使用者在整頁模式操作時，網頁可能自己換到下一部影片；格子的網址仍是原本的影片，重新開啟程式時回到原本的影片。
+  - YouTube 預覽縮圖：從 `https://www.youtube.com/watch?v=<代碼>` 的 HTML 取出 `playerStoryboardSpecRenderer`，選寬度不超過 320px 的最大等級，以 160px 寬顯示。
+  - mp4 預覽：另一個靜音、不播放的影片元素跳到游標位置，提示消失時釋放。
 - **技術風險：**
   - YouTube 的預覽縮圖不是公開的介面，要從 YouTube 網頁取得縮圖資訊，YouTube 改版時可能失效；失效時只顯示時間（R50），不影響其他功能。
   - 網頁來源的影片偵測、影片模式能不能正常用在 YouTube 網頁上（例如 YouTube 網頁的廣告、同意畫面），實作時先驗證；做不到時停下來回報。
@@ -151,18 +159,22 @@
 ## 9. 預計影響的檔案
 
 - `src/lib/slots.ts`、`src/lib/settings.ts`、`electron/main.ts`：網頁播放欄位、自動改用設定（R48、R49）
-- `src/lib/source.ts` 或新的函式：YouTube 網頁播放的網址（R48）
-- `src/players/YouTubePlayer.tsx`：回報錯誤碼（R48）、預覽縮圖資訊（R50）
-- `src/components/Cell.tsx`、`Grid.tsx`、`Toolbar.tsx`、`src/App.tsx`：按鈕、設定選單、目前操作的格子（R48、R49、R51）
-- `src/components/ProgressBar.tsx`、`src/lib/progress.ts`：提示、縮圖、快轉倒轉（R50、R51）
+- `src/lib/source.ts`（`resolveSource`）、`src/lib/webErrors.ts`（錯誤碼）：YouTube 網頁播放（R48）
+- `src/players/YouTubePlayer.tsx`：回報錯誤碼（R48）
+- `src/players/WebPlayer.tsx`、`electron/webPreload.ts`：網頁播放不縮小、補回被改寫的樣式（R48）
+- `src/components/Cell.tsx`、`Grid.tsx`、`Toolbar.tsx`、`PopupMenu.tsx`、`src/App.tsx`：按鈕、設定選單、目前操作的格子（R48、R49、R51）
+- `src/lib/storyboard.ts`（新）、`src/components/ProgressPreview.tsx`（新）、`electron/main.ts`、`electron/preload.ts`：預覽縮圖（R50）
+- `src/components/ProgressBar.tsx`、`src/lib/progress.ts`：提示、快轉倒轉（R50、R51）
 - `src/lib/shortcuts.ts`：方向鍵（R51）
 - `src/styles.css`
 - `package.json`、`package-lock.json`：版本號（R52）
-- `tests/unit/`、`tests/manual/`：測試
+- `tests/unit/youtube-web.test.ts`、`storyboard.test.ts`、`seek-skip.test.ts`（新）、`tests/manual/youtube-web-and-seek.md`（新）：測試；既有測試補上新欄位、R9 測試的方向鍵
 
 ## 10. 未決事項
 
-- [ ] 分支：從 `installer-and-youtube-fixes` 開出 `youtube-web-and-seek`。
+- [x] 分支：從 `installer-and-youtube-fixes` 開出 `youtube-web-and-seek`（2026-10-10）。
+- [ ] 其他網頁來源（新聞台等）的影片如果也是硬體解碼，影片模式縮小顯示時可能同樣全黑；這次只確認了 YouTube 網頁，其他網站請使用時留意。
+- [ ] R50 的提示與縮圖、R51 按住方向鍵，請以真實滑鼠鍵盤確認一次（測試時以測試工具模擬）。
 - [x] 版本號：0.4.0（2026-10-10 確認）。
 
 ## 變更紀錄
@@ -171,3 +183,5 @@
 |---|---|---|
 | 2026-10-10 | 初版 | 依 2026-10-10 討論的決定（按鈕＋設定切換自動；設定放工具列；YouTube 網頁廣告阻擋預設關閉；縮圖只做 YouTube 和 mp4；窄格子隱藏快轉按鈕） |
 | 2026-10-10 | 目前操作的格子包括操作區已自動隱藏的格子，方向鍵跳轉時顯示操作區（新增 R51 AC10）；網頁來源有焦點時也能連續跳轉；網頁播放的歷史名稱去掉「 - YouTube」；自動改用也適用開啟程式時還原的格子；縮圖尺寸與直播沒有縮圖；版本號確定 0.4.0 | 第 2 步複查 |
+| 2026-10-10 | R48 AC5 改成 YouTube 回報的實際行為；YouTube 網頁播放不縮小；R50 游標在進度條上時操作區不隱藏 | 實作時發現：YouTube 對不存在的影片也回報 150；YouTube 網頁的影片縮小顯示時全黑；停下來看縮圖時操作區會自動隱藏 |
+| 2026-10-10 | 補實作結果、實際檔案與未決事項 | 實作完成 |
