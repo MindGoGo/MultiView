@@ -113,6 +113,8 @@ export function Cell(props: Props) {
   const [hover, setHover] = useState(false)
   /** 拖曳進度條中，操作區不隱藏（R19） */
   const [seeking, setSeeking] = useState(false)
+  /** 游標在進度條上（顯示時間提示）時，操作區不因滑鼠靜止而隱藏（R50） */
+  const [previewing, setPreviewing] = useState(false)
   /** 有進度時才顯示播放鈕（R26、R30） */
   const [hasProgress, setHasProgress] = useState(false)
   /** 開著的格子選單與它的按鈕位置（R31、R32）；選單開著時操作區不隱藏 */
@@ -249,16 +251,31 @@ export function Cell(props: Props) {
         </button>
       )}
       {source && !editing && (
-        <div className={`cell-controls ${hover || props.moving || seeking || menu ? 'show' : ''}`} onMouseMove={onMouseMove}>
+        <div
+          className={`cell-controls ${hover || props.moving || seeking || previewing || menu ? 'show' : ''}`}
+          onMouseMove={onMouseMove}
+        >
           {!failed && (
             <ProgressBar
-              active={hover || seeking}
+              active={hover || seeking || previewing}
               getProgress={() => props.getProgress(index)}
               onSeek={(t) => props.onSeek(index, t)}
               onDragChange={setSeeking}
               playing={isPlayingStatus(status)}
               onTogglePlay={() => props.onTogglePlay(index)}
               onAvailable={setHasProgress}
+              onHoverChange={(on) => {
+                setPreviewing(on)
+                // 離開進度條後重新計算靜止時間
+                if (!on) onMouseMove()
+              }}
+              preview={
+                source.parsed.kind === 'youtube'
+                  ? { kind: 'youtube', videoId: source.parsed.videoId }
+                  : source.parsed.kind === 'mp4'
+                    ? { kind: 'video', url: source.parsed.url }
+                    : null
+              }
             />
           )}
           {props.canMove && (

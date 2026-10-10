@@ -53,6 +53,8 @@ const api = {
       ipcRenderer.removeListener('link:open', listener)
     }
   },
+  /** YouTube 預覽縮圖的資訊；取不到時為 null（R50） */
+  getStoryboard: (videoId: string): Promise<string | null> => ipcRenderer.invoke('youtube:storyboard', videoId),
   /** 用系統預設的瀏覽器開啟（R45） */
   openExternal: (url: string) => ipcRenderer.send('link:external', url),
   /** 告知主程序網頁來源的顯示模式（R14） */

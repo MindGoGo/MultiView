@@ -350,6 +350,33 @@ button.link {
   background: #fff;
 }
 
+/* ---- 進度條的時間提示與預覽縮圖（R50） ---- */
+.progress-preview {
+  position: fixed;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+}
+
+.progress-preview-image {
+  display: block;
+  border-radius: 2px;
+  background-color: #000;
+  background-repeat: no-repeat;
+}
+
+.progress-preview-time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* ---- 格子選單（R31、R32） ---- */
 .popup-menu {
   position: fixed;

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { app, BrowserWindow, clipboard, ipcMain, Menu, screen, session, shell, type Rectangle } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, Menu, net, screen, session, shell, type Rectangle } from 'electron'
 import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
@@ -10,6 +10,7 @@ import { forgetWebContents, installAdblock, loadAdblockList, setAdblockEnabled }
 import { createListsSaver, loadLists } from './listsStore'
 import { normalizeLists, type Lists } from '../src/lib/lists'
 import { pageMenuItems, type PageMenuAction } from '../src/lib/pageMenu'
+import { extractStoryboardSpec } from '../src/lib/storyboard'
 
 // 測試時用獨立的資料夾，不動到正式的設定檔
 if (process.env['MULTIVIEW_USER_DATA']) app.setPath('userData', process.env['MULTIVIEW_USER_DATA'])
@@ -198,6 +199,22 @@ ipcMain.on('win:toggleAlwaysOnTop', () => {
   saveSoon()
 })
 ipcMain.on('win:minimize', () => win?.minimize())
+
+// YouTube 預覽縮圖的資訊（R50）：從這部影片的 YouTube 網頁取出，每部影片只取得一次
+const storyboardSpecs = new Map<string, Promise<string | null>>()
+ipcMain.handle('youtube:storyboard', (_, videoId: unknown) => {
+  if (typeof videoId !== 'string' || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) return null
+  let p = storyboardSpecs.get(videoId)
+  if (!p) {
+    p = net
+      .fetch(`https://www.youtube.com/watch?v=${videoId}`)
+      .then((r) => (r.ok ? r.text() : ''))
+      .then(extractStoryboardSpec)
+      .catch(() => null)
+    storyboardSpecs.set(videoId, p)
+  }
+  return p
+})
 
 // 只有 http／https 網址交給系統瀏覽器（R45，非功能需求：安全）
 ipcMain.on('link:external', (_, url: unknown) => {
