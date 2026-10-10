@@ -540,6 +540,36 @@ window.addEventListener(
   true
 )
 
+// ---------- YouTube 網站頁面的影片連結（R57、R63） ----------
+// 在 YouTube 自己的處理之前攔下影片連結的點擊：網頁不換頁（保留搜尋結果、捲動位置，也不會在網頁裡開始播放），
+// 交給程式把這一格換成那部影片。只在最上層框架、程式開啟這個功能時作用。
+function youtubeVideoHref(target: EventTarget | null): string | null {
+  const a = target instanceof Element ? target.closest<HTMLAnchorElement>('a[href]') : null
+  if (!a) return null
+  try {
+    const u = new URL(a.href, location.href)
+    const host = u.hostname.toLowerCase()
+    const isYouTube = host === 'youtube.com' || host.endsWith('.youtube.com')
+    return isYouTube && u.pathname === '/watch' && /^[\w-]{11}$/.test(u.searchParams.get('v') ?? '') ? u.href : null
+  } catch {
+    return null
+  }
+}
+if (window === window.top) {
+  window.addEventListener(
+    'click',
+    (e) => {
+      if (!state.interceptYouTube || e.button !== 0 || e.ctrlKey || e.shiftKey || e.metaKey) return
+      const href = youtubeVideoHref(e.target)
+      if (!href) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      ipcRenderer.sendToHost('mv:ytvideo', href, location.href)
+    },
+    true
+  )
+}
+
 // ---------- 隱藏廣告元素（R17） ----------
 // 把頁面上出現的 class / id / 連結交給程式比對廣告清單，拿回要隱藏的樣式。
 // 關閉廣告阻擋的格子和 YouTube 播放器框架，程式會回傳空字串。

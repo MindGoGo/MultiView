@@ -25,6 +25,8 @@ interface Props {
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
+  /** 回到 YouTube 頁面（R63） */
+  onBack(index: number): void
   onSkip(index: number, seconds: number): void
   /** 用方向鍵跳轉時增加，顯示操作區（R51） */
   poke: number
@@ -314,6 +316,11 @@ export function Cell(props: Props) {
                     : null
               }
             />
+          )}
+          {(source.back || source.backUrl) && (
+            <button title="回到 YouTube 頁面（滑鼠上一頁鍵、Backspace）" onClick={() => props.onBack(index)}>
+              <Label full="← 回到 YouTube" icon="←" />
+            </button>
           )}
           {props.canMove && (
             <button

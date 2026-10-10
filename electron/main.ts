@@ -148,6 +148,11 @@ async function createWindow() {
     win?.webContents.send('shortcut', input.key)
   })
 
+  // 滑鼠的「上一頁」側鍵（Windows 的 app-command）：直接操作時游標在 YouTube 播放器裡也收得到（R63）
+  win.on('app-command', (_, command) => {
+    if (command === 'browser-backward') win?.webContents.send('shortcut', 'BrowserBack')
+  })
+
   // YouTube 播放器會註冊 beforeunload，Electron 遇到時會默默取消關閉，這裡一律允許關閉（R1 AC6）
   win.webContents.on('will-prevent-unload', (event) => event.preventDefault())
 

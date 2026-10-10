@@ -16,6 +16,8 @@ export interface WebState {
   volume: number
   /** 靜音由程式對整個網頁設定；取消靜音時也解除主要影片本身的靜音（R15） */
   muted: boolean
+  /** YouTube 網站頁面：攔截影片連結的點擊，不換頁，交給程式在這一格播放（R57、R63） */
+  interceptYouTube?: boolean
 }
 
 /** 網頁最上層框架每秒回報給程式 */

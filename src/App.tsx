@@ -84,7 +84,8 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
         captions: s.captions,
         brightness: s.brightness,
         youtubeWeb: s.youtubeWeb,
-        resume: s.position
+        resume: s.position,
+        backUrl: s.backUrl
       }
   })
   return slots
@@ -186,7 +187,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
             captions: s.captions,
             brightness: s.brightness,
             youtubeWeb: s.youtubeWeb,
-            position: s.id in pos ? pos[s.id] : s.resume
+            position: s.id in pos ? pos[s.id] : s.resume,
+            backUrl: s.backUrl ?? null
           }
         : null
     )
@@ -245,12 +247,12 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (failure) setFailures((prev) => (prev[id] === failure ? prev : { ...prev, [id]: failure }))
   }, [])
 
-  const onSubmitUrl = (index: number, text: string): string | null => {
+  /** 這一格放入新的網址時的來源（更換網址的規則，R2 AC8）；背景的來源頁面關閉（R63） */
+  const sourceFor = (index: number, text: string): Source | null => {
     const parsed = parseSource(text)
-    if (!parsed) return '不支援的網址'
+    if (!parsed) return null
     const existing = slots[index]
-    setSlots(
-      setSlot(slots, index, {
+    return {
         id: newSourceId(),
         url: text.trim(),
         parsed,
@@ -271,9 +273,22 @@ export default function App({ initial }: { initial: ViewSettings }) {
         youtubeWeb: false,
         // 新的影片從頭開始（R55 AC7）
         resume: null
-      })
-    )
+    }
+  }
+  const onSubmitUrl = (index: number, text: string): string | null => {
+    const next = sourceFor(index, text)
+    if (!next) return '不支援的網址'
+    setSlots(setSlot(slots, index, next))
     return null
+  }
+
+  // 回到 YouTube 頁面（R63）：背景的來源頁面換回前景（id 不變，停在原本的位置），聲音與亮度沿用影片的設定；
+  // 重開程式後沒有背景頁面，重新載入來源頁面的網址
+  const onBack = (index: number) => {
+    const s = slots[index]
+    if (!s) return
+    if (s.back) setSlots(setSlot(slots, index, { ...s.back, muted: s.muted, volume: s.volume, brightness: s.brightness }))
+    else if (s.backUrl) onSubmitUrl(index, s.backUrl)
   }
 
   const onRemove = (index: number) => {
@@ -415,13 +430,16 @@ export default function App({ initial }: { initial: ViewSettings }) {
   }, [slots, webModes])
 
   // 在 YouTube 網站頁面點了影片：這一格換成那部影片的嵌入播放，和「更換網址」相同（R57）
-  const onYouTubeVideoRef = useRef<(id: number, url: string) => void>(() => undefined)
-  onYouTubeVideoRef.current = (id: number, url: string) => {
+  const onYouTubeVideoRef = useRef<(id: number, url: string, from: string) => void>(() => undefined)
+  onYouTubeVideoRef.current = (id: number, url: string, from: string) => {
     const index = slots.findIndex((s) => s?.id === id)
     const parsed = parseSource(url)
-    if (index >= 0 && parsed?.kind === 'youtube') onSubmitUrl(index, canonicalYouTubeUrl(parsed.videoId))
+    const page = slots[index]
+    const next = index >= 0 && parsed?.kind === 'youtube' ? sourceFor(index, canonicalYouTubeUrl(parsed.videoId)) : null
+    // 來源頁面保留在背景，可以回去（R63）
+    if (next && page) setSlots(setSlot(slots, index, { ...next, back: page, backUrl: isYouTubeSite(from) ? from : page.url }))
   }
-  const onYouTubeVideo = useCallback((id: number, url: string) => onYouTubeVideoRef.current(id, url), [])
+  const onYouTubeVideo = useCallback((id: number, url: string, from: string) => onYouTubeVideoRef.current(id, url, from), [])
 
   const onUseYoutubeWeb = (index: number) => {
     const s = slots[index]
@@ -559,6 +577,14 @@ export default function App({ initial }: { initial: ViewSettings }) {
         // 單格全螢幕時數字鍵不作用（R20 AC5）
         if (soloIndex === null && isVisible(action.index, layout)) onFocusAudio(action.index)
         break
+      case 'back': {
+        // 目前操作的格子是從 YouTube 網站開啟的影片時才作用（R63 AC8）
+        const index = soloIndex ?? cellAtPointer()
+        const s = index !== null ? slots[index] : null
+        if (index === null || !s || !(s.back || s.backUrl)) return false
+        onBack(index)
+        break
+      }
       case 'skip': {
         // 目前操作的格子：單格全螢幕時是放大的那一格，否則是游標所在的格子（R51）
         const index = soloIndex ?? cellAtPointer()
@@ -605,12 +631,18 @@ export default function App({ initial }: { initial: ViewSettings }) {
       const el = document.activeElement as HTMLElement | null
       if (el?.tagName === 'WEBVIEW') el.blur()
     }
+    // 滑鼠的「上一頁」側鍵：游標在格子上時回到 YouTube 頁面（R63）
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 3 && runShortcutRef.current('BrowserBack')) e.preventDefault()
+    }
     window.addEventListener('keydown', onKey)
     window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('mouseup', onMouseUp, true)
     const offShortcut = window.multiview.onShortcut((key) => runShortcutRef.current(key))
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('mouseup', onMouseUp, true)
       offShortcut()
     }
   }, [])
@@ -638,6 +670,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onRetry={onRetry}
         onUseYoutubeWeb={onUseYoutubeWeb}
         onYouTubeVideo={onYouTubeVideo}
+        onBack={onBack}
         onDividerDrag={onDividerDrag}
         onDividerReset={onDividerReset}
         move={move}

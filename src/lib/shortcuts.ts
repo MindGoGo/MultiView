@@ -8,6 +8,8 @@ export type ShortcutAction =
   | { type: 'exitFullscreen' }
   /** 目前操作的格子快轉（正數）或倒轉（負數）（R51） */
   | { type: 'skip'; seconds: number }
+  /** 目前操作的格子回到 YouTube 頁面（R63）；BrowserBack 是滑鼠的「上一頁」側鍵 */
+  | { type: 'back' }
 
 /** 方向鍵每次快轉、倒轉的秒數（R51） */
 export const SKIP_SECONDS = 5
@@ -39,5 +41,6 @@ export function shortcutFor(key: string): ShortcutAction | null {
   if (key === 'Escape') return { type: 'exitFullscreen' }
   if (key === 'ArrowLeft') return { type: 'skip', seconds: -SKIP_SECONDS }
   if (key === 'ArrowRight') return { type: 'skip', seconds: SKIP_SECONDS }
+  if (key === 'Backspace' || key === 'BrowserBack') return { type: 'back' }
   return null
 }

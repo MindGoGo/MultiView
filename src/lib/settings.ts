@@ -1,6 +1,6 @@
 // 設定檔的資料結構與驗證（R10）。主程序與畫面共用，不依賴 Electron。
 import { DEFAULT_LAYOUT, isValidRatios, LAYOUT_IDS, type LayoutId, type Ratios } from './layout'
-import { parseSource } from './source'
+import { isYouTubeSite, parseSource } from './source'
 import { SLOT_COUNT, type Quality } from './slots'
 import { normalizeQuality } from './quality'
 import { BRIGHTNESS_DEFAULT, normalizeBrightness } from './brightness'
@@ -29,6 +29,8 @@ export interface SavedSource {
   youtubeWeb: boolean
   /** 觀看進度（秒，R55）；舊的設定檔沒有這個欄位時從頭開始 */
   position: number | null
+  /** 從 YouTube 網站開啟時的來源頁面（R63）；舊的設定檔沒有時沒有「回到」 */
+  backUrl: string | null
 }
 
 /** 畫面這一側的設定，由畫面送給主程序保存 */
@@ -116,7 +118,8 @@ function normalizeSource(raw: unknown): SavedSource | null {
     captions: typeof raw.captions === 'string' && raw.captions ? raw.captions : null,
     brightness: normalizeBrightness(raw.brightness),
     youtubeWeb: raw.youtubeWeb === true,
-    position: isFiniteNumber(raw.position) && raw.position > 0 ? raw.position : null
+    position: isFiniteNumber(raw.position) && raw.position > 0 ? raw.position : null,
+    backUrl: typeof raw.backUrl === 'string' && isYouTubeSite(raw.backUrl) ? raw.backUrl : null
   }
 }
 

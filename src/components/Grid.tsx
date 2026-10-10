@@ -42,8 +42,10 @@ interface Props {
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
-  /** YouTube 網站頁面換到影片頁（R57） */
-  onYouTubeVideo(id: number, url: string): void
+  /** YouTube 網站頁面換到影片頁（R57）；from 是點影片前的頁面網址（R63） */
+  onYouTubeVideo(id: number, url: string, from: string): void
+  /** 回到 YouTube 頁面（R63） */
+  onBack(index: number): void
   /** 快轉、倒轉（R51） */
   onSkip(index: number, seconds: number): void
   /** 用方向鍵跳轉的格子與次數，那一格顯示操作區（R51） */
@@ -104,18 +106,22 @@ export function Grid(props: Props) {
   const rects = solo === null ? layoutRects : layoutRects.map((_, i) => (i === solo ? FULL : null))
 
   // 播放器依 id 排序並固定在同一層，換位或切換版型時只改位置，不搬動 DOM，所以不會重新載入
+  // 保留在背景的來源頁面也放在同一層，回到前景時 id 不變，網頁不會重新載入（R63）
   const placed = slots
-    .map((source, index) => ({ source, index }))
-    .filter((p): p is { source: NonNullable<typeof p.source>; index: number } => p.source !== null)
+    .flatMap((source, index) =>
+      source
+        ? [{ source, index, parked: false }, ...(source.back ? [{ source: source.back, index, parked: true }] : [])]
+        : []
+    )
     .sort((a, b) => a.source.id - b.source.id)
 
   return (
     <div className="grid">
-      {placed.map(({ source, index }) => {
-        const visible = isVisible(index, layout, solo)
+      {placed.map(({ source, index, parked }) => {
+        const visible = !parked && isVisible(index, layout, solo)
         const common = {
           ref: (h: PlayerHandle | null) => props.registerPlayer(source.id, h),
-          muted: source.muted,
+          muted: source.muted || parked,
           volume: source.volume,
           autoplay: source.autoplay,
           active: visible,
@@ -127,13 +133,17 @@ export function Grid(props: Props) {
           <div
             key={source.id}
             className="player-box"
-            data-slot={index}
+            data-slot={parked ? undefined : index}
+            data-parked={parked ? index : undefined}
             style={{
               ...(visible
                 ? rectStyle(rects[index] ?? FULL)
-                : source.parsed.kind === 'web'
-                  ? HIDDEN_WEB_STYLE
-                  : { display: 'none' }),
+                : parked && rects[index]
+                  ? // 背景的來源頁面維持那一格的大小，網頁不會重新排版，回去時停在原本的捲動位置（R63）
+                    { ...rectStyle(rects[index]!), visibility: 'hidden' as const }
+                  : source.parsed.kind === 'web'
+                    ? HIDDEN_WEB_STYLE
+                    : { display: 'none' }),
               // 亮度只套在播放器上，格子的操作按鈕在另一層，不受影響（R40）
               filter: brightnessFilter(source.brightness, props.masterBrightness)
             }}
@@ -152,7 +162,8 @@ export function Grid(props: Props) {
                 mode={props.webModes[source.id] ?? 'video'}
                 onModeChange={(mode) => props.onWebMode(source.id, mode)}
                 onNavState={(s) => props.onNavState(source.id, s)}
-                onYouTubeVideo={isYouTubeSite(source.url) ? (url) => props.onYouTubeVideo(source.id, url) : undefined}
+                onYouTubeVideo={isYouTubeSite(source.url) ? (url, from) => props.onYouTubeVideo(source.id, url, from) : undefined}
+                parked={parked}
                 {...common}
               />
             ) : (
@@ -176,6 +187,7 @@ export function Grid(props: Props) {
             onSubmitUrl={props.onSubmitUrl}
             onRemove={props.onRemove}
             onRetry={props.onRetry}
+            onBack={props.onBack}
             onSkip={props.onSkip}
             poke={props.poke.index === index ? props.poke.n : 0}
             onUseYoutubeWeb={props.onUseYoutubeWeb}

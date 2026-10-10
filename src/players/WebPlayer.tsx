@@ -18,9 +18,11 @@ interface Props extends PlayerProps {
   onNavState(state: NavState): void
   /**
    * YouTube 網站頁面（R57）：網頁換到影片頁時通知（網址），網頁先靜音並暫停，不在網頁裡播出聲音；
-   * 沒有提供時照一般網頁處理
+   * 沒有提供時照一般網頁處理。from 是點影片前的頁面網址（R63）
    */
-  onYouTubeVideo?(url: string): void
+  onYouTubeVideo?(url: string, from: string): void
+  /** 保留在背景的來源頁面（R63）：不顯示、靜音；回到前景時恢復聲音 */
+  parked?: boolean
 }
 
 /** 網頁載入完成或主要影片消失後，找不到主要影片多久就切換成整頁模式（R13 AC4） */
@@ -33,7 +35,7 @@ export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「�
 export const NOTICE_NOT_FOUND = '找不到影片'
 
 export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
-  { url, adblock, mode, onModeChange, onNavState, onYouTubeVideo, muted, volume, autoplay, active, startAt, onStatus, onLoaded },
+  { url, adblock, mode, onModeChange, onNavState, onYouTubeVideo, parked, muted, volume, autoplay, active, startAt, onStatus, onLoaded },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -53,7 +55,14 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   const pendingStart = useRef(startAt)
   const pendingSince = useRef(0)
   // 新加入的來源播放意圖是「播放」，從設定檔還原的是「暫停」（R15）
-  const stateRef = useRef<WebState>({ v: 0, mode, intent: autoplay ? 'play' : 'pause', volume, muted })
+  const stateRef = useRef<WebState>({
+    v: 0,
+    mode,
+    intent: autoplay ? 'play' : 'pause',
+    volume,
+    muted,
+    interceptYouTube: !!onYouTubeVideo
+  })
   const noVideoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const showNotice = (text: string, ms: number) => {
@@ -156,12 +165,19 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
       latest.current.onNavState({ back: view.canGoBack(), forward: view.canGoForward() })
     }
     // YouTube 網站換到影片頁（YouTube 是單頁應用程式，通常是同一頁內換網址）（R57）
-    const checkYouTubeVideo = (url: string) => {
+    // 點影片前的頁面（R63）
+    let pageUrl = url
+    const checkYouTubeVideo = (next: string) => {
       const cb = latest.current.onYouTubeVideo
-      if (!cb || parseSource(url)?.kind !== 'youtube') return
+      if (!cb || parseSource(next)?.kind !== 'youtube') {
+        if (next !== 'about:blank') pageUrl = next
+        return
+      }
       view.setAudioMuted(true)
       updateStateRef.current({ intent: 'pause' })
-      cb(url)
+      cb(next, pageUrl)
+      // 網頁退回點影片前的頁面，保留在背景，不在背景播放影片（R63）
+      if (view.canGoBack()) view.goBack()
     }
     const onNavigate = (e: Electron.DidNavigateEvent) => {
       if (!historyCleared && e.url !== 'about:blank') {
@@ -191,6 +207,11 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     const onIpc = (e: Electron.IpcMessageEvent) => {
       if (e.channel === 'mv:hello') {
         sendState()
+      } else if (e.channel === 'mv:ytvideo') {
+        // YouTube 網站頁面點了影片連結：網頁沒有換頁，停在原本的位置（R57、R63）
+        const [href, from] = e.args as [string, string]
+        if (typeof href === 'string' && parseSource(href)?.kind === 'youtube')
+          latest.current.onYouTubeVideo?.(href, typeof from === 'string' ? from : url)
       } else if (e.channel === 'mv:nav') {
         // 滑鼠側鍵只在整頁模式作用（R28 AC3）
         if (latest.current.mode !== 'page' || !page.current.attached) return
@@ -256,6 +277,12 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   useEffect(() => {
     if (stateRef.current.muted !== muted) updateStateRef.current({ muted })
   }, [muted])
+
+  // 回到前景時恢復聲音（R63）；背景時維持靜音
+  useEffect(() => {
+    const view = viewRef.current
+    if (view && page.current.attached) view.setAudioMuted(!!parked)
+  }, [parked])
 
   useEffect(() => {
     if (stateRef.current.volume !== volume) updateStateRef.current({ volume })

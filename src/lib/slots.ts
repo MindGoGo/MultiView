@@ -27,6 +27,10 @@ export interface Source {
   youtubeWeb: boolean
   /** 載入時要跳到的位置（秒）：上次的觀看進度（R55）；從頭開始時為 null */
   resume: number | null
+  /** 從 YouTube 網站開啟時，保留在背景的來源頁面（R63）；跟著來源移動，不保存 */
+  back?: Source | null
+  /** 來源頁面的網址（R63）；重開程式後用來重新載入，跟著來源移動和保存 */
+  backUrl?: string | null
 }
 
 export type { Quality } from './quality'
