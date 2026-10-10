@@ -98,6 +98,9 @@ function Label({ full, icon }: { full: string; icon: string }) {
 
 /** 滑鼠靜止多久後隱藏操作按鈕（R3 AC2） */
 const CONTROLS_IDLE_MS = 2000
+/** 網頁來源按播放後多久還是暫停就提示，提示顯示多久（R54） */
+const PLAY_HINT_MS = 5000
+export const PLAY_HINT = '無法直接播放，請按「直接操作」後按網站的播放鈕'
 
 /** 游標下的格子編號；不在任何格子上時回傳 null */
 function cellIndexAt(x: number, y: number): number | null {
@@ -163,6 +166,28 @@ export function Cell(props: Props) {
 
   const showInput = !source || editing
   const failed = source !== null && status === 'error' && !editing
+  /** 找到影片了（暫停、播放中、播完），還沒有進度條時也可以按播放（R54）；載入中不算 */
+  const videoFound = status === 'paused' || status === 'playing' || status === 'ended'
+
+  // 網頁來源按播放後 5 秒仍然是暫停：網站要求按它自己的播放鈕（R54 AC3）
+  const [playHint, setPlayHint] = useState(false)
+  const statusRef = useRef(status)
+  statusRef.current = status
+  const hintTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => () => hintTimers.current.forEach(clearTimeout), [])
+  const togglePlay = () => {
+    const starting = !isPlayingStatus(status)
+    props.onTogglePlay(index)
+    if (!starting || !isWeb) return
+    hintTimers.current.forEach(clearTimeout)
+    hintTimers.current = [
+      setTimeout(() => {
+        if (statusRef.current !== 'paused') return
+        setPlayHint(true)
+        hintTimers.current.push(setTimeout(() => setPlayHint(false), PLAY_HINT_MS))
+      }, PLAY_HINT_MS)
+    ]
+  }
 
   const closeInput = () => {
     setEditing(false)
@@ -248,11 +273,12 @@ export function Cell(props: Props) {
       )}
 
       {/* 中央的半透明播放／暫停鈕：只有按鈕本身播放／暫停，其他影片區域仍然切換聲音（R30） */}
-      {source && !editing && hover && hasProgress && !failed && !pageMode && !props.direct && (
+      {playHint && !pageMode && !props.direct && <div className="web-notice">{PLAY_HINT}</div>}
+      {source && !editing && hover && (hasProgress || videoFound) && !failed && !pageMode && !props.direct && (
         <button
           className="center-play"
           title={isPlayingStatus(status) ? '暫停這一格' : '播放這一格'}
-          onClick={() => props.onTogglePlay(index)}
+          onClick={togglePlay}
           onMouseMove={onMouseMove}
         >
           {isPlayingStatus(status) ? '❚❚' : '▶'}
@@ -270,7 +296,8 @@ export function Cell(props: Props) {
               onSeek={(t) => props.onSeek(index, t)}
               onDragChange={setSeeking}
               playing={isPlayingStatus(status)}
-              onTogglePlay={() => props.onTogglePlay(index)}
+              onTogglePlay={togglePlay}
+              canPlay={videoFound}
               onSkip={(seconds) => props.onSkip(index, seconds)}
               onAvailable={setHasProgress}
               onHoverChange={(on) => {

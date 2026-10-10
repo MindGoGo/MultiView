@@ -22,6 +22,8 @@ interface Props {
   preview: PreviewSource
   /** 時間提示顯示／消失時通知，顯示中操作區不隱藏（R50） */
   onHoverChange?(on: boolean): void
+  /** 找到影片但還沒有進度時，仍然顯示播放鈕（R54） */
+  canPlay?: boolean
 }
 
 const POLL_MS = 250
@@ -36,7 +38,8 @@ export function ProgressBar({
   onSkip,
   onAvailable,
   preview,
-  onHoverChange
+  onHoverChange,
+  canPlay
 }: Props) {
   const [progress, setProgress] = useState<Progress | null>(null)
   /** 拖曳中游標所在的比例；沒有拖曳時為 null */
@@ -67,14 +70,15 @@ export function ProgressBar({
   // 進度條消失時（例如變成沒有回放範圍的直播）提示也一起消失
   useEffect(() => () => onHoverRef.current?.(false), [])
 
-  if (!progress) return null
-  const view = progressView(progress)
   // 只影響這一格，不影響聲音（R26）
   const playButton = (
     <button className="play-button" title={playing ? '暫停這一格' : '播放這一格'} onClick={onTogglePlay}>
       {playing ? '❚❚' : '▶'}
     </button>
   )
+  // 網站的影片在播放前不提供長度時沒有進度條，只顯示播放鈕（R54）
+  if (!progress) return canPlay ? <div className="progress">{playButton}</div> : null
+  const view = progressView(progress)
   if (view.kind === 'live') {
     return (
       <div className="progress">
