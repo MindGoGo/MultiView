@@ -776,6 +776,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
       <Toolbar
         visible={toolbarVisible || toast !== null || listOpen || toolbarPopup}
         win={win}
+        solo={solo !== null}
         layout={layout}
         onLayout={changeLayout}
         toast={toast}

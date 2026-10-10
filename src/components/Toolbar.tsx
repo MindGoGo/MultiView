@@ -21,6 +21,8 @@ interface Props {
   onToggleList(): void
   /** 單格全螢幕時要先離開單格全螢幕（R20） */
   onToggleFullscreen(): void
+  /** 正在單格全螢幕（R67：一定是全螢幕，按鈕顯示「離開全螢幕」） */
+  solo: boolean
   /** 總亮度（R41） */
   brightness: number
   onBrightness(brightness: number): void
@@ -121,7 +123,7 @@ export function Toolbar(props: Props) {
           置頂
         </button>
         <button title="全螢幕 (F11)" onClick={props.onToggleFullscreen}>
-          {win.fullscreen ? '離開全螢幕' : '全螢幕'}
+          {win.fullscreen || props.solo ? '離開全螢幕' : '全螢幕'}
         </button>
         <button title="最小化" onClick={api.minimize}>
           ─
