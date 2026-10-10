@@ -25,7 +25,7 @@ export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「�
 export const NOTICE_NOT_FOUND = '找不到影片'
 
 export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
-  { url, adblock, mode, onModeChange, onNavState, muted, volume, autoplay, active, onStatus, onLoaded },
+  { url, adblock, mode, onModeChange, onNavState, muted, volume, autoplay, active, startAt, onStatus, onLoaded },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -38,6 +38,8 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   const page = useRef({ loaded: false, found: false, attached: false, failed: false })
   /** 網頁回報的主要影片進度（R19） */
   const progressRef = useRef<WebReport['progress']>(null)
+  /** 還沒跳過去的上次觀看進度（R55）：網站提供長度後才跳；跳過去之前進度顯示這個位置 */
+  const pendingStart = useRef(startAt)
   // 新加入的來源播放意圖是「播放」，從設定檔還原的是「暫停」（R15）
   const stateRef = useRef<WebState>({ v: 0, mode, intent: autoplay ? 'play' : 'pause', volume, muted })
   const noVideoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -176,6 +178,12 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
         if (page.current.failed) return
         page.current.found = r.found
         progressRef.current = r.progress
+        const t = pendingStart.current
+        if (t && r.progress) {
+          pendingStart.current = null
+          // 直播或比影片還長時不跳（R55）
+          if (!r.progress.live && t < r.progress.end) view.send('mv:seek', t)
+        }
         checkNoVideoRef.current()
         report(r.status ?? 'loading')
         // 整頁模式中使用者直接按網站的播放 / 暫停，也算播放意圖（R15 AC7）

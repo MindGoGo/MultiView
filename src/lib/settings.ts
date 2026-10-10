@@ -27,6 +27,8 @@ export interface SavedSource {
   brightness: number
   /** 改用 YouTube 網頁播放（R48）；舊的設定檔沒有這個欄位時視為否 */
   youtubeWeb: boolean
+  /** 觀看進度（秒，R55）；舊的設定檔沒有這個欄位時從頭開始 */
+  position: number | null
 }
 
 /** 畫面這一側的設定，由畫面送給主程序保存 */
@@ -99,7 +101,8 @@ function normalizeSource(raw: unknown): SavedSource | null {
     quality: normalizeQuality(raw.quality),
     captions: typeof raw.captions === 'string' && raw.captions ? raw.captions : null,
     brightness: normalizeBrightness(raw.brightness),
-    youtubeWeb: raw.youtubeWeb === true
+    youtubeWeb: raw.youtubeWeb === true,
+    position: isFiniteNumber(raw.position) && raw.position > 0 ? raw.position : null
   }
 }
 

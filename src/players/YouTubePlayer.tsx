@@ -19,7 +19,7 @@ interface Props extends PlayerProps {
 const NO_CAPTIONS_AFTER_MS = 3000
 
 export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
-  { videoId, quality, captions, muted, volume, autoplay, active, onStatus },
+  { videoId, quality, captions, startAt, muted, volume, autoplay, active, onStatus },
   ref
 ) {
   const outerRef = useRef<HTMLDivElement>(null)
@@ -31,6 +31,8 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
    * 沒有字幕的影片不會觸發 onApiChange，播放後一段時間還沒有清單才判斷為「沒有字幕」（R31 AC5）
    */
   const playedAtRef = useRef(0)
+  /** 上次的觀看進度（R55）；只在載入時使用 */
+  const startAtRef = useRef(startAt)
   /** 這部影片的字幕軌；字幕模組載入前為 null（R31） */
   const tracksRef = useRef<CaptionTrack[] | null>(null)
   const captionsRef = useRef(captions)
@@ -67,6 +69,8 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
           height: '100%',
           playerVars: {
             autoplay: autoplay ? 1 : 0,
+            // 上次的觀看進度（R55）：在載入時指定，播放後才生效；播放前跳轉會停在「尚未開始」
+            ...(startAt ? { start: Math.floor(startAt) } : {}),
             mute: latest.current.muted ? 1 : 0,
             controls: 0,
             rel: 0,
@@ -184,7 +188,9 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
         return { current: ps.current, start: ps.seekableStart, end: Math.max(ps.seekableEnd, ps.current), live: true }
       }
       const duration = p.getDuration()
-      return duration > 0 ? { current, start: 0, end: duration, live: false } : null
+      // 播放前 YouTube 回報的位置是 0，改用上次的觀看進度顯示（R55）
+      const shown = !playedAtRef.current && startAtRef.current && current < 1 ? startAtRef.current : current
+      return duration > 0 ? { current: shown, start: 0, end: duration, live: false } : null
     },
     seek: (seconds) => {
       const p = playerRef.current

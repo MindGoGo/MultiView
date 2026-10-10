@@ -52,6 +52,18 @@ export function skipTarget(p: Progress, seconds: number): number | null {
   return Math.min(Math.max(p.current + seconds, p.start), p.end)
 }
 
+/** 開頭、結尾這麼近以內的位置不保存，下次從頭開始（R55） */
+export const RESUME_MARGIN_SECONDS = 5
+
+/**
+ * 要保存的觀看進度（R55）：只有點播影片；直播、播完或距離結尾不到 5 秒、還不到 5 秒時不保存（回傳 null）。
+ */
+export function resumePosition(p: Progress | null, ended = false): number | null {
+  if (!p || p.live || ended) return null
+  if (p.current < RESUME_MARGIN_SECONDS || p.end - p.current < RESUME_MARGIN_SECONDS) return null
+  return Math.round(p.current * 10) / 10
+}
+
 /** `m:ss`，一小時以上 `h:mm:ss` */
 export function formatTime(seconds: number): string {
   const s = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0))

@@ -33,7 +33,7 @@ import type { Failure } from './lib/webErrors'
 import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
 import { classifyLink } from './lib/links'
-import { skipTarget } from './lib/progress'
+import { skipTarget, resumePosition } from './lib/progress'
 import {
   addFavorite,
   clearHistory,
@@ -52,6 +52,8 @@ import {
 import { ListPanel } from './components/ListPanel'
 
 const TOAST_MS = 3000
+/** 觀看進度多久讀一次（R55） */
+const POSITION_SAVE_MS = 5000
 
 /** 改用 YouTube 網頁播放：廣告阻擋預設關閉；使用者放入的影片在網頁載入完成時記錄到歷史（R48） */
 function toYoutubeWeb(s: Source, autoplay: boolean): Source | null {
@@ -76,7 +78,8 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
         quality: s.quality,
         captions: s.captions,
         brightness: s.brightness,
-        youtubeWeb: s.youtubeWeb
+        youtubeWeb: s.youtubeWeb,
+        resume: s.position
       }
   })
   return slots
@@ -102,6 +105,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const ratios = ratiosMap[layout] ?? defaultRatios(layout)
   const [slots, setSlots] = useState<Slots>(() => restoreSlots(initial.slots))
   const [statuses, setStatuses] = useState<Record<number, PlayStatus>>({})
+  const statusesRef = useRef(statuses)
+  statusesRef.current = statuses
   const [failures, setFailures] = useState<Record<number, Failure>>({})
   const [navStates, setNavStates] = useState<Record<number, NavState>>({})
   const onNavState = useCallback((id: number, s: NavState) => setNavStates((prev) => ({ ...prev, [id]: s })), [])
@@ -137,29 +142,64 @@ export default function App({ initial }: { initial: ViewSettings }) {
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
   }
 
+  // 觀看進度（R55）：來源 id → 要保存的位置。每 5 秒讀一次，改變超過 1 秒才更新（才會寫檔）
+  const [positions, setPositions] = useState<Record<number, number | null>>({})
+  const readPositions = (prev: Record<number, number | null>) => {
+    const next: Record<number, number | null> = {}
+    let changed = false
+    for (const s of slotsRef.current) {
+      if (!s) continue
+      const p = players.current.get(s.id)?.getProgress() ?? null
+      // 還不知道進度（例如影片資訊還沒讀到）時保留原本的值
+      const pos = p ? resumePosition(p, statusesRef.current[s.id] === 'ended') : (prev[s.id] ?? s.resume)
+      next[s.id] = pos
+      const old = prev[s.id] ?? s.resume
+      if (pos === null ? old !== null : old === null || Math.abs(pos - old) > 1) changed = true
+    }
+    return changed ? next : prev
+  }
+  useEffect(() => {
+    const timer = setInterval(() => setPositions((prev) => readPositions(prev)), POSITION_SAVE_MS)
+    return () => clearInterval(timer)
+  }, [])
+  const viewOf = (pos: Record<number, number | null>): ViewSettings => ({
+    layout,
+    ratios: ratiosMap,
+    brightness: masterBrightness,
+    autoYoutubeWeb,
+    slots: slots.map((s) =>
+      s
+        ? {
+            url: s.url,
+            muted: s.muted,
+            volume: s.volume,
+            adblock: s.adblock,
+            quality: s.quality,
+            captions: s.captions,
+            brightness: s.brightness,
+            youtubeWeb: s.youtubeWeb,
+            position: s.id in pos ? pos[s.id] : s.resume
+          }
+        : null
+    )
+  })
+  const viewOfRef = useRef(viewOf)
+  viewOfRef.current = viewOf
+  // 關閉前送出每一格最新的觀看進度（R55 AC9）
+  useEffect(
+    () =>
+      window.multiview.onClosing(() => {
+        window.multiview.saveView(viewOfRef.current(readPositions({})))
+        window.multiview.closingDone()
+      }),
+    []
+  )
+
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
-    window.multiview.saveView({
-      layout,
-      ratios: ratiosMap,
-      brightness: masterBrightness,
-      autoYoutubeWeb,
-      slots: slots.map((s) =>
-        s
-          ? {
-              url: s.url,
-              muted: s.muted,
-              volume: s.volume,
-              adblock: s.adblock,
-              quality: s.quality,
-              captions: s.captions,
-              brightness: s.brightness,
-              youtubeWeb: s.youtubeWeb
-            }
-          : null
-      )
-    })
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb])
+    window.multiview.saveView(viewOf(positions))
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, positions])
+
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
     if (handle) players.current.set(id, handle)
@@ -219,7 +259,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         // 更換網址時保留亮度（R40）
         brightness: existing ? existing.brightness : BRIGHTNESS_DEFAULT,
         // 新的網址先用一般的判斷（R48 AC6）
-        youtubeWeb: false
+        youtubeWeb: false,
+        // 新的影片從頭開始（R55 AC7）
+        resume: null
       })
     )
     return null
@@ -324,7 +366,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
 
   const onRetry = (index: number) => {
     const s = slots[index]
-    if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true, record: true }))
+    // 換新的 id 重新載入時，觀看進度跟著帶過去（R55）
+    if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true, record: true, resume: positions[s.id] ?? s.resume }))
   }
 
   const onUseYoutubeWeb = (index: number) => {
@@ -336,7 +379,17 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 切換廣告阻擋：換新的 id 讓網頁重新載入，比照「重試」（R17 AC2）
   const onToggleAdblock = (index: number) => {
     const s = slots[index]
-    if (s) setSlots(setSlot(slots, index, { ...s, adblock: !s.adblock, id: newSourceId(), autoplay: true, record: false }))
+    if (s)
+      setSlots(
+        setSlot(slots, index, {
+          ...s,
+          adblock: !s.adblock,
+          id: newSourceId(),
+          autoplay: true,
+          record: false,
+          resume: positions[s.id] ?? s.resume
+        })
+      )
   }
 
   // 每種版型的比例分開記錄（R5 AC4）

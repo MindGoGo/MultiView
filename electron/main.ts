@@ -105,7 +105,22 @@ async function createWindow() {
     sendWindowState()
   })
   win.on('always-on-top-changed', sendWindowState)
-  win.on('close', () => {
+  // 關閉前先向畫面要每一格最新的觀看進度，最多等 1 秒（R55 AC9）
+  let closingAsked = false
+  win.on('close', (event) => {
+    if (!closingAsked && win) {
+      closingAsked = true
+      event.preventDefault()
+      const done = () => {
+        clearTimeout(timer)
+        ipcMain.removeListener('app:closing-done', done)
+        win?.close()
+      }
+      const timer = setTimeout(done, CLOSING_WAIT_MS)
+      ipcMain.on('app:closing-done', done)
+      win.webContents.send('app:closing')
+      return
+    }
     trackBounds()
     saver.flush()
     listsSaver.flush()
@@ -224,6 +239,8 @@ ipcMain.on('link:external', (_, url: unknown) => {
 // 游標在拖曳區或 iframe 上時，網頁收不到滑鼠事件。
 // 需要時由主程序定時回報游標位置（R3：工具列隱藏、直接操作模式結束）。
 const CURSOR_POLL_MS = 150
+/** 關閉前等畫面回報最新觀看進度的時間（R55） */
+const CLOSING_WAIT_MS = 1000
 let cursorTimer: ReturnType<typeof setInterval> | null = null
 ipcMain.on('cursor:watch', (_, on: boolean) => {
   if (cursorTimer) clearInterval(cursorTimer)

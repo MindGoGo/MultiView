@@ -116,6 +116,7 @@ export function Grid(props: Props) {
           volume: source.volume,
           autoplay: source.autoplay,
           active: visible,
+          startAt: source.resume,
           onStatus: (s: PlayStatus, f?: Failure) => props.onStatus(source.id, s, f),
           onLoaded: () => props.onLoaded(source.id)
         }

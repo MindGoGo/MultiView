@@ -14,7 +14,7 @@ interface Props extends PlayerProps {
 }
 
 export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
-  { kind, url, quality, muted, volume, autoplay, active, onStatus },
+  { kind, url, quality, muted, volume, autoplay, active, startAt, onStatus },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -25,6 +25,8 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
   qualityRef.current = quality
   const onStatusRef = useRef(onStatus)
   onStatusRef.current = onStatus
+  /** 上次的觀看進度（R55）；第一次讀到影片資訊時跳過去，直播不跳 */
+  const startAtRef = useRef(startAt)
 
   useEffect(() => {
     const video = videoRef.current!
@@ -89,6 +91,12 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
     // hls.js 自己處理 video 的錯誤；mp4 才需要聽 video 的 error
     const onError = () => kind === 'mp4' && fail()
 
+    const onMeta = () => {
+      const t = startAtRef.current
+      startAtRef.current = null
+      if (t && Number.isFinite(video.duration) && t < video.duration) video.currentTime = t
+    }
+    video.addEventListener('loadedmetadata', onMeta, { once: true })
     video.addEventListener('playing', onPlaying)
     video.addEventListener('pause', onPause)
     video.addEventListener('ended', onEnded)
@@ -103,6 +111,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       clearTimeout(retryTimer)
       hls?.destroy()
       hlsRef.current = null
+      video.removeEventListener('loadedmetadata', onMeta)
       video.removeEventListener('playing', onPlaying)
       video.removeEventListener('pause', onPause)
       video.removeEventListener('ended', onEnded)

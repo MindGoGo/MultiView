@@ -45,6 +45,15 @@ const api = {
     }
   },
   close: () => ipcRenderer.send('win:close'),
+  /** 程式要關閉時通知（R55）：送出最新的設定後呼叫 closingDone */
+  onClosing: (cb: () => void) => {
+    const listener = () => cb()
+    ipcRenderer.on('app:closing', listener)
+    return () => {
+      ipcRenderer.removeListener('app:closing', listener)
+    }
+  },
+  closingDone: () => ipcRenderer.send('app:closing-done'),
   /** YouTube 播放器裡要開新視窗的連結（R45） */
   onLink: (cb: (url: string) => void) => {
     const listener = (_: unknown, url: string) => cb(url)

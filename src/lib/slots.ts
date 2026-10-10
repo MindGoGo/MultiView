@@ -25,6 +25,8 @@ export interface Source {
   brightness: number
   /** 改用 YouTube 網頁播放（R48）；跟著來源移動和保存 */
   youtubeWeb: boolean
+  /** 載入時要跳到的位置（秒）：上次的觀看進度（R55）；從頭開始時為 null */
+  resume: number | null
 }
 
 export type { Quality } from './quality'

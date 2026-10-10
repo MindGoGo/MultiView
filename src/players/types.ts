@@ -36,6 +36,8 @@ export interface PlayerProps {
   autoplay: boolean
   /** false 表示來源被隱藏（R4 AC3），要暫停 */
   active: boolean
+  /** 載入時跳到這個位置（上次的觀看進度，R55）；直播不使用 */
+  startAt: number | null
   /** failure：網頁來源錯誤狀態的種類（R16），其他來源不使用 */
   onStatus(status: PlayStatus, failure?: Failure): void
   /** 網頁來源「網頁載入完成」時呼叫，用來記錄歷史（R23）；其他來源以開始播放或暫停為準 */
