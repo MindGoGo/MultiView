@@ -86,7 +86,8 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
         brightness: s.brightness,
         youtubeWeb: s.youtubeWeb,
         resume: s.position,
-        backUrl: s.backUrl
+        backUrl: s.backUrl,
+        pageAdblock: s.pageAdblock
       }
   })
   return slots
@@ -189,7 +190,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
             brightness: s.brightness,
             youtubeWeb: s.youtubeWeb,
             position: s.id in pos ? pos[s.id] : s.resume,
-            backUrl: s.backUrl ?? null
+            backUrl: s.backUrl ?? null,
+            pageAdblock: s.pageAdblock ?? true
           }
         : null
     )
@@ -306,7 +308,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
           id: newSourceId(),
           parsed: { kind: 'web', url: youtubePageUrl(s.parsed.videoId, t) },
           youtubePage: true,
-          adblock: false,
+          // 預設開啟，沿用這一格上次在網頁模式的選擇（R70）
+          adblock: s.pageAdblock ?? true,
           autoplay: isPlayingStatus(statuses[s.id]),
           record: false,
           resume: null
@@ -325,7 +328,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
           resume: players.current.get(s.id)?.getProgress()?.current ?? null,
           record: !(before?.kind === 'youtube' && before.videoId === videoId),
           back: s.back,
-          backUrl: s.backUrl
+          backUrl: s.backUrl,
+          pageAdblock: s.pageAdblock
         })
       )
     }
@@ -515,6 +519,23 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 切換廣告阻擋：換新的 id 讓網頁重新載入，比照「重試」（R17 AC2）
   const onToggleAdblock = (index: number) => {
     const s = slots[index]
+    // YouTube 網頁模式：記住選擇，重新載入時接續網頁上目前的影片與時間（R70）
+    const videoId = s?.youtubePage ? pageVideoId(s) : null
+    if (s && videoId) {
+      setSlots(
+        setSlot(slots, index, {
+          ...s,
+          id: newSourceId(),
+          adblock: !s.adblock,
+          pageAdblock: !s.adblock,
+          parsed: { kind: 'web', url: youtubePageUrl(videoId, players.current.get(s.id)?.getProgress()?.current ?? 0) },
+          autoplay: isPlayingStatus(statuses[s.id]),
+          record: false,
+          resume: null
+        })
+      )
+      return
+    }
     if (s)
       setSlots(
         setSlot(slots, index, {

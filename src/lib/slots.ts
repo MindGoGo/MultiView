@@ -33,6 +33,8 @@ export interface Source {
   backUrl?: string | null
   /** YouTube 網頁模式（R66）：url 仍是切換前的影片，parsed 是那部影片的 YouTube 網頁；不保存 */
   youtubePage?: boolean
+  /** YouTube 網頁模式的廣告阻擋（R70）；沒有設定時為開啟。跟著來源移動和保存 */
+  pageAdblock?: boolean
 }
 
 export type { Quality } from './quality'
