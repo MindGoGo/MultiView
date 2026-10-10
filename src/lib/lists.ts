@@ -1,5 +1,5 @@
 // 最愛清單與歷史紀錄（R21–R23）。主程序與畫面共用，不依賴 Electron。
-import { parseSource } from './source'
+import { isYouTubeSite, parseSource } from './source'
 
 export interface ListItem {
   url: string
@@ -15,8 +15,22 @@ export interface Lists {
 
 export type ListKind = keyof Lists
 
-/** 歷史最多保留的筆數（R23） */
+/** 清單的兩邊（R58）：YouTube 影片與 YouTube 網站頁面、其他網站 */
+export type ListGroup = 'youtube' | 'other'
+
+export function groupOf(url: string): ListGroup {
+  const parsed = parseSource(url)
+  return parsed?.kind === 'youtube' || isYouTubeSite(url) ? 'youtube' : 'other'
+}
+
+/** 歷史最多保留的筆數（R23）；YouTube 和其他網站各自計算（R58） */
 export const HISTORY_MAX = 200
+
+/** 每一邊只保留最新的 max 筆（清單已依時間由新到舊排列） */
+function capPerGroup(items: ListItem[], max: number): ListItem[] {
+  const count: Record<ListGroup, number> = { youtube: 0, other: 0 }
+  return items.filter((i) => ++count[groupOf(i.url)] <= max)
+}
 
 export const LIST_ERROR = {
   unsupported: '不支援的網址',
@@ -62,7 +76,7 @@ function normalizeItems(raw: unknown, max = Infinity): ListItem[] {
 /** 只留下合法的項目（網址必須支援、不重複）；歷史最多 200 筆 */
 export function normalizeLists(raw: unknown): Lists {
   const obj = isObject(raw) ? raw : {}
-  return { favorites: normalizeItems(obj.favorites), history: normalizeItems(obj.history, HISTORY_MAX) }
+  return { favorites: normalizeItems(obj.favorites), history: capPerGroup(normalizeItems(obj.history), HISTORY_MAX) }
 }
 
 /** 讀取清單檔；JSON 格式錯誤或整體結構不對時視為損毀（R21 AC11） */
@@ -124,11 +138,12 @@ export function recordHistory(lists: Lists, url: string, title: string | null | 
   const existing = lists.history.find((i) => sameUrl(i.url, u))
   const item: ListItem = existing ? { ...existing, time: now } : { url: u, name: defaultName(u, title), time: now }
   const rest = lists.history.filter((i) => !sameUrl(i.url, u))
-  return { ...lists, history: [item, ...rest].slice(0, HISTORY_MAX) }
+  return { ...lists, history: capPerGroup([item, ...rest], HISTORY_MAX) }
 }
 
-export function clearHistory(lists: Lists): Lists {
-  return { ...lists, history: [] }
+/** 清除一邊的歷史（R58 AC3） */
+export function clearHistory(lists: Lists, group: ListGroup): Lists {
+  return { ...lists, history: lists.history.filter((i) => groupOf(i.url) !== group) }
 }
 
 /** 歷史的最後播放時間：`YYYY/MM/DD HH:mm`（R23） */

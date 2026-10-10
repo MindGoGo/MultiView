@@ -515,6 +515,18 @@ button.link {
   }
 }
 
+/* 清單的兩邊：YouTube、其他網站（R58） */
+.list-groups {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 0;
+}
+
+.list-groups button {
+  font-weight: 600;
+}
+
 .list-head {
   display: flex;
   align-items: center;

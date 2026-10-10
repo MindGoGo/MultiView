@@ -130,17 +130,23 @@ describe('歷史（R23）', () => {
     let l = emptyLists()
     for (let i = 0; i < HISTORY_MAX; i++) l = recordHistory(l, `https://example.com/v/${i}`, null, i)
     expect(l.history).toHaveLength(HISTORY_MAX)
-    l = recordHistory(l, YT, 'Bunny', 9999)
+    // 同一邊（其他網站）超過 200 筆時刪掉最舊的
+    l = recordHistory(l, 'https://example.com/v/new', null, 9998)
     expect(l.history).toHaveLength(HISTORY_MAX)
-    expect(l.history[0].url).toBe(YT)
+    expect(l.history[0].url).toBe('https://example.com/v/new')
     // 最舊的是第 0 筆
     expect(l.history.some((i) => i.url === 'https://example.com/v/0')).toBe(false)
     expect(l.history.some((i) => i.url === 'https://example.com/v/1')).toBe(true)
+    // R58 AC4：YouTube 的上限另外計算，不會擠掉其他網站的歷史
+    l = recordHistory(l, YT, 'Bunny', 9999)
+    expect(l.history).toHaveLength(HISTORY_MAX + 1)
+    expect(l.history.some((i) => i.url === 'https://example.com/v/1')).toBe(true)
   })
 
-  it('AC7：全部清除', () => {
-    const l = recordHistory(emptyLists(), YT, 'Bunny', 1)
-    expect(clearHistory(l).history).toEqual([])
+  it('AC7：全部清除（R58 起只清除一邊）', () => {
+    const l = recordHistory(recordHistory(emptyLists(), YT, 'Bunny', 1), 'https://example.com/a.m3u8', null, 2)
+    expect(clearHistory(l, 'youtube').history.map((i) => i.url)).toEqual(['https://example.com/a.m3u8'])
+    expect(clearHistory(l, 'other').history.map((i) => i.url)).toEqual([YT])
   })
 
   it('最後播放時間的格式是 YYYY/MM/DD HH:mm', () => {

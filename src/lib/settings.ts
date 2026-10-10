@@ -40,6 +40,8 @@ export interface ViewSettings {
   brightness: number
   /** YouTube 無法嵌入時自動改用網頁播放（R49）；舊的設定檔沒有這個欄位時視為否 */
   autoYoutubeWeb: boolean
+  /** 清單面板上次的那一邊和分頁（R58）；舊的設定檔視為 YouTube 的最愛 */
+  listTab: { group: 'youtube' | 'other'; tab: 'favorites' | 'history' }
 }
 
 export interface Settings extends ViewSettings {
@@ -57,8 +59,18 @@ export function defaultSettings(): Settings {
     ratios: {},
     slots: Array.from({ length: SLOT_COUNT }, () => null),
     brightness: BRIGHTNESS_DEFAULT,
-    autoYoutubeWeb: false
+    autoYoutubeWeb: false,
+    listTab: DEFAULT_LIST_TAB
   }
+}
+
+const DEFAULT_LIST_TAB: ViewSettings['listTab'] = { group: 'youtube', tab: 'favorites' }
+
+function normalizeListTab(raw: unknown): ViewSettings['listTab'] {
+  if (!isObject(raw)) return DEFAULT_LIST_TAB
+  const group = raw.group === 'other' ? 'other' : raw.group === 'youtube' ? 'youtube' : null
+  const tab = raw.tab === 'favorites' || raw.tab === 'history' ? raw.tab : null
+  return group && tab ? { group, tab } : DEFAULT_LIST_TAB
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -119,7 +131,8 @@ export function normalizeView(raw: unknown): ViewSettings {
     ratios: normalizeRatios(obj.ratios),
     slots: normalizeSlots(obj.slots),
     brightness: normalizeBrightness(obj.brightness),
-    autoYoutubeWeb: obj.autoYoutubeWeb === true
+    autoYoutubeWeb: obj.autoYoutubeWeb === true,
+    listTab: normalizeListTab(obj.listTab)
   }
 }
 

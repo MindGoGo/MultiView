@@ -49,7 +49,7 @@ import {
   type ListKind,
   type Lists
 } from './lib/lists'
-import { ListPanel } from './components/ListPanel'
+import { ListPanel, type ListTab } from './components/ListPanel'
 
 const TOAST_MS = 3000
 /** 觀看進度多久讀一次（R55） */
@@ -121,6 +121,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const [lists, setLists] = useState<Lists>(emptyLists)
   const listsLoaded = useRef(false)
   const [listOpen, setListOpen] = useState(false)
+  /** 清單面板上次的那一邊和分頁（R58） */
+  const [listTab, setListTab] = useState<ListTab>(initial.listTab)
   const [listOver, setListOver] = useState<number | null>(null)
   useEffect(() => {
     void window.multiview.getLists().then((l) => {
@@ -167,6 +169,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     ratios: ratiosMap,
     brightness: masterBrightness,
     autoYoutubeWeb,
+    listTab,
     slots: slots.map((s) =>
       s
         ? {
@@ -198,7 +201,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
     window.multiview.saveView(viewOf(positions))
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, positions])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, positions, listTab])
 
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
@@ -659,11 +662,14 @@ export default function App({ initial }: { initial: ViewSettings }) {
       {listOpen && (
         <ListPanel
           lists={lists}
+          initialTab={listTab}
+          onTabChange={setListTab}
+          onToast={showToast}
           onClose={() => setListOpen(false)}
           onAddFavorite={(url, name) => applyResult(addFavorite(lists, url, name, Date.now()))}
           onEdit={(kind: ListKind, i, url, name) => applyResult(editItem(lists, kind, i, url, name))}
           onDelete={(kind: ListKind, i) => setLists(deleteItem(lists, kind, i))}
-          onClearHistory={() => setLists(clearHistory(lists))}
+          onClearHistory={(group) => setLists(clearHistory(lists, group))}
           onPick={onPickItem}
           onDragOver={setListOver}
           onDrop={onDropItem}
