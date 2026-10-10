@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>blocked</title>
+<style>
+  body { margin: 0; background: #223; color: #fff; font: 14px sans-serif; }
+</style>
+<header style="height: 30px">只能用網站自己的按鈕播放的影片（R54 AC3）</header>
+<video id="v" width="480" height="270" src="/bunny-10s.mp4" loop muted></video>
+<button id="b">網站的播放鈕</button>
+<script>
+  // 不是網站自己的按鈕開始的播放一律立刻暫停
+  const v = document.getElementById('v')
+  let allowed = false
+  document.getElementById('b').onclick = () => { allowed = true; v.play() }
+  v.addEventListener('play', () => { if (!allowed) v.pause() })
+</script>
