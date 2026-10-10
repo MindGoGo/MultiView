@@ -46,7 +46,7 @@
     - 其他錯誤碼：「這部影片無法播放」
   - 注意：YouTube 嵌入播放器對不存在的影片代碼也回報 150（2026-10-10 實測），所以不存在的影片也會顯示「此影片無法在外部播放」和按鈕；按下後由 YouTube 網頁顯示影片無法播放。
   - 改用網頁播放時：
-    - 影片模式也以格子大小排版、不縮小（其他網頁來源會放大排版再縮小，第二版 R13）：YouTube 網頁的影片只要被縮小顯示就會變成全黑。YouTube 依格子大小自動決定畫質。
+    - 影片模式時，YouTube 網頁的影片移到網頁最外層（離開影片模式時放回原位）：影片留在 YouTube 的播放器容器裡放大時，整個網頁畫不出來（全黑但有聲音）。畫質由 YouTube 自動決定。
     - 格子的網址維持原本的 YouTube 網址（清單、歷史、最愛都用這個網址）。
     - 廣告阻擋預設關閉；可以用原本的「廣告阻擋」按鈕開啟。
     - 音量、靜音、亮度保留。
@@ -146,7 +146,8 @@
 
 - **效能：** mp4 的預覽縮圖只在滑鼠停在進度條上時取得，離開後釋放；不影響正在播放的影片。YouTube 預覽縮圖的資訊每部影片只取得一次。
 - **實作結果：**
-  - YouTube 網頁播放：YouTube 會不斷改寫影片元素的位置和大小，蓋掉影片模式的放大樣式；改成監看主要影片的 style，被改寫時立刻補回（所有網頁來源都適用）。另外 YouTube 網頁的影片在縮小顯示時（`transform`、CSS `zoom`、網頁縮放比例都試過）畫面全黑，但影片仍在解碼（從螢幕實際擷取確認），所以 YouTube 網頁播放不縮小。
+  - YouTube 網頁播放：YouTube 會不斷改寫影片元素的位置和大小，蓋掉影片模式的放大樣式；改成監看主要影片的 style，被改寫時立刻補回（所有網頁來源都適用）。
+  - YouTube 網頁播放的黑畫面（2026-10-10 使用者回報 `yE7nLbXTZ6o`：開始約 1 秒有畫面，之後全黑但有聲音）：影片留在 YouTube 的 `#player-container` 裡放大時，整個網頁都畫不出來；關閉硬體解碼、關閉影片疊加層、改變縮放方式、拿掉外層的裁切與圓角、劇院模式都無效，把影片移到 `#player-container` 外面（例如 body）就正常。所以影片模式在 YouTube 網頁上把主要影片移到 body，離開影片模式時放回原位；YouTube 沒有把它搬回去（觀察 60 秒），被搬回時下一次檢查會再移出。初版以「不縮小排版」暫時避開（格子小時剛好沒觸發），找到原因後改回和其他網站一樣放大排版再縮小。
   - YouTube 網頁播完或使用者在整頁模式操作時，網頁可能自己換到下一部影片；格子的網址仍是原本的影片，重新開啟程式時回到原本的影片。
   - YouTube 預覽縮圖：從 `https://www.youtube.com/watch?v=<代碼>` 的 HTML 取出 `playerStoryboardSpecRenderer`，選寬度不超過 320px 的最大等級，以 160px 寬顯示。
   - mp4 預覽：另一個靜音、不播放的影片元素跳到游標位置，提示消失時釋放。
@@ -161,7 +162,7 @@
 - `src/lib/slots.ts`、`src/lib/settings.ts`、`electron/main.ts`：網頁播放欄位、自動改用設定（R48、R49）
 - `src/lib/source.ts`（`resolveSource`）、`src/lib/webErrors.ts`（錯誤碼）：YouTube 網頁播放（R48）
 - `src/players/YouTubePlayer.tsx`：回報錯誤碼（R48）
-- `src/players/WebPlayer.tsx`、`electron/webPreload.ts`：網頁播放不縮小、補回被改寫的樣式（R48）
+- `electron/webPreload.ts`：補回被改寫的樣式、YouTube 網頁的影片移到 body（R48）
 - `src/components/Cell.tsx`、`Grid.tsx`、`Toolbar.tsx`、`PopupMenu.tsx`、`src/App.tsx`：按鈕、設定選單、目前操作的格子（R48、R49、R51）
 - `src/lib/storyboard.ts`（新）、`src/components/ProgressPreview.tsx`（新）、`electron/main.ts`、`electron/preload.ts`：預覽縮圖（R50）
 - `src/components/ProgressBar.tsx`、`src/lib/progress.ts`：提示、快轉倒轉（R50、R51）
@@ -185,3 +186,4 @@
 | 2026-10-10 | 目前操作的格子包括操作區已自動隱藏的格子，方向鍵跳轉時顯示操作區（新增 R51 AC10）；網頁來源有焦點時也能連續跳轉；網頁播放的歷史名稱去掉「 - YouTube」；自動改用也適用開啟程式時還原的格子；縮圖尺寸與直播沒有縮圖；版本號確定 0.4.0 | 第 2 步複查 |
 | 2026-10-10 | R48 AC5 改成 YouTube 回報的實際行為；YouTube 網頁播放不縮小；R50 游標在進度條上時操作區不隱藏 | 實作時發現：YouTube 對不存在的影片也回報 150；YouTube 網頁的影片縮小顯示時全黑；停下來看縮圖時操作區會自動隱藏 |
 | 2026-10-10 | 補實作結果、實際檔案與未決事項 | 實作完成 |
+| 2026-10-10 | YouTube 網頁播放改成把影片移出播放器容器，取消「不縮小排版」 | 使用者回報格子較大時仍然全黑；找到真正原因是影片所在的容器 |
