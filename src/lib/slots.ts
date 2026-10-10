@@ -23,6 +23,8 @@ export interface Source {
   captions: string | null
   /** 亮度 20–150（%）（R40）；跟著來源移動和保存 */
   brightness: number
+  /** 改用 YouTube 網頁播放（R48）；跟著來源移動和保存 */
+  youtubeWeb: boolean
 }
 
 export type { Quality } from './quality'

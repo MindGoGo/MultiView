@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { cellRects, dividers, type Axis, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
 import { isVisible, type Slots } from '../lib/slots'
 import type { NavState, PlayerHandle, PlayStatus } from '../players/types'
-import type { WebFailure } from '../lib/webErrors'
+import type { Failure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import type { CaptionTrack } from '../lib/captions'
 import type { Quality } from '../lib/quality'
@@ -35,12 +35,14 @@ interface Props {
   slots: Slots
   statuses: Record<number, PlayStatus>
   /** 網頁來源錯誤狀態的種類，依來源 id（R16） */
-  failures: Record<number, WebFailure>
+  failures: Record<number, Failure>
   registerPlayer(id: number, handle: PlayerHandle | null): void
-  onStatus(id: number, status: PlayStatus, failure?: WebFailure): void
+  onStatus(id: number, status: PlayStatus, failure?: Failure): void
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
+  /** 改用 YouTube 網頁播放（R48） */
+  onUseYoutubeWeb(index: number): void
   onDividerDrag(axis: Axis, index: number, pos: number, containerPx: number): void
   onDividerReset(axis: Axis, index: number, containerPx: number): void
   /** 拖曳換位中：來源格與目前游標下的格子（R6） */
@@ -110,7 +112,7 @@ export function Grid(props: Props) {
           volume: source.volume,
           autoplay: source.autoplay,
           active: visible,
-          onStatus: (s: PlayStatus, f?: WebFailure) => props.onStatus(source.id, s, f),
+          onStatus: (s: PlayStatus, f?: Failure) => props.onStatus(source.id, s, f),
           onLoaded: () => props.onLoaded(source.id)
         }
         return (
@@ -142,6 +144,7 @@ export function Grid(props: Props) {
                 mode={props.webModes[source.id] ?? 'video'}
                 onModeChange={(mode) => props.onWebMode(source.id, mode)}
                 onNavState={(s) => props.onNavState(source.id, s)}
+                noScale={source.youtubeWeb}
                 {...common}
               />
             ) : (
@@ -165,6 +168,7 @@ export function Grid(props: Props) {
             onSubmitUrl={props.onSubmitUrl}
             onRemove={props.onRemove}
             onRetry={props.onRetry}
+            onUseYoutubeWeb={props.onUseYoutubeWeb}
             canMove={layout !== '1' && solo === null}
             moving={props.move?.from === index}
             dropTarget={

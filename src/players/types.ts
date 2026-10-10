@@ -1,4 +1,4 @@
-import type { WebFailure } from '../lib/webErrors'
+import type { Failure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import type { CaptionTrack } from '../lib/captions'
 
@@ -37,7 +37,7 @@ export interface PlayerProps {
   /** false 表示來源被隱藏（R4 AC3），要暫停 */
   active: boolean
   /** failure：網頁來源錯誤狀態的種類（R16），其他來源不使用 */
-  onStatus(status: PlayStatus, failure?: WebFailure): void
+  onStatus(status: PlayStatus, failure?: Failure): void
   /** 網頁來源「網頁載入完成」時呼叫，用來記錄歷史（R23）；其他來源以開始播放或暫停為準 */
   onLoaded?(): void
 }

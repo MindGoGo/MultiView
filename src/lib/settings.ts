@@ -25,6 +25,8 @@ export interface SavedSource {
   captions: string | null
   /** 亮度（R40）；舊的設定檔沒有這個欄位時視為 100 */
   brightness: number
+  /** 改用 YouTube 網頁播放（R48）；舊的設定檔沒有這個欄位時視為否 */
+  youtubeWeb: boolean
 }
 
 /** 畫面這一側的設定，由畫面送給主程序保存 */
@@ -93,7 +95,8 @@ function normalizeSource(raw: unknown): SavedSource | null {
     adblock: raw.adblock !== false,
     quality: normalizeQuality(raw.quality),
     captions: typeof raw.captions === 'string' && raw.captions ? raw.captions : null,
-    brightness: normalizeBrightness(raw.brightness)
+    brightness: normalizeBrightness(raw.brightness),
+    youtubeWeb: raw.youtubeWeb === true
   }
 }
 

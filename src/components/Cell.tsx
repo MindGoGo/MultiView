@@ -4,7 +4,7 @@ import { isAudible } from '../lib/audio'
 import type { PlayStatus } from '../players/types'
 import type { WebMode } from '../players/webTypes'
 import type { NavState } from '../players/types'
-import { WEB_FAILURE_TEXT, type WebFailure } from '../lib/webErrors'
+import { WEB_FAILURE_TEXT, YOUTUBE_FAILURE_TEXT, type Failure, type WebFailure, type YouTubeFailure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import { ProgressBar } from './ProgressBar'
 import { isPlayingStatus } from '../lib/playback'
@@ -19,11 +19,12 @@ interface Props {
   style: CSSProperties
   source: Source | null
   status: PlayStatus | undefined
-  failure: WebFailure | undefined
+  failure: Failure | undefined
   /** 送出網址；回傳錯誤訊息，成功時回傳 null */
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
+  onUseYoutubeWeb(index: number): void
   canMove: boolean
   moving: boolean
   dropTarget: boolean
@@ -213,11 +214,17 @@ export function Cell(props: Props) {
       {failed && (
         <div className="cell-center cell-message">
           {source.parsed.kind === 'youtube' ? (
-            <div>此影片無法在外部播放</div>
+            // 禁止嵌入的影片可以改用 YouTube 網頁播放（R48）
+            <>
+              <div>{YOUTUBE_FAILURE_TEXT[(props.failure as YouTubeFailure | undefined) ?? 'other']}</div>
+              {props.failure === 'embed' && (
+                <button onClick={() => props.onUseYoutubeWeb(index)}>改用 YouTube 網頁播放</button>
+              )}
+            </>
           ) : isWeb ? (
             // 網頁載入失敗可以重試；DRM 只能更換網址（R16）
             <>
-              <div>{WEB_FAILURE_TEXT[props.failure ?? 'load']}</div>
+              <div>{WEB_FAILURE_TEXT[(props.failure as WebFailure | undefined) ?? 'load']}</div>
               {props.failure !== 'drm' && <button onClick={() => onRetry(index)}>重試</button>}
             </>
           ) : (

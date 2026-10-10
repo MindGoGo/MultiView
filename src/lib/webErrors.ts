@@ -26,3 +26,22 @@ export const WEB_FAILURE_TEXT: Record<WebFailure, string> = {
   load: '無法載入網頁',
   drm: '這個影片有版權保護，無法播放'
 }
+
+/** YouTube 播放器的錯誤種類（R48）：禁止嵌入、找不到影片、其他 */
+export type YouTubeFailure = 'embed' | 'missing' | 'other'
+
+/** 錯誤狀態的種類（網頁來源或 YouTube） */
+export type Failure = WebFailure | YouTubeFailure
+
+/** YouTube 錯誤碼：100 找不到 / 101、150 禁止嵌入 / 其他（2 參數錯誤、5 HTML5 播放器錯誤等） */
+export function youtubeFailure(code: number): YouTubeFailure {
+  if (code === 101 || code === 150) return 'embed'
+  if (code === 100) return 'missing'
+  return 'other'
+}
+
+export const YOUTUBE_FAILURE_TEXT: Record<YouTubeFailure, string> = {
+  embed: '此影片無法在外部播放',
+  missing: '找不到這部影片，可能已刪除或不公開',
+  other: '這部影片無法播放'
+}

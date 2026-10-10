@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { youtubeFailure } from '../lib/webErrors'
 import { loadYouTubeApi, YT_STATE, type YTPlayer } from './youtubeApi'
 import type { PlayerHandle, PlayerProps, PlayStatus } from './types'
 import type { Progress } from '../lib/progress'
@@ -110,8 +111,8 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
                 playerRef.current?.loadModule('captions')
               }
             },
-            // 100 找不到 / 101、150 禁止內嵌 / 2 參數錯誤 / 5 HTML5 播放器錯誤（R2 AC6）
-            onError: () => latest.current.onStatus('error')
+            // 100 找不到 / 101、150 禁止內嵌 / 2 參數錯誤 / 5 HTML5 播放器錯誤（R2 AC6、R48）
+            onError: ({ data }) => latest.current.onStatus('error', youtubeFailure(data))
           }
         })
       })

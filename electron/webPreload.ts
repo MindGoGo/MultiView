@@ -284,6 +284,8 @@ let styled: {
   rect: Rect
   saved: [HTMLElement, string | null][]
   overlays: HTMLStyleElement[]
+  /** 網站改寫主要影片的 style 時（例如 YouTube 會一直設定影片的位置和大小），立刻把放大的樣式補回來 */
+  observer: MutationObserver
 } | null = null
 
 function parentOf(el: Element): Element | null {
@@ -299,6 +301,7 @@ function setStyles(el: HTMLElement, css: [string, string][], saved: [HTMLElement
 
 function unstyle() {
   if (!styled) return
+  styled.observer.disconnect()
   for (const [el, attr] of styled.saved.reverse()) {
     if (attr === null) el.removeAttribute('style')
     else el.setAttribute('style', attr)
@@ -335,10 +338,20 @@ function applyStyles() {
   if (best && !styled) {
     const saved: [HTMLElement, string | null][] = []
     const overlays: HTMLStyleElement[] = []
+    const observer = new MutationObserver((records) => {
+      for (const r of records) {
+        const el = r.target as HTMLElement
+        // 只補回被蓋掉的屬性，避免自己的修改又觸發一次
+        for (const [k, v] of CHOSEN_CSS) {
+          if (el.style.getPropertyPriority(k) !== 'important') el.style.setProperty(k, v, 'important')
+        }
+      }
+    })
     best.path.forEach((el, i) => {
       // 同網域子框架的文件也要加遮罩
       if (i > 0) overlays.push(overlayIn(el.ownerDocument))
       setStyles(el, CHOSEN_CSS, saved)
+      observer.observe(el, { attributes: true, attributeFilter: ['style'] })
       for (let p = parentOf(el); p; p = parentOf(p)) {
         const h = p as HTMLElement
         if (!h.style) continue
@@ -347,7 +360,7 @@ function applyStyles() {
         setStyles(h, pos === 'fixed' || pos === 'sticky' ? [...ANCESTOR_CSS, ['position', 'static']] : ANCESTOR_CSS, saved)
       }
     })
-    styled = { path: best.path, rect: best.rect, saved, overlays }
+    styled = { path: best.path, rect: best.rect, saved, overlays, observer }
   }
 }
 

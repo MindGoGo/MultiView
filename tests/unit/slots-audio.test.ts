@@ -19,6 +19,7 @@ function src(over: Partial<Source> = {}): Source {
     quality: 'auto',
     captions: null,
     brightness: 100,
+    youtubeWeb: false,
     ...over
   }
 }

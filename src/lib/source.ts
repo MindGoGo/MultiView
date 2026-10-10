@@ -28,6 +28,18 @@ function isYouTubeDomain(host: string): boolean {
   return ['youtube.com', 'youtu.be'].some((d) => host === d || host.endsWith('.' + d))
 }
 
+/**
+ * 格子實際使用的來源：改用 YouTube 網頁播放時（R48），以網頁來源載入這部影片的 YouTube 網頁，
+ * 格子的網址仍是原本的 YouTube 網址。
+ */
+export function resolveSource(input: string, youtubeWeb: boolean): ParsedSource | null {
+  const parsed = parseSource(input)
+  if (youtubeWeb && parsed?.kind === 'youtube') {
+    return { kind: 'web', url: `https://www.youtube.com/watch?v=${parsed.videoId}` }
+  }
+  return parsed
+}
+
 /** 解析使用者輸入的網址；不支援時回傳 null。 */
 export function parseSource(input: string): ParsedSource | null {
   let url: URL

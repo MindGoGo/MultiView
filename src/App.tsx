@@ -19,16 +19,17 @@ import {
   newSourceId,
   setSlot,
   swapSlots,
-  type Slots
+  type Slots,
+  type Source
 } from './lib/slots'
-import { parseSource } from './lib/source'
+import { parseSource, resolveSource } from './lib/source'
 import { focusAudio, initialMuted, muteAll, setVolume, toggleMute } from './lib/audio'
 import { controllableIndices, isPlayingStatus, toggleAllAction } from './lib/playback'
 import { shortcutFor } from './lib/shortcuts'
 import type { ViewSettings } from './lib/settings'
 import type { NavState, PlayerHandle, PlayStatus } from './players/types'
 import type { WebMode } from './players/webTypes'
-import type { WebFailure } from './lib/webErrors'
+import type { Failure } from './lib/webErrors'
 import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
 import { classifyLink } from './lib/links'
@@ -55,7 +56,7 @@ const TOAST_MS = 3000
 function restoreSlots(saved: ViewSettings['slots']): Slots {
   const slots = emptySlots()
   saved.forEach((s, i) => {
-    const parsed = s && parseSource(s.url)
+    const parsed = s && resolveSource(s.url, s.youtubeWeb)
     if (s && parsed)
       slots[i] = {
         id: newSourceId(),
@@ -67,7 +68,8 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
         adblock: s.adblock,
         quality: s.quality,
         captions: s.captions,
-        brightness: s.brightness
+        brightness: s.brightness,
+        youtubeWeb: s.youtubeWeb
       }
   })
   return slots
@@ -89,7 +91,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const ratios = ratiosMap[layout] ?? defaultRatios(layout)
   const [slots, setSlots] = useState<Slots>(() => restoreSlots(initial.slots))
   const [statuses, setStatuses] = useState<Record<number, PlayStatus>>({})
-  const [failures, setFailures] = useState<Record<number, WebFailure>>({})
+  const [failures, setFailures] = useState<Record<number, Failure>>({})
   const [navStates, setNavStates] = useState<Record<number, NavState>>({})
   const onNavState = useCallback((id: number, s: NavState) => setNavStates((prev) => ({ ...prev, [id]: s })), [])
   const players = useRef(new Map<number, PlayerHandle>())
@@ -139,7 +141,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
               adblock: s.adblock,
               quality: s.quality,
               captions: s.captions,
-              brightness: s.brightness
+              brightness: s.brightness,
+              youtubeWeb: s.youtubeWeb
             }
           : null
       )
@@ -158,11 +161,13 @@ export default function App({ initial }: { initial: ViewSettings }) {
     const s = slotsRef.current.find((x) => x?.id === id)
     if (!s || !s.record || recorded.current.has(id)) return
     recorded.current.add(id)
-    const title = players.current.get(id)?.getTitle() ?? null
+    const raw = players.current.get(id)?.getTitle() ?? null
+    // YouTube 網頁播放的名稱是網頁標題，去掉結尾的「 - YouTube」（R48）
+    const title = s.youtubeWeb && raw ? raw.replace(/ - YouTube$/, '') : raw
     setLists((l) => recordHistory(l, s.url, title, Date.now()))
   }, [])
 
-  const onStatus = useCallback((id: number, status: PlayStatus, failure?: WebFailure) => {
+  const onStatus = useCallback((id: number, status: PlayStatus, failure?: Failure) => {
     // 網頁來源以「網頁載入完成」為準，其他來源以開始播放或暫停為準
     const s = slotsRef.current.find((x) => x?.id === id)
     if (s && s.parsed.kind !== 'web' && (status === 'playing' || status === 'paused' || status === 'ended')) onLoaded(id)
@@ -191,7 +196,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         // 更換網址時保留字幕的選擇，新影片有同一種語言就自動開啟（R31）
         captions: existing ? existing.captions : null,
         // 更換網址時保留亮度（R40）
-        brightness: existing ? existing.brightness : BRIGHTNESS_DEFAULT
+        brightness: existing ? existing.brightness : BRIGHTNESS_DEFAULT,
+        // 新的網址先用一般的判斷（R48 AC6）
+        youtubeWeb: false
       })
     )
     return null
@@ -297,6 +304,17 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const onRetry = (index: number) => {
     const s = slots[index]
     if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true, record: true }))
+  }
+
+  // 改用 YouTube 網頁播放：廣告阻擋預設關閉；使用者放入的影片在網頁載入完成時記錄到歷史（R48）
+  const useYoutubeWeb = (s: Source): Source | null => {
+    const parsed = resolveSource(s.url, true)
+    return parsed && { ...s, id: newSourceId(), parsed, youtubeWeb: true, adblock: false, autoplay: true }
+  }
+  const onUseYoutubeWeb = (index: number) => {
+    const s = slots[index]
+    const next = s && useYoutubeWeb(s)
+    if (next) setSlots(setSlot(slots, index, next))
   }
 
   // 切換廣告阻擋：換新的 id 讓網頁重新載入，比照「重試」（R17 AC2）
@@ -457,6 +475,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onSubmitUrl={onSubmitUrl}
         onRemove={onRemove}
         onRetry={onRetry}
+        onUseYoutubeWeb={onUseYoutubeWeb}
         onDividerDrag={onDividerDrag}
         onDividerReset={onDividerReset}
         move={move}
