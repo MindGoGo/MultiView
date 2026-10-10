@@ -95,7 +95,8 @@ describe('設定檔中的網頁來源（R12 AC6、AC7，R17 AC3）', () => {
       adblock: true,
       quality: 'auto',
       captions: null,
-      brightness: 100
+      brightness: 100,
+      youtubeWeb: false
     })
   })
 
