@@ -21,6 +21,8 @@ const CONCURRENCY = 4
 
 interface FeedState {
   videos: FeedVideo[] | null
+  /** 正在直播的影片代碼（R60）；沒有直播或判斷不了時為 null */
+  live: string | null
   /** 讀取完成的時間；0 表示還沒讀取過 */
   at: number
   loading: boolean
@@ -37,11 +39,10 @@ function pump() {
   while (running < CONCURRENCY && queue.length) {
     const id = queue.shift()!
     running++
-    window.multiview
-      .ytFeed(id)
-      .catch(() => null)
-      .then((videos) => {
-        feeds.set(id, { videos, at: Date.now(), loading: false })
+    // 最新影片和直播狀態一起讀取（R60）；每個頻道每次最多 2 個請求
+    Promise.all([window.multiview.ytFeed(id).catch(() => null), window.multiview.ytLive(id).catch(() => null)])
+      .then(([videos, live]) => {
+        feeds.set(id, { videos, live, at: Date.now(), loading: false })
         running--
         notify()
         pump()
@@ -55,7 +56,7 @@ function load(ids: string[], force: boolean) {
     const f = feeds.get(id)
     if (f?.loading || queue.includes(id)) continue
     if (!force && f && now - f.at < REFRESH_MS) continue
-    feeds.set(id, { videos: f?.videos ?? null, at: f?.at ?? 0, loading: true })
+    feeds.set(id, { videos: f?.videos ?? null, live: f?.live ?? null, at: f?.at ?? 0, loading: true })
     queue.push(id)
   }
   notify()
@@ -88,7 +89,9 @@ export function SubscriptionList(props: Props) {
 
   const anyLoading = channels.some((c) => feeds.get(c.id)?.loading)
   const now = Date.now()
-  const sorted = [...channels].sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'))
+  // 正在直播的排在最上面（R60），其他依名稱排序
+  const isLive = (c: Channel) => !!feeds.get(c.id)?.live
+  const sorted = [...channels].sort((a, b) => Number(isLive(b)) - Number(isLive(a)) || a.name.localeCompare(b.name, 'zh-TW'))
 
   const submit = async () => {
     if (!adding || adding.busy || !adding.url.trim()) return
@@ -155,12 +158,15 @@ export function SubscriptionList(props: Props) {
           const videos = feed?.videos ?? []
           const fresh = countNew(videos, now)
           const open = expanded.has(ch.id)
+          const live = feed?.live ?? null
+          // 拖曳頻道：正在直播時播放那場直播，否則以整頁模式顯示頻道頁（R59、R60）
+          const channelItem: ListItem = live ? { url: watchUrl(live), name: ch.name, time: 0 } : { url: ch.url, name: ch.name, time: 0 }
           return (
             <li key={ch.id} className="channel">
               <div
                 className="list-item channel-row"
                 title="點一下放進空格，或拖到要放的格子"
-                {...props.pick(`channel:${ch.id}`, { url: ch.url, name: ch.name, time: 0 })}
+                {...props.pick(`channel:${ch.id}`, channelItem)}
               >
                 <button className="channel-toggle" title={open ? '收合' : '顯示最新影片'} onClick={() => toggle(ch.id)}>
                   {open ? '▾' : '▸'}
@@ -168,6 +174,15 @@ export function SubscriptionList(props: Props) {
                 <div className="list-text">
                   <div className="list-name">
                     {ch.name}
+                    {live && (
+                      <button
+                        className="channel-live"
+                        title="播放這場直播（點一下放進空格，或拖到要放的格子）"
+                        {...props.pick(`live:${ch.id}`, channelItem)}
+                      >
+                        ● 直播中
+                      </button>
+                    )}
                     {fresh > 0 && (
                       <span className="channel-new" title="24 小時內發布的新影片">
                         {fresh}

@@ -11,7 +11,16 @@ import { createListsSaver, loadLists } from './listsStore'
 import { normalizeLists, type Lists } from '../src/lib/lists'
 import { pageMenuItems, type PageMenuAction } from '../src/lib/pageMenu'
 import { extractStoryboardSpec } from '../src/lib/storyboard'
-import { channelFeedUrl, channelLookupUrl, channelPageUrl, extractChannelInfo, isChannelId, parseFeed } from '../src/lib/youtubeFeed'
+import {
+  channelFeedUrl,
+  channelLiveUrl,
+  channelLookupUrl,
+  channelPageUrl,
+  extractChannelInfo,
+  isChannelId,
+  parseFeed,
+  parseLiveStatus
+} from '../src/lib/youtubeFeed'
 
 // 測試時用獨立的資料夾，不動到正式的設定檔
 if (process.env['MULTIVIEW_USER_DATA']) app.setPath('userData', process.env['MULTIVIEW_USER_DATA'])
@@ -253,6 +262,12 @@ ipcMain.handle('yt:feed', async (_, id: unknown) => {
   if (!isChannelId(id)) return null
   const xml = await fetchText(channelFeedUrl(id))
   return xml ? parseFeed(xml) : null
+})
+// 正在直播的影片代碼（R60）；沒有直播或判斷不了時為 null
+ipcMain.handle('yt:live', async (_, id: unknown) => {
+  if (!isChannelId(id)) return null
+  const html = await fetchText(channelLiveUrl(id))
+  return html ? parseLiveStatus(html) : null
 })
 
 // 只有 http／https 網址交給系統瀏覽器（R45，非功能需求：安全）

@@ -98,6 +98,16 @@ export function parseFeed(xml: string): FeedVideo[] | null {
   return videos.sort((a, b) => b.published - a.published)
 }
 
+/**
+ * 頻道直播頁的 HTML → 正在直播的影片代碼（R60）。
+ * 正在直播時直播頁指向那場直播的影片，並標示直播中；已排程、還沒開始的直播不算。判斷不了時回傳 null。
+ */
+export function parseLiveStatus(html: string): string | null {
+  const id = html.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})"/)?.[1]
+  if (!id || !html.includes('"isLive":true') || html.includes('"isUpcoming":true')) return null
+  return id
+}
+
 /** 名稱旁顯示的新影片：24 小時內發布的（R59） */
 export const NEW_VIDEO_MS = 24 * 3600 * 1000
 

@@ -542,6 +542,16 @@ button.link {
   color: #fff;
 }
 
+.channel-live {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: #ff4e45;
+  border: 1px solid #ff4e45;
+  border-radius: 8px;
+  background: transparent;
+}
+
 .channel-videos {
   margin: 0;
   padding: 0 0 4px 24px;

@@ -69,6 +69,8 @@ const api = {
   ytChannelInfo: (input: string): Promise<{ id: string; name: string; url: string } | null> =>
     ipcRenderer.invoke('yt:channelInfo', input),
   ytFeed: (id: string): Promise<FeedVideo[] | null> => ipcRenderer.invoke('yt:feed', id),
+  /** 正在直播的影片代碼（R60）；沒有直播或判斷不了時為 null */
+  ytLive: (id: string): Promise<string | null> => ipcRenderer.invoke('yt:live', id),
   /** 用系統預設的瀏覽器開啟（R45） */
   openExternal: (url: string) => ipcRenderer.send('link:external', url),
   /** 告知主程序網頁來源的顯示模式（R14） */
