@@ -2,7 +2,7 @@
 
 - 功能代號：`resume-and-play-fixes`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-10
 - 前置規格：[multiview-player](multiview-player.md)（R1–R11）、[web-page-source](web-page-source.md)（R12–R18）、[player-controls-and-lists](player-controls-and-lists.md)（R19–R25）、[cell-play-and-page-menu](cell-play-and-page-menu.md)（R26–R29）、[captions-and-quality-menu](captions-and-quality-menu.md)（R30–R33）、[brightness-and-volume-popup](brightness-and-volume-popup.md)（R40–R43）、[installer-and-youtube-fixes](installer-and-youtube-fixes.md)（R44–R47）、[youtube-web-and-seek](youtube-web-and-seek.md)（R48–R52）。本規格的需求編號從 R53 開始；R34–R39 仍保留給本機播放與下載功能。
 
@@ -65,7 +65,7 @@
   - 觀看進度至少每 5 秒保存一次；正常關閉程式時（工具列的關閉鈕、Alt+F4、工作列關閉）先取得每一格最新的位置再關閉。關閉時最多等 1 秒，畫面沒有回應就照原本的方式關閉（最多遺失 5 秒內的進度）。
   - 不保存的情況（下次從頭開始）：直播、影片已播完或距離結尾不到 5 秒、還不到 5 秒。
   - 觀看進度跟著影片：拖曳換位時一起移動；更換網址、移除後清除。
-  - 網頁來源要等網站載入影片、提供長度後才跳到上次的位置；網站一直不提供長度時從頭開始。
+  - 網頁來源要等網站載入影片、提供的長度大於上次的位置後才跳過去（YouTube 網頁會先播比較短的片頭廣告）；跳過去之前不回報進度，保存的位置不會被廣告的進度蓋掉。第一次有進度後 30 秒內都等不到（或網站一直不提供長度）時從頭開始。
   - YouTube 重開後畫面顯示影片的縮圖（YouTube 在播放前無法顯示那個位置的畫面），進度條和時間顯示上次的位置（YouTube 在播放前回報的位置是 0，程式改用上次的位置顯示）；按播放後從那個位置開始（R53 也是從點擊的位置開始）。
   - 開啟程式時被暫停、沒有顯示的格子（單格全螢幕的其他格、版型外的格子）保留原本的觀看進度。
   - 舊的設定檔沒有觀看進度時從頭開始。
@@ -105,6 +105,11 @@
 ## 8. 非功能需求
 
 - **效能：** 觀看進度只在改變超過 1 秒時才更新設定檔，不增加不必要的寫檔。
+- **實作結果：**
+  - YouTube 的上次位置用播放器的 `start` 參數指定；播放前 `getCurrentTime()` 是 0，進度改用上次的位置顯示。
+  - mp4、m3u8 在第一次讀到影片資訊（`loadedmetadata`）時跳到上次的位置；直播的長度是無限大，不跳。
+  - 關閉：主程序在 `close` 事件先取消關閉、通知畫面，畫面送出最新的設定後回覆，主程序再存檔關閉；1 秒內沒有回覆就照原本的方式關閉。
+  - 安裝版測試時發現 YouTube 網頁先播 37 秒的片頭廣告，原本的寫法會因為「廣告比上次的位置短」而放棄跳轉，已修正（見 R55 描述）。
 - **技術風險：**
   - YouTube 在播放前跳轉會停在「尚未開始」，所以 YouTube 的上次位置在載入時指定（播放後才生效），播放前的畫面是縮圖。
   - 有些網站換影片或重新整理時會重設影片位置，網頁來源的跳轉可能被網站蓋掉；做不到時記錄在未決事項。
@@ -113,16 +118,18 @@
 ## 9. 預計影響的檔案
 
 - `src/lib/slots.ts`、`src/lib/settings.ts`：觀看進度欄位（R55）
-- `src/lib/progress.ts` 或新的函式：保存條件（R55）
+- `src/lib/progress.ts`（`resumePosition`）：保存條件（R55）
 - `src/players/YouTubePlayer.tsx`、`VideoPlayer.tsx`、`WebPlayer.tsx`：開始位置、還沒播放過的跳轉、狀態對應（R53、R55）
 - `src/components/Cell.tsx`、`ProgressBar.tsx`、`src/App.tsx`：播放鈕、提示、定期保存（R54、R55）
 - `electron/main.ts`、`electron/preload.ts`：關閉前取得最新的觀看進度（R55）
 - `package.json`、`package-lock.json`：版本號（R56）
-- `tests/unit/`、`tests/manual/`：測試
+- `tests/unit/resume.test.ts`（新）、`tests/manual/resume-and-play-fixes.md`（新）、`tests/manual/web-pages/nolength.html`、`blocked.html`（新）：測試；既有測試的來源資料補上觀看進度欄位
 
 ## 10. 未決事項
 
-- [ ] 分支：從 `youtube-web-and-seek` 開出 `resume-and-play-fixes`。
+- [x] 分支：從 `youtube-web-and-seek` 開出 `resume-and-play-fixes`（2026-10-10）。
+- [ ] YouTube 網頁的片頭廣告是隨機出現的，修正後沒有再遇到，請使用時留意重開後是否回到上次的位置。
+- [ ] 請以真實滑鼠確認一次 R53（重開後點進度條）與 R54（網站影片的播放鈕）。
 - [x] 版本號：0.4.2（2026-10-10 確認）。
 
 ## 變更紀錄
@@ -131,3 +138,5 @@
 |---|---|---|
 | 2026-10-10 | 初版 | 依 2026-10-10 使用者回報與選擇（所有點播影片記住進度；還沒播放過點進度條就開始播放；找到影片就顯示播放鈕；版本 0.4.2） |
 | 2026-10-10 | 關閉前先取得最新進度（新增 AC9）；YouTube 播放前以上次的位置顯示進度；隱藏的格子保留進度；不到 5 秒與直播不保存（新增 AC10）；提示的判斷排除緩衝中 | 第 2 步複查 |
+| 2026-10-10 | 網頁來源等影片長度大於上次的位置才跳，跳之前不回報進度 | 安裝版測試時發現 YouTube 網頁的片頭廣告會讓上次的位置被放棄 |
+| 2026-10-10 | 補實作結果、實際檔案與未決事項 | 實作完成 |
