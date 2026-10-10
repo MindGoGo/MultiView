@@ -2,7 +2,7 @@
 
 - 功能代號：`youtube-browse-and-subscriptions`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-10
 - 前置規格：[multiview-player](multiview-player.md)（R1–R11）、[web-page-source](web-page-source.md)（R12–R18）、[player-controls-and-lists](player-controls-and-lists.md)（R19–R25）、[cell-play-and-page-menu](cell-play-and-page-menu.md)（R26–R29）、[captions-and-quality-menu](captions-and-quality-menu.md)（R30–R33）、[brightness-and-volume-popup](brightness-and-volume-popup.md)（R40–R43）、[installer-and-youtube-fixes](installer-and-youtube-fixes.md)（R44–R47）、[youtube-web-and-seek](youtube-web-and-seek.md)（R48–R52）、[resume-and-play-fixes](resume-and-play-fixes.md)（R53–R56）。本規格的需求編號從 R57 開始；R34–R39 仍保留給本機播放與下載功能。
 
@@ -142,6 +142,12 @@ Google 不允許在程式裡登入帳號（2026-10-10 實測：「目前無法�
 - **資料來源：**
   - 最新影片：YouTube 公開的頻道摘要 `https://www.youtube.com/feeds/videos.xml?channel_id=<頻道代碼>`（不需要登入或金鑰）。
   - 頻道代碼與名稱、直播狀態：YouTube 的頻道網頁與直播頁（非公開介面，YouTube 改版時可能失效；失效時直播標示不顯示、以頻道網址加入會失敗，但匯入與既有訂閱的最新影片不受影響）。
+- **實作結果：**
+  - 點影片的攔截：YouTube 網站在同一頁內換網址（`did-navigate-in-page`），程式在這時把網頁靜音（`setAudioMuted`）並送出暫停，再換成嵌入播放；實測從點擊到換成嵌入播放約 0.7 秒。
+  - 頻道代碼：頻道頁取 `externalId`（沒有時取 canonical 網址），名稱取 `og:title`；影片頁取 `channelId` 與 `ownerChannelName`。
+  - 直播狀態：頻道直播頁的 canonical 指向 `watch?v=` 且頁面有 `"isLive":true`、沒有 `"isUpcoming":true` 時算正在直播。
+  - Takeout：不依欄位名稱，從每一行找頻道代碼欄、網址欄，其餘當作名稱；支援 BOM、Windows 換行、引號內的逗號。
+  - 清單資料仍是同一份，依網址分類顯示；既有清單不需要轉換。
 - **技術風險：** 在格子裡逛 YouTube 時，YouTube 網站是單頁應用程式，點影片時網址在同一頁內改變；要確認程式能在網頁真的播放前攔到，避免先在網頁裡播出聲音。做不到時停下來回報。
 - **測試：** 網址分類、Takeout CSV 解析（中英文欄位）、頻道摘要解析、頻道網址辨識、各邊歷史上限、舊清單檔相容寫成單元測試；畫面以手動驗收。
 
@@ -149,16 +155,20 @@ Google 不允許在程式裡登入帳號（2026-10-10 實測：「目前無法�
 
 - `src/lib/source.ts`：YouTube 網站頁面（R57）
 - `src/lib/lists.ts`、`electron/listsStore.ts`：分類、訂閱、上限（R58、R59）
-- `src/lib/youtubeFeed.ts`（新）：頻道網址辨識、摘要與 CSV 解析（R59–R61）
+- `src/lib/youtubeFeed.ts`（新）：頻道網址辨識、頻道資訊、摘要、直播狀態與 CSV 解析（R59–R61）
 - `electron/main.ts`、`electron/preload.ts`：讀取頻道資訊、摘要、直播狀態、選擇檔案（R59–R61）
 - `src/players/WebPlayer.tsx`、`src/App.tsx`：在 YouTube 網站點影片時換成嵌入播放（R57）
-- `src/components/ListPanel.tsx`（可能拆出 `SubscriptionList.tsx`）、`src/styles.css`：分邊、訂閱分頁（R58–R61）
+- `src/components/ListPanel.tsx`、`SubscriptionList.tsx`（新）、`src/lib/settings.ts`、`src/styles.css`：分邊、訂閱分頁、面板分頁的保存（R58–R61）
+- `src/components/Grid.tsx`、`Cell.tsx`：YouTube 網站頁面的換頁通知、不顯示「只顯示影片」（R57）
 - `package.json`、`package-lock.json`：版本號（R62）
-- `tests/unit/`、`tests/manual/`：測試
+- `tests/unit/youtube-feed.test.ts`（新）、`tests/manual/youtube-browse-and-subscriptions.md`（新）：測試；`source.test.ts`、`web-source.test.ts`（R12 的 YouTube 網域規則）、`lists.test.ts`（R23 的上限與全部清除）依規格第 5 節修改
 
 ## 10. 未決事項
 
-- [ ] 分支：從 `resume-and-play-fixes` 開出 `youtube-browse-and-subscriptions`。
+- [x] 分支：從 `resume-and-play-fixes` 開出 `youtube-browse-and-subscriptions`（2026-10-10）。
+- [ ] R61 的選檔視窗需要真實滑鼠，請使用者實際匯入一次 Google Takeout 的 subscriptions.csv。
+- [ ] R62：打包完成（0.5.0），使用者的 MultiView 正在執行，尚未安裝。
+- [ ] 頻道代碼、直播狀態依賴 YouTube 網頁（非公開介面），YouTube 改版時可能失效。
 - [x] 版本號：0.5.0（2026-10-10 確認）。
 
 ## 變更紀錄
@@ -167,3 +177,4 @@ Google 不允許在程式裡登入帳號（2026-10-10 實測：「目前無法�
 |---|---|---|
 | 2026-10-10 | 初版 | 依 2026-10-10 討論的決定（點影片後這一格換成嵌入播放；訂閱有加入／移除、最新影片、直播標示、Takeout 匯入；YouTube 的清單與其他網站分開） |
 | 2026-10-10 | YouTube 網站頁面固定整頁模式；點影片時網頁裡的影片先靜音暫停；☆ 加入貼上的頁面；「開啟 YouTube」與訂閱影片的點一下／拖曳比照 R21；面板分頁保存在設定檔；限制每個頻道的請求數；版本號確定 0.5.0 | 第 2 步複查 |
+| 2026-10-10 | 補實作結果、實際檔案與未決事項 | 實作完成 |
