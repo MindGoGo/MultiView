@@ -467,6 +467,11 @@ button.link {
   }
 }
 
+.skip-button {
+  padding: 0 4px;
+  font-size: 12px;
+}
+
 .play-button {
   padding: 0 6px;
   font-size: 12px;
@@ -633,6 +638,10 @@ button.danger {
     padding: 2px 4px;
   }
   .progress-time {
+    display: none;
+  }
+  /* 窄格子不顯示快轉、倒轉按鈕，鍵盤照常可用（R51） */
+  .skip-button {
     display: none;
   }
   /* 最小的格子操作區有三列高，進度條在上方會被工具列蓋住，移到最下面（R19） */

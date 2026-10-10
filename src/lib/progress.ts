@@ -43,6 +43,15 @@ export function seekTarget(p: Progress, fraction: number): number {
   return p.start + clamp01(fraction) * (p.end - p.start)
 }
 
+/**
+ * 快轉、倒轉後的秒數（R51）：限制在可跳轉的範圍內（開頭／可回放範圍的開始 ～ 結尾／直播最新位置）。
+ * 沒有進度條（沒有回放範圍的直播）時回傳 null。
+ */
+export function skipTarget(p: Progress, seconds: number): number | null {
+  if (progressView(p).kind === 'live') return null
+  return Math.min(Math.max(p.current + seconds, p.start), p.end)
+}
+
 /** `m:ss`，一小時以上 `h:mm:ss` */
 export function formatTime(seconds: number): string {
   const s = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0))

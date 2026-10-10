@@ -172,7 +172,8 @@ describe('快捷鍵（R9）', () => {
   })
 
   it('其他按鍵不是快捷鍵', () => {
-    for (const k of ['0', 'a', 'Enter', 'F5', 'ArrowLeft', '10']) expect(shortcutFor(k)).toBeNull()
+    // ←、→ 從 R51 起是快轉、倒轉的快捷鍵，見 seek-skip.test.ts
+    for (const k of ['0', 'a', 'Enter', 'F5', 'ArrowUp', '10']) expect(shortcutFor(k)).toBeNull()
   })
 
   it('Space：任何一格在播放就全部暫停，否則全部播放', () => {

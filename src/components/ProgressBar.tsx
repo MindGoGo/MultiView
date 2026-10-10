@@ -1,6 +1,7 @@
 // 每格的進度條（R19）與播放／暫停按鈕（R26）
 import { useEffect, useRef, useState } from 'react'
 import { formatBehind, formatTime, progressView, seekTarget, type Progress } from '../lib/progress'
+import { SKIP_SECONDS } from '../lib/shortcuts'
 import { ProgressPreview, type PreviewSource } from './ProgressPreview'
 
 interface Props {
@@ -13,6 +14,8 @@ interface Props {
   /** 這一格正在播放或緩衝（R26） */
   playing: boolean
   onTogglePlay(): void
+  /** 快轉、倒轉（R51） */
+  onSkip(seconds: number): void
   /** 有沒有進度（有進度才顯示播放鈕，R26、R30） */
   onAvailable?(available: boolean): void
   /** 預覽縮圖的來源（R50）；null 時只顯示時間 */
@@ -30,6 +33,7 @@ export function ProgressBar({
   onDragChange,
   playing,
   onTogglePlay,
+  onSkip,
   onAvailable,
   preview,
   onHoverChange
@@ -96,6 +100,13 @@ export function ProgressBar({
   return (
     <div className="progress">
       {playButton}
+      {/* 窄格子不顯示，鍵盤照常可用（R51） */}
+      <button className="skip-button" title={`倒轉 ${SKIP_SECONDS} 秒（←）`} onClick={() => onSkip(-SKIP_SECONDS)}>
+        ⏪
+      </button>
+      <button className="skip-button" title={`快轉 ${SKIP_SECONDS} 秒（→）`} onClick={() => onSkip(SKIP_SECONDS)}>
+        ⏩
+      </button>
       {label && <span className="progress-time">{label}</span>}
       <div
         className="progress-track"

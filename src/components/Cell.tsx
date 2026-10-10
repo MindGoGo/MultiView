@@ -24,6 +24,9 @@ interface Props {
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
+  onSkip(index: number, seconds: number): void
+  /** 用方向鍵跳轉時增加，顯示操作區（R51） */
+  poke: number
   onUseYoutubeWeb(index: number): void
   canMove: boolean
   moving: boolean
@@ -136,6 +139,11 @@ export function Cell(props: Props) {
     clearTimeout(idleTimer.current)
     setHover(false)
   }
+  const onMouseMoveRef = useRef(onMouseMove)
+  onMouseMoveRef.current = onMouseMove
+  useEffect(() => {
+    if (props.poke) onMouseMoveRef.current()
+  }, [props.poke])
 
   // 整頁模式時游標在網頁上，格子收不到滑鼠事件，改用主程序回報的游標位置顯示操作按鈕（R14）
   const hoverHandlers = useRef({ onMouseMove, onMouseLeave })
@@ -263,6 +271,7 @@ export function Cell(props: Props) {
               onDragChange={setSeeking}
               playing={isPlayingStatus(status)}
               onTogglePlay={() => props.onTogglePlay(index)}
+              onSkip={(seconds) => props.onSkip(index, seconds)}
               onAvailable={setHasProgress}
               onHoverChange={(on) => {
                 setPreviewing(on)

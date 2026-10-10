@@ -6,6 +6,16 @@ export type ShortcutAction =
   | { type: 'focusAudio'; index: number }
   | { type: 'toggleFullscreen' }
   | { type: 'exitFullscreen' }
+  /** 目前操作的格子快轉（正數）或倒轉（負數）（R51） */
+  | { type: 'skip'; seconds: number }
+
+/** 方向鍵每次快轉、倒轉的秒數（R51） */
+export const SKIP_SECONDS = 5
+
+/** 按住時可以連續作用的按鍵（R51）；其他快捷鍵按住只作用一次 */
+export function isRepeatableKey(key: string): boolean {
+  return key === 'ArrowLeft' || key === 'ArrowRight'
+}
 
 /**
  * 焦點在網頁來源裡時按下的鍵要怎麼處理（R14 AC4、AC6，R9 AC3）：
@@ -27,5 +37,7 @@ export function shortcutFor(key: string): ShortcutAction | null {
   if (/^[1-9]$/.test(key)) return { type: 'focusAudio', index: Number(key) - 1 }
   if (key === 'F11') return { type: 'toggleFullscreen' }
   if (key === 'Escape') return { type: 'exitFullscreen' }
+  if (key === 'ArrowLeft') return { type: 'skip', seconds: -SKIP_SECONDS }
+  if (key === 'ArrowRight') return { type: 'skip', seconds: SKIP_SECONDS }
   return null
 }

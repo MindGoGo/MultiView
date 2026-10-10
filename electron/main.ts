@@ -4,7 +4,7 @@ import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
 import { normalizeView, type Settings } from '../src/lib/settings'
-import { guestKeyAction, shortcutFor } from '../src/lib/shortcuts'
+import { guestKeyAction, isRepeatableKey, shortcutFor } from '../src/lib/shortcuts'
 import { WEB_PARTITION, type WebMode } from '../src/players/webTypes'
 import { forgetWebContents, installAdblock, loadAdblockList, setAdblockEnabled } from './adblock'
 import { createListsSaver, loadLists } from './listsStore'
@@ -114,7 +114,7 @@ async function createWindow() {
 
   // 焦點在 YouTube 播放器（iframe）裡時，按鍵不會傳到畫面，在這裡攔下來轉給畫面（R9 AC3）
   win.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown' || input.isAutoRepeat) return
+    if (input.type !== 'keyDown' || (input.isAutoRepeat && !isRepeatableKey(input.key))) return
     const focused = win?.webContents.focusedFrame
     if (!focused || focused === win?.webContents.mainFrame) return
     if (!shortcutFor(input.key)) return
@@ -254,7 +254,8 @@ function attachWebGuest(guest: Electron.WebContents) {
   // 網頁要開新視窗一律擋下（R14 AC3）
   guest.setWindowOpenHandler(() => ({ action: 'deny' }))
   guest.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown' || input.isAutoRepeat) return
+    // 方向鍵按住時連續快轉、倒轉，網頁有焦點時也一樣（R51）
+    if (input.type !== 'keyDown' || (input.isAutoRepeat && !isRepeatableKey(input.key))) return
     const action = guestKeyAction(input.key, webModes.get(id))
     // F11 也交給畫面處理：單格全螢幕時要先離開單格全螢幕（R20）
     if (action === 'fullscreen' || action === 'forward') {

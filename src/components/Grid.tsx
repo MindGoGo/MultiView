@@ -41,6 +41,10 @@ interface Props {
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
+  /** 快轉、倒轉（R51） */
+  onSkip(index: number, seconds: number): void
+  /** 用方向鍵跳轉的格子與次數，那一格顯示操作區（R51） */
+  poke: { index: number; n: number }
   /** 改用 YouTube 網頁播放（R48） */
   onUseYoutubeWeb(index: number): void
   onDividerDrag(axis: Axis, index: number, pos: number, containerPx: number): void
@@ -168,6 +172,8 @@ export function Grid(props: Props) {
             onSubmitUrl={props.onSubmitUrl}
             onRemove={props.onRemove}
             onRetry={props.onRetry}
+            onSkip={props.onSkip}
+            poke={props.poke.index === index ? props.poke.n : 0}
             onUseYoutubeWeb={props.onUseYoutubeWeb}
             canMove={layout !== '1' && solo === null}
             moving={props.move?.from === index}

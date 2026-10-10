@@ -25,7 +25,7 @@ import {
 import { parseSource, resolveSource } from './lib/source'
 import { focusAudio, initialMuted, muteAll, setVolume, toggleMute } from './lib/audio'
 import { controllableIndices, isPlayingStatus, toggleAllAction } from './lib/playback'
-import { shortcutFor } from './lib/shortcuts'
+import { shortcutFor, isRepeatableKey } from './lib/shortcuts'
 import type { ViewSettings } from './lib/settings'
 import type { NavState, PlayerHandle, PlayStatus } from './players/types'
 import type { WebMode } from './players/webTypes'
@@ -33,6 +33,7 @@ import type { Failure } from './lib/webErrors'
 import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
 import { classifyLink } from './lib/links'
+import { skipTarget } from './lib/progress'
 import {
   addFavorite,
   clearHistory,
@@ -381,6 +382,39 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (s) players.current.get(s.id)?.seek(seconds)
   }
 
+  // 快轉、倒轉（R51）：維持原本的播放或暫停狀態；跳轉後顯示那一格的操作區，看得到跳轉後的時間
+  const [poke, setPoke] = useState({ index: -1, n: 0 })
+  const onSkip = (index: number, seconds: number) => {
+    const s = slots[index]
+    const p = s && players.current.get(s.id)
+    const progress = p?.getProgress()
+    const t = progress ? skipTarget(progress, seconds) : null
+    if (!p || t === null) return
+    p.seek(t)
+    setPoke((prev) => ({ index, n: prev.n + 1 }))
+  }
+  /** 游標最後的位置；離開視窗時為 null */
+  const pointer = useRef<{ x: number; y: number } | null>(null)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => (pointer.current = { x: e.clientX, y: e.clientY })
+    const onLeave = () => (pointer.current = null)
+    window.addEventListener('mousemove', onMove, true)
+    document.documentElement.addEventListener('mouseleave', onLeave)
+    return () => {
+      window.removeEventListener('mousemove', onMove, true)
+      document.documentElement.removeEventListener('mouseleave', onLeave)
+    }
+  }, [])
+  const cellAtPointer = (): number | null => {
+    const p = pointer.current
+    if (!p) return null
+    for (const el of document.elementsFromPoint(p.x, p.y)) {
+      const cell = el.closest<HTMLElement>('.cell[data-index]')
+      if (cell) return Number(cell.dataset.index)
+    }
+    return null
+  }
+
   // 整頁模式的上一頁／下一頁（R28）
   const onNav = (index: number, back: boolean) => {
     const s = slots[index]
@@ -419,6 +453,12 @@ export default function App({ initial }: { initial: ViewSettings }) {
         // 單格全螢幕時數字鍵不作用（R20 AC5）
         if (soloIndex === null && isVisible(action.index, layout)) onFocusAudio(action.index)
         break
+      case 'skip': {
+        // 目前操作的格子：單格全螢幕時是放大的那一格，否則是游標所在的格子（R51）
+        const index = soloIndex ?? cellAtPointer()
+        if (index !== null) onSkip(index, action.seconds)
+        break
+      }
       case 'toggleFullscreen':
         // 單格全螢幕時 F11、Esc 先離開單格全螢幕（R20）
         if (solo) exitSolo()
@@ -451,7 +491,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
       const t = e.target as HTMLElement
       // 只排除文字輸入框；音量滑桿有焦點時快捷鍵照樣有效
       const typing = t instanceof HTMLInputElement ? t.type !== 'range' : t.tagName === 'TEXTAREA'
-      if (e.repeat || typing) return
+      if ((e.repeat && !isRepeatableKey(e.key)) || typing) return
       if (runShortcutRef.current(e.key)) e.preventDefault()
     }
     // 點擊網頁以外的地方時，把焦點從整頁模式的網頁拿回來，快捷鍵才會恢復（R14 AC5）
@@ -524,6 +564,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         getCaptionTracks={getCaptionTracks}
         getProgress={getProgress}
         onSeek={onSeek}
+        onSkip={onSkip}
+        poke={poke}
       />
       <Toolbar
         visible={toolbarVisible || toast !== null || listOpen || toolbarPopup}
