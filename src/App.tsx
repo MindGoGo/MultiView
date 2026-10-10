@@ -33,7 +33,7 @@ import type { WebMode } from './players/webTypes'
 import type { Failure } from './lib/webErrors'
 import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
-import { canonicalYouTubeUrl, classifyLink } from './lib/links'
+import { canonicalYouTubeUrl, classifyLink, youtubePageUrl } from './lib/links'
 import { skipTarget, resumePosition } from './lib/progress'
 import {
   addChannel,
@@ -180,7 +180,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     slots: slots.map((s) =>
       s
         ? {
-            url: s.url,
+            url: s.youtubePage ? pageVideoUrl(s) : s.url,
             muted: s.muted,
             volume: s.volume,
             adblock: s.adblock,
@@ -281,6 +281,54 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (!next) return '不支援的網址'
     setSlots(setSlot(slots, index, next))
     return null
+  }
+
+  // YouTube 網頁模式（R66）：網頁上目前的影片；網頁還沒回報網址時用切換前的影片
+  const pageVideoId = (s: Source): string | null => {
+    const current = players.current.get(s.id)?.getUrl?.()
+    const parsed = (current && parseSource(current)) || parseSource(s.url)
+    return parsed?.kind === 'youtube' ? parsed.videoId : null
+  }
+  const pageVideoUrl = (s: Source): string => {
+    const id = pageVideoId(s)
+    return id ? canonicalYouTubeUrl(id) : s.url
+  }
+  const onYouTubeMenu = (index: number, key: string) => {
+    const s = slots[index]
+    if (!s) return
+    if (key === 'back') onBack(index)
+    else if (key === 'page' && s.parsed.kind === 'youtube') {
+      // 從播放器目前的時間接著播；暫停時網頁也停在那裡（R66 AC1、AC4）
+      const t = players.current.get(s.id)?.getProgress()?.current ?? 0
+      setSlots(
+        setSlot(slots, index, {
+          ...s,
+          id: newSourceId(),
+          parsed: { kind: 'web', url: youtubePageUrl(s.parsed.videoId, t) },
+          youtubePage: true,
+          adblock: false,
+          autoplay: isPlayingStatus(statuses[s.id]),
+          record: false,
+          resume: null
+        })
+      )
+    } else if (key === 'player' && s.youtubePage) {
+      // 播放網頁上目前的影片，從網頁上的時間接著播（R66 AC2、AC3）；換過影片時記錄到歷史
+      const videoId = pageVideoId(s)
+      const before = parseSource(s.url)
+      const next = videoId ? sourceFor(index, canonicalYouTubeUrl(videoId)) : null
+      if (!next) return
+      setSlots(
+        setSlot(slots, index, {
+          ...next,
+          autoplay: isPlayingStatus(statuses[s.id]),
+          resume: players.current.get(s.id)?.getProgress()?.current ?? null,
+          record: !(before?.kind === 'youtube' && before.videoId === videoId),
+          back: s.back,
+          backUrl: s.backUrl
+        })
+      )
+    }
   }
 
   // 回到 YouTube 頁面（R63）：背景的來源頁面換回前景（id 不變，停在原本的位置），聲音與亮度沿用影片的設定；
@@ -438,9 +486,11 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true, record: true, resume: positions[s.id] ?? s.resume }))
   }
 
-  // YouTube 網站頁面固定是整頁模式（R57）
+  // YouTube 網站頁面（R57）與 YouTube 網頁模式（R66）固定是整頁模式
   useEffect(() => {
-    const ids = slots.filter((s): s is Source => !!s && isYouTubeSite(s.url) && webModes[s.id] !== 'page').map((s) => s.id)
+    const ids = slots
+      .filter((s): s is Source => !!s && (isYouTubeSite(s.url) || !!s.youtubePage) && webModes[s.id] !== 'page')
+      .map((s) => s.id)
     if (ids.length) setWebModes((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, 'page' as const])) }))
   }, [slots, webModes])
 
@@ -686,6 +736,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onUseYoutubeWeb={onUseYoutubeWeb}
         onYouTubeVideo={onYouTubeVideo}
         onBack={onBack}
+        onYouTubeMenu={onYouTubeMenu}
         onDividerDrag={onDividerDrag}
         onDividerReset={onDividerReset}
         move={move}

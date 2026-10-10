@@ -46,6 +46,8 @@ interface Props {
   onYouTubeVideo(id: number, url: string, from: string): void
   /** 回到 YouTube 頁面（R63） */
   onBack(index: number): void
+  /** 「YouTube ▾」選單（R66） */
+  onYouTubeMenu(index: number, key: string): void
   /** 快轉、倒轉（R51） */
   onSkip(index: number, seconds: number): void
   /** 用方向鍵跳轉的格子與次數，那一格顯示操作區（R51） */
@@ -164,6 +166,7 @@ export function Grid(props: Props) {
                 onNavState={(s) => props.onNavState(source.id, s)}
                 onYouTubeVideo={isYouTubeSite(source.url) ? (url, from) => props.onYouTubeVideo(source.id, url, from) : undefined}
                 parked={parked}
+                pauseOnStart={!!source.youtubePage && !source.autoplay}
                 {...common}
               />
             ) : (
@@ -188,6 +191,7 @@ export function Grid(props: Props) {
             onRemove={props.onRemove}
             onRetry={props.onRetry}
             onBack={props.onBack}
+            onYouTubeMenu={props.onYouTubeMenu}
             onSkip={props.onSkip}
             poke={props.poke.index === index ? props.poke.n : 0}
             onUseYoutubeWeb={props.onUseYoutubeWeb}

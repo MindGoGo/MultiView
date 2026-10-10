@@ -23,6 +23,11 @@ interface Props extends PlayerProps {
   onYouTubeVideo?(url: string, from: string): void
   /** 保留在背景的來源頁面（R63）：不顯示、靜音；回到前景時恢復聲音 */
   parked?: boolean
+  /**
+   * 網頁剛載入、網站自己開始播放時暫停一次（R66：播放器暫停時切到 YouTube 網頁）。
+   * 整頁模式平常不阻止網站播放（R15），所以只處理第一次
+   */
+  pauseOnStart?: boolean
 }
 
 /** 網頁載入完成或主要影片消失後，找不到主要影片多久就切換成整頁模式（R13 AC4） */
@@ -35,7 +40,7 @@ export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「�
 export const NOTICE_NOT_FOUND = '找不到影片'
 
 export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
-  { url, adblock, mode, onModeChange, onNavState, onYouTubeVideo, parked, muted, volume, autoplay, active, startAt, onStatus, onLoaded },
+  { url, adblock, mode, onModeChange, onNavState, onYouTubeVideo, parked, pauseOnStart, muted, volume, autoplay, active, startAt, onStatus, onLoaded },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -46,6 +51,8 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   latest.current = { mode, onModeChange, onStatus, onLoaded, onNavState, onYouTubeVideo }
   /** 網頁回報的最新結果，以及網頁是否已經載入完成 */
   const page = useRef({ loaded: false, found: false, attached: false, failed: false })
+  /** 還要在網站自己開始播放時暫停一次（R66） */
+  const pauseOnce = useRef(!!pauseOnStart)
   /** 網頁回報的主要影片進度（R19） */
   const progressRef = useRef<WebReport['progress']>(null)
   /**
@@ -235,6 +242,11 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
         }
         checkNoVideoRef.current()
         report(r.status ?? 'loading')
+        if (pauseOnce.current && r.status === 'playing') {
+          pauseOnce.current = false
+          updateStateRef.current({ intent: 'pause' })
+          return
+        }
         // 整頁模式中使用者直接按網站的播放 / 暫停，也算播放意圖（R15 AC7）
         const intent = intentFromReport(stateRef.current, r)
         if (intent) updateStateRef.current({ intent })
@@ -319,6 +331,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     pause: () => updateStateRef.current({ intent: 'pause' }),
     getProgress: () => (page.current.failed || pendingStart.current ? null : progressRef.current),
     getTitle: () => (viewRef.current && page.current.attached ? viewRef.current.getTitle() || null : null),
+    getUrl: () => (viewRef.current && page.current.attached ? viewRef.current.getURL() || null : null),
     goBack: () => {
       const view = viewRef.current
       if (view && page.current.attached && view.canGoBack()) view.goBack()

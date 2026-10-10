@@ -27,6 +27,8 @@ interface Props {
   onRetry(index: number): void
   /** 回到 YouTube 頁面（R63） */
   onBack(index: number): void
+  /** 「YouTube ▾」選單（R66）：page 看影片的網頁、player 回到播放器、back 回到剛才的 YouTube 頁面 */
+  onYouTubeMenu(index: number, key: string): void
   onSkip(index: number, seconds: number): void
   /** 用方向鍵跳轉時增加，顯示操作區（R51） */
   poke: number
@@ -67,7 +69,7 @@ interface Props {
 }
 
 /** 格子裡的選單：字幕、畫質（R31、R32）；亮度、音量的滑桿選單（R40、R42） */
-type MenuKind = 'captions' | 'quality' | 'brightness' | 'volume'
+type MenuKind = 'captions' | 'quality' | 'brightness' | 'volume' | 'youtube'
 
 /** 畫質選單：自動＋可用畫質（由高到低）；還不知道可用畫質時列出目前的選擇（R32） */
 function qualityItems(options: number[], selected: Quality): PopupItem[] {
@@ -317,9 +319,15 @@ export function Cell(props: Props) {
               }
             />
           )}
-          {(source.back || source.backUrl) && (
-            <button title="回到 YouTube 頁面（滑鼠上一頁鍵、Backspace）" onClick={() => props.onBack(index)}>
-              <Label full="← 回到 YouTube" icon="←" />
+          {/* 嵌入播放的 YouTube 與 YouTube 網頁模式（R66）；併入第十三版 R63 的「回到 YouTube」 */}
+          {(source.parsed.kind === 'youtube' || source.youtubePage) && (
+            <button
+              className={source.youtubePage ? 'active' : ''}
+              title="YouTube：看這部影片的網頁（留言、推薦）、回到播放器、回到剛才的 YouTube 頁面"
+              onPointerDown={(e) => menu?.kind === 'youtube' && e.stopPropagation()}
+              onClick={(e) => toggleMenu('youtube', e)}
+            >
+              <Label full="YouTube ▾" icon="YT" />
             </button>
           )}
           {props.canMove && (
@@ -380,7 +388,7 @@ export function Cell(props: Props) {
             </>
           )}
           {/* YouTube 網站頁面固定是整頁模式（R57） */}
-          {isWeb && !isYouTubeSite(source.url) && (
+          {isWeb && !isYouTubeSite(source.url) && !source.youtubePage && (
             <button
               title={pageMode ? '只顯示影片' : '顯示整個網頁，可以登入、關閉提示或按播放'}
               onClick={() => props.onToggleWebMode(index)}
@@ -475,6 +483,19 @@ export function Cell(props: Props) {
               format={(v) => `${v}%`}
               onChange={(v) => props.onBrightness(index, v)}
               onReset={() => props.onBrightness(index, BRIGHTNESS_DEFAULT)}
+              onClose={() => setMenu(null)}
+            />
+          )}
+          {menu?.kind === 'youtube' && (
+            <PopupMenu
+              anchor={menu.anchor}
+              items={[
+                source.youtubePage
+                  ? { key: 'player', label: '回到播放器' }
+                  : { key: 'page', label: '看這部影片的網頁（留言、推薦）' },
+                ...(source.back || source.backUrl ? [{ key: 'back', label: '回到剛才的 YouTube 頁面' }] : [])
+              ]}
+              onSelect={(key) => props.onYouTubeMenu(index, key)}
               onClose={() => setMenu(null)}
             />
           )}

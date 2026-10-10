@@ -14,6 +14,12 @@ export function canonicalYouTubeUrl(videoId: string): string {
   return `https://www.youtube.com/watch?v=${videoId}`
 }
 
+/** YouTube 網頁模式的網址（R66）：這部影片的 YouTube 網頁，從指定的秒數開始 */
+export function youtubePageUrl(videoId: string, seconds: number): string {
+  const t = Math.floor(seconds)
+  return `${canonicalYouTubeUrl(videoId)}${t > 0 ? `&t=${t}s` : ''}`
+}
+
 /**
  * 決定連結的處理方式。
  * @param direct 直接操作中的格子；沒有時為 null

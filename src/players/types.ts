@@ -19,6 +19,8 @@ export interface PlayerHandle {
   getQualityOptions?(): number[]
   /** YouTube 這部影片的字幕軌；還不知道時回傳 null（R31） */
   getCaptionTracks?(): CaptionTrack[] | null
+  /** 網頁來源目前的網址（R66：YouTube 網頁模式下網頁上目前的影片） */
+  getUrl?(): string | null
   /** 網頁來源的上一頁／下一頁（R28） */
   goBack?(): void
   goForward?(): void

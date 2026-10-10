@@ -31,6 +31,8 @@ export interface Source {
   back?: Source | null
   /** 來源頁面的網址（R63）；重開程式後用來重新載入，跟著來源移動和保存 */
   backUrl?: string | null
+  /** YouTube 網頁模式（R66）：url 仍是切換前的影片，parsed 是那部影片的 YouTube 網頁；不保存 */
+  youtubePage?: boolean
 }
 
 export type { Quality } from './quality'
