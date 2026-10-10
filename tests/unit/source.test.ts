@@ -30,13 +30,19 @@ describe('parseSource — YouTube（R2）', () => {
   })
 
   it.each([
-    [`https://www.youtube.com/shorts/${ID}`, 'Shorts 不支援'],
-    ['https://www.youtube.com/watch?list=PL123', '只有播放清單、沒有 v='],
-    ['https://www.youtube.com/watch?v=short', 'id 長度不對'],
-    ['https://www.youtube.com/@somechannel', '頻道頁'],
     [`https://youtu.be/${ID}/extra`, 'youtu.be 多餘的路徑']
   ])('拒絕 %s（%s）', (url) => {
     expect(parseSource(url)).toBeNull()
+  })
+
+  // R57 起 youtube.com 不是單一影片的頁面當作 YouTube 網站頁面（原本 R12 不支援）
+  it.each([
+    [`https://www.youtube.com/shorts/${ID}`, 'Shorts'],
+    ['https://www.youtube.com/watch?list=PL123', '只有播放清單、沒有 v='],
+    ['https://www.youtube.com/watch?v=short', 'id 長度不對'],
+    ['https://www.youtube.com/@somechannel', '頻道頁']
+  ])('%s（%s）是 YouTube 網站頁面', (url) => {
+    expect(parseSource(url)?.kind).toBe('web')
   })
 
   it('不是 YouTube 網域的不當成 YouTube，改為網頁來源（R12）', () => {

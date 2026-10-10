@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { isYouTubeSite } from '../lib/source'
 import type { Source } from '../lib/slots'
 import { isAudible } from '../lib/audio'
 import type { PlayStatus } from '../players/types'
@@ -371,7 +372,8 @@ export function Cell(props: Props) {
               </button>
             </>
           )}
-          {isWeb && (
+          {/* YouTube 網站頁面固定是整頁模式（R57） */}
+          {isWeb && !isYouTubeSite(source.url) && (
             <button
               title={pageMode ? '只顯示影片' : '顯示整個網頁，可以登入、關閉提示或按播放'}
               onClick={() => props.onToggleWebMode(index)}

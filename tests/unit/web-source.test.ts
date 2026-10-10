@@ -25,10 +25,7 @@ describe('parseSource — 網頁來源（R12）', () => {
   })
 
   it.each([
-    [`https://www.youtube.com/shorts/${ID}`, 'YouTube Shorts'],
-    ['https://www.youtube.com/playlist?list=PL123', 'YouTube 播放清單頁'],
-    ['https://www.youtube.com/@somechannel', 'YouTube 頻道頁'],
-    ['https://music.youtube.com/watch?list=PL1', 'YouTube 子網域'],
+    // YouTube 頻道頁、播放清單頁、Shorts 從 R57 起是 YouTube 網站頁面，見 youtube-browse.test.ts
     ['https://youtu.be/', 'youtu.be 沒有影片 id'],
     ['ftp://example.com/live', 'ftp'],
     ['twitch.tv/abc', '沒有 http(s)://'],

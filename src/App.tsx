@@ -22,7 +22,7 @@ import {
   type Slots,
   type Source
 } from './lib/slots'
-import { parseSource, resolveSource } from './lib/source'
+import { isYouTubeSite, parseSource, resolveSource } from './lib/source'
 import { focusAudio, initialMuted, muteAll, setVolume, toggleMute } from './lib/audio'
 import { controllableIndices, isPlayingStatus, toggleAllAction } from './lib/playback'
 import { shortcutFor, isRepeatableKey } from './lib/shortcuts'
@@ -32,7 +32,7 @@ import type { WebMode } from './players/webTypes'
 import type { Failure } from './lib/webErrors'
 import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
-import { classifyLink } from './lib/links'
+import { canonicalYouTubeUrl, classifyLink } from './lib/links'
 import { skipTarget, resumePosition } from './lib/progress'
 import {
   addFavorite,
@@ -211,7 +211,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   slotsRef.current = slots
   const onLoaded = useCallback((id: number) => {
     const s = slotsRef.current.find((x) => x?.id === id)
-    if (!s || !s.record || recorded.current.has(id)) return
+    // YouTube 網站頁面不是影片，不記錄到歷史（R57）
+    if (!s || !s.record || recorded.current.has(id) || isYouTubeSite(s.url)) return
     recorded.current.add(id)
     const raw = players.current.get(id)?.getTitle() ?? null
     // YouTube 網頁播放的名稱是網頁標題，去掉結尾的「 - YouTube」（R48）
@@ -249,8 +250,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         muted: existing ? existing.muted : initialMuted(slots, layout, soloIndex),
         volume: existing ? existing.volume : 100,
         autoplay: true,
-        // 廣告阻擋預設開啟（R17）
-        adblock: true,
+        // 廣告阻擋預設開啟（R17）；YouTube 網站頁面預設關閉（R57）
+        adblock: !isYouTubeSite(text),
         record: true,
         // 更換網址時保留原本的畫質設定，新的格子預設自動（R24）
         quality: existing ? existing.quality : 'auto',
@@ -369,6 +370,21 @@ export default function App({ initial }: { initial: ViewSettings }) {
     // 換新的 id 重新載入時，觀看進度跟著帶過去（R55）
     if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true, record: true, resume: positions[s.id] ?? s.resume }))
   }
+
+  // YouTube 網站頁面固定是整頁模式（R57）
+  useEffect(() => {
+    const ids = slots.filter((s): s is Source => !!s && isYouTubeSite(s.url) && webModes[s.id] !== 'page').map((s) => s.id)
+    if (ids.length) setWebModes((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, 'page' as const])) }))
+  }, [slots, webModes])
+
+  // 在 YouTube 網站頁面點了影片：這一格換成那部影片的嵌入播放，和「更換網址」相同（R57）
+  const onYouTubeVideoRef = useRef<(id: number, url: string) => void>(() => undefined)
+  onYouTubeVideoRef.current = (id: number, url: string) => {
+    const index = slots.findIndex((s) => s?.id === id)
+    const parsed = parseSource(url)
+    if (index >= 0 && parsed?.kind === 'youtube') onSubmitUrl(index, canonicalYouTubeUrl(parsed.videoId))
+  }
+  const onYouTubeVideo = useCallback((id: number, url: string) => onYouTubeVideoRef.current(id, url), [])
 
   const onUseYoutubeWeb = (index: number) => {
     const s = slots[index]
@@ -584,6 +600,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onRemove={onRemove}
         onRetry={onRetry}
         onUseYoutubeWeb={onUseYoutubeWeb}
+        onYouTubeVideo={onYouTubeVideo}
         onDividerDrag={onDividerDrag}
         onDividerReset={onDividerReset}
         move={move}

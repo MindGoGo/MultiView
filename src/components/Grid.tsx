@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { isYouTubeSite } from '../lib/source'
 import { cellRects, dividers, type Axis, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
 import { isVisible, type Slots } from '../lib/slots'
 import type { NavState, PlayerHandle, PlayStatus } from '../players/types'
@@ -41,6 +42,8 @@ interface Props {
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
   onRetry(index: number): void
+  /** YouTube 網站頁面換到影片頁（R57） */
+  onYouTubeVideo(id: number, url: string): void
   /** 快轉、倒轉（R51） */
   onSkip(index: number, seconds: number): void
   /** 用方向鍵跳轉的格子與次數，那一格顯示操作區（R51） */
@@ -149,6 +152,7 @@ export function Grid(props: Props) {
                 mode={props.webModes[source.id] ?? 'video'}
                 onModeChange={(mode) => props.onWebMode(source.id, mode)}
                 onNavState={(s) => props.onNavState(source.id, s)}
+                onYouTubeVideo={isYouTubeSite(source.url) ? (url) => props.onYouTubeVideo(source.id, url) : undefined}
                 {...common}
               />
             ) : (

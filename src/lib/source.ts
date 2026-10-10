@@ -56,7 +56,15 @@ export function parseSource(input: string): ParsedSource | null {
   const pathname = url.pathname.toLowerCase()
   if (pathname.endsWith('.m3u8')) return { kind: 'hls', url: url.href }
   if (pathname.endsWith('.mp4')) return { kind: 'mp4', url: url.href }
-  // YouTube 網域但格式不支援的（Shorts、播放清單頁、頻道頁）維持不支援（R12）
-  if (isYouTubeDomain(url.hostname.toLowerCase())) return null
+  const host = url.hostname.toLowerCase()
+  // youtu.be 只有影片網址；youtube.com 的其他頁面（首頁、搜尋、頻道、播放清單、Shorts）當作 YouTube 網站頁面（R57）
+  if (host === 'youtu.be' || host.endsWith('.youtu.be')) return null
   return { kind: 'web', url: url.href }
+}
+
+/** YouTube 網站頁面（R57）：youtube.com 網域、但不是單一影片的頁面，以網頁來源的整頁模式瀏覽 */
+export function isYouTubeSite(input: string): boolean {
+  const parsed = parseSource(input)
+  if (parsed?.kind !== 'web') return false
+  return isYouTubeDomain(new URL(parsed.url).hostname.toLowerCase())
 }

@@ -1,5 +1,6 @@
 // 網頁來源的播放器（R13–R17）：在格子裡用 <webview> 載入整個網頁
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { parseSource } from '../lib/source'
 import type { WebviewTag } from 'electron'
 import type { NavState, PlayerHandle, PlayerProps, PlayStatus } from './types'
 import { isHttpFailure, isLoadFailure, LOAD_TIMEOUT_MS, type WebFailure } from '../lib/webErrors'
@@ -15,6 +16,11 @@ interface Props extends PlayerProps {
   onModeChange(mode: WebMode): void
   /** 能不能上一頁／下一頁改變時通知（R28） */
   onNavState(state: NavState): void
+  /**
+   * YouTube 網站頁面（R57）：網頁換到影片頁時通知（網址），網頁先靜音並暫停，不在網頁裡播出聲音；
+   * 沒有提供時照一般網頁處理
+   */
+  onYouTubeVideo?(url: string): void
 }
 
 /** 網頁載入完成或主要影片消失後，找不到主要影片多久就切換成整頁模式（R13 AC4） */
@@ -27,15 +33,15 @@ export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「�
 export const NOTICE_NOT_FOUND = '找不到影片'
 
 export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
-  { url, adblock, mode, onModeChange, onNavState, muted, volume, autoplay, active, startAt, onStatus, onLoaded },
+  { url, adblock, mode, onModeChange, onNavState, onYouTubeVideo, muted, volume, autoplay, active, startAt, onStatus, onLoaded },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<WebviewTag | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const latest = useRef({ mode, onModeChange, onStatus, onLoaded, onNavState })
-  latest.current = { mode, onModeChange, onStatus, onLoaded, onNavState }
+  const latest = useRef({ mode, onModeChange, onStatus, onLoaded, onNavState, onYouTubeVideo })
+  latest.current = { mode, onModeChange, onStatus, onLoaded, onNavState, onYouTubeVideo }
   /** 網頁回報的最新結果，以及網頁是否已經載入完成 */
   const page = useRef({ loaded: false, found: false, attached: false, failed: false })
   /** 網頁回報的主要影片進度（R19） */
@@ -149,12 +155,25 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
       if (!page.current.attached) return
       latest.current.onNavState({ back: view.canGoBack(), forward: view.canGoForward() })
     }
+    // YouTube 網站換到影片頁（YouTube 是單頁應用程式，通常是同一頁內換網址）（R57）
+    const checkYouTubeVideo = (url: string) => {
+      const cb = latest.current.onYouTubeVideo
+      if (!cb || parseSource(url)?.kind !== 'youtube') return
+      view.setAudioMuted(true)
+      updateStateRef.current({ intent: 'pause' })
+      cb(url)
+    }
     const onNavigate = (e: Electron.DidNavigateEvent) => {
       if (!historyCleared && e.url !== 'about:blank') {
         historyCleared = true
         view.clearHistory()
       }
       reportNav()
+      checkYouTubeVideo(e.url)
+    }
+    const onNavigateInPage = (e: Electron.DidNavigateInPageEvent) => {
+      reportNav()
+      if (e.isMainFrame) checkYouTubeVideo(e.url)
     }
 
     const onDomReady = () => {
@@ -205,7 +224,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     view.addEventListener('ipc-message', onIpc)
     view.addEventListener('did-start-navigation', onStartNavigation)
     view.addEventListener('did-navigate', onNavigate)
-    view.addEventListener('did-navigate-in-page', reportNav)
+    view.addEventListener('did-navigate-in-page', onNavigateInPage)
     view.addEventListener('did-fail-load', onFailLoad)
     view.addEventListener('render-process-gone', onGone)
     hostRef.current!.appendChild(view)
@@ -217,7 +236,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
       view.removeEventListener('ipc-message', onIpc)
       view.removeEventListener('did-start-navigation', onStartNavigation)
       view.removeEventListener('did-navigate', onNavigate)
-      view.removeEventListener('did-navigate-in-page', reportNav)
+      view.removeEventListener('did-navigate-in-page', onNavigateInPage)
       view.removeEventListener('did-fail-load', onFailLoad)
       view.removeEventListener('render-process-gone', onGone)
       view.remove()
