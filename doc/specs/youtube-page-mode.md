@@ -2,7 +2,7 @@
 
 - 功能代號：`youtube-page-mode`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-10
 - 前置規格：[multiview-player](multiview-player.md)（R1–R11）、[web-page-source](web-page-source.md)（R12–R18）、[player-controls-and-lists](player-controls-and-lists.md)（R19–R25）、[cell-play-and-page-menu](cell-play-and-page-menu.md)（R26–R29）、[captions-and-quality-menu](captions-and-quality-menu.md)（R30–R33）、[brightness-and-volume-popup](brightness-and-volume-popup.md)（R40–R43）、[installer-and-youtube-fixes](installer-and-youtube-fixes.md)（R44–R47）、[youtube-web-and-seek](youtube-web-and-seek.md)（R48–R52）、[resume-and-play-fixes](resume-and-play-fixes.md)（R53–R56）、[youtube-browse-and-subscriptions](youtube-browse-and-subscriptions.md)（R57–R62）、[youtube-back-to-page](youtube-back-to-page.md)（R63–R65）。本規格的需求編號從 R66 開始；R34–R39 仍保留給本機播放與下載功能。
 
@@ -50,6 +50,7 @@
   - 回到播放器時：
     - 播放「網頁上目前的影片」，從網頁上的時間接著播；網頁原本暫停時，播放器也停在那個位置。
     - 畫質、字幕的選擇維持切換前的設定。
+    - 網頁上目前的影片禁止嵌入時，依第九版 R48、R49 的規則（顯示「改用 YouTube 網頁播放」，或自動改用網頁播放）；播放失敗不記錄歷史（第三版 R23 AC4）。
   - 其他：
     - 切換本身不記錄歷史（還是同一部影片）；在網頁裡換成其他影片後回到播放器，那部影片記錄到歷史。
     - 網頁模式時，格子上的 ☆ 和最愛、歷史的判斷用切換前的那部影片；回到播放器後才換成網頁上目前的影片。
@@ -105,6 +106,11 @@
 
 ## 8. 非功能需求
 
+- **實作結果：**
+  - 網頁模式是新的網頁來源，網址是 `watch?v=<代碼>&t=<秒>s`，格子的網址（☆、歷史判斷）仍是切換前的影片；背景的來源頁面（R63）一起帶過去。
+  - 回到播放器時用網頁目前的網址（`getURL`）判斷網頁上目前的影片、用網頁回報的進度接續時間。
+  - 暫停時切到網頁：網頁剛載入、YouTube 自動開始播放時程式送出一次暫停；實測網頁停在 3:01、5 秒後仍然暫停。
+  - 保存：網頁模式的格子保存網頁上目前的影片與時間，重開時以播放器開啟。
 - **技術風險：** YouTube 網頁從指定時間開始（`&t=` 參數）、網頁暫停狀態的取得、網頁剛載入時暫停一次，實作時驗證。
 - **R67 的驗收：** 需要實際切換視窗全螢幕，會短暫蓋住使用者的螢幕；先徵求使用者同意再測。
 - **測試：** 網址與時間的轉換寫成單元測試；切換以手動驗收。
@@ -112,15 +118,16 @@
 ## 9. 預計影響的檔案
 
 - `src/lib/slots.ts`：網頁模式狀態（R66）
-- `src/players/WebPlayer.tsx`、`YouTubePlayer.tsx`：目前的網址、時間與播放狀態（R66）
+- `src/lib/links.ts`（`youtubePageUrl`）、`src/players/types.ts`、`src/players/WebPlayer.tsx`：網頁模式的網址、目前的網址、剛載入時暫停一次（R66）
 - `src/components/Cell.tsx`、`Grid.tsx`、`src/App.tsx`：按鈕與切換（R66）
 - `src/components/Toolbar.tsx`、`src/hooks/useWindowState.ts`：全螢幕按鈕的文字（R67）
 - `package.json`、`package-lock.json`：版本號（R68）
-- `tests/unit/`、`tests/manual/`：測試
+- `tests/unit/links.test.ts`、`tests/manual/youtube-page-mode.md`（新）：測試
 
 ## 10. 未決事項
 
-- [ ] 分支：從 `youtube-back-to-page` 開出 `youtube-page-mode`。
+- [x] 分支：從 `youtube-back-to-page` 開出 `youtube-page-mode`（2026-10-10）。
+- [ ] R67 尚未驗收：需要實際切換視窗全螢幕（會蓋住使用者的螢幕），等使用者同意後再測，或由使用者手動確認。
 - [x] 版本號：0.5.2（2026-10-10 確認）。
 
 ## 變更紀錄
@@ -131,3 +138,4 @@
 | 2026-10-10 | R66 改成「YouTube ▾」選單，併入 R63 的「回到 YouTube」按鈕（新增 AC8） | 使用者在檢查點 A 回饋兩個功能重複 |
 | 2026-10-10 | 新增 R67 工具列全螢幕按鈕的文字；版本號改為 R68 | 使用者在檢查點 A 回報 |
 | 2026-10-10 | 暫停時切到網頁只在網頁剛載入時暫停一次；網頁模式的 ☆ 用切換前的影片；只有嵌入播放的格子有選單；R67 驗收前徵求同意 | 第 2 步複查 |
+| 2026-10-10 | 網頁上目前的影片禁止嵌入時依 R48、R49；補實作結果、實際檔案與未決事項 | 實作時發現：推薦影片可能禁止嵌入；實作完成 |
