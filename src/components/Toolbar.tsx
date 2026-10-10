@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { LAYOUT_IDS, LAYOUT_LABELS, type LayoutId } from '../lib/layout'
 import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } from '../lib/brightness'
 import { SliderPopup } from './SliderPopup'
+import { PopupMenu } from './PopupMenu'
 
 interface Props {
   visible: boolean
@@ -23,18 +24,26 @@ interface Props {
   /** 總亮度（R41） */
   brightness: number
   onBrightness(brightness: number): void
-  /** 總亮度選單開關時通知，開著時工具列不自動隱藏 */
+  /** 總亮度、設定選單開關時通知，開著時工具列不自動隱藏 */
   onPopupChange(open: boolean): void
+  /** YouTube 無法嵌入時自動改用網頁播放（R49） */
+  autoYoutubeWeb: boolean
+  onAutoYoutubeWeb(on: boolean): void
 }
+
+/** 設定選單的項目（R49） */
+const AUTO_YOUTUBE_WEB = 'autoYoutubeWeb'
 
 export function Toolbar(props: Props) {
   const { visible, win, layout, onLayout, toast, canControl } = props
   const api = window.multiview
-  const [popup, setPopup] = useState<DOMRect | null>(null)
-  const openPopup = (anchor: DOMRect | null) => {
-    setPopup(anchor)
-    props.onPopupChange(anchor !== null)
+  const [popup, setPopup] = useState<{ kind: 'brightness' | 'settings'; anchor: DOMRect } | null>(null)
+  const openPopup = (next: { kind: 'brightness' | 'settings'; anchor: DOMRect } | null) => {
+    setPopup(next)
+    props.onPopupChange(next !== null)
   }
+  const togglePopup = (kind: 'brightness' | 'settings', e: React.MouseEvent<HTMLButtonElement>) =>
+    openPopup(popup?.kind === kind ? null : { kind, anchor: e.currentTarget.getBoundingClientRect() })
   return (
     <div className={`toolbar ${visible ? 'show' : ''}`}>
       <div className="toolbar-group">
@@ -65,14 +74,14 @@ export function Toolbar(props: Props) {
         <button
           className={props.brightness !== BRIGHTNESS_DEFAULT ? 'active' : ''}
           title="總亮度：和每一格的亮度相乘"
-          onPointerDown={(e) => popup && e.stopPropagation()}
-          onClick={(e) => openPopup(popup ? null : e.currentTarget.getBoundingClientRect())}
+          onPointerDown={(e) => popup?.kind === 'brightness' && e.stopPropagation()}
+          onClick={(e) => togglePopup('brightness', e)}
         >
           ☀ {props.brightness}%
         </button>
-        {popup && (
+        {popup?.kind === 'brightness' && (
           <SliderPopup
-            anchor={popup}
+            anchor={popup.anchor}
             placement="below"
             title="總亮度"
             min={BRIGHTNESS_MIN}
@@ -82,6 +91,22 @@ export function Toolbar(props: Props) {
             format={(v) => `${v}%`}
             onChange={props.onBrightness}
             onReset={() => props.onBrightness(BRIGHTNESS_DEFAULT)}
+            onClose={() => openPopup(null)}
+          />
+        )}
+        <button
+          title="設定"
+          onPointerDown={(e) => popup?.kind === 'settings' && e.stopPropagation()}
+          onClick={(e) => togglePopup('settings', e)}
+        >
+          ⚙ 設定
+        </button>
+        {popup?.kind === 'settings' && (
+          <PopupMenu
+            anchor={popup.anchor}
+            placement="below"
+            items={[{ key: AUTO_YOUTUBE_WEB, label: 'YouTube 無法嵌入時自動改用網頁播放', checked: props.autoYoutubeWeb }]}
+            onSelect={(key) => key === AUTO_YOUTUBE_WEB && props.onAutoYoutubeWeb(!props.autoYoutubeWeb)}
             onClose={() => openPopup(null)}
           />
         )}

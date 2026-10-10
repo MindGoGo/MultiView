@@ -36,6 +36,8 @@ export interface ViewSettings {
   slots: (SavedSource | null)[]
   /** 總亮度（R41）；舊的設定檔沒有這個欄位時視為 100 */
   brightness: number
+  /** YouTube 無法嵌入時自動改用網頁播放（R49）；舊的設定檔沒有這個欄位時視為否 */
+  autoYoutubeWeb: boolean
 }
 
 export interface Settings extends ViewSettings {
@@ -52,7 +54,8 @@ export function defaultSettings(): Settings {
     layout: DEFAULT_LAYOUT,
     ratios: {},
     slots: Array.from({ length: SLOT_COUNT }, () => null),
-    brightness: BRIGHTNESS_DEFAULT
+    brightness: BRIGHTNESS_DEFAULT,
+    autoYoutubeWeb: false
   }
 }
 
@@ -112,7 +115,8 @@ export function normalizeView(raw: unknown): ViewSettings {
     layout: LAYOUT_IDS.includes(obj.layout as LayoutId) ? (obj.layout as LayoutId) : DEFAULT_LAYOUT,
     ratios: normalizeRatios(obj.ratios),
     slots: normalizeSlots(obj.slots),
-    brightness: normalizeBrightness(obj.brightness)
+    brightness: normalizeBrightness(obj.brightness),
+    autoYoutubeWeb: obj.autoYoutubeWeb === true
   }
 }
 

@@ -12,6 +12,8 @@ export interface PopupItem {
 interface Props {
   /** 按鈕的位置（視窗座標） */
   anchor: DOMRect
+  /** 出現在按鈕上方（格子，預設）或下方（工具列，R49） */
+  placement?: 'above' | 'below'
   items: PopupItem[]
   onSelect(key: string): void
   onClose(): void
@@ -19,13 +21,13 @@ interface Props {
 
 const MARGIN = 4
 
-export function PopupMenu({ anchor, items, onSelect, onClose }: Props) {
+export function PopupMenu({ anchor, placement = 'above', items, onSelect, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ left: number; bottom: number; maxHeight: number }>({
-    left: anchor.left,
-    bottom: window.innerHeight - anchor.top + MARGIN,
-    maxHeight: anchor.top - MARGIN * 2
-  })
+  const [pos, setPos] = useState<{ left: number; bottom?: number; top?: number; maxHeight: number }>(
+    placement === 'above'
+      ? { left: anchor.left, bottom: window.innerHeight - anchor.top + MARGIN, maxHeight: anchor.top - MARGIN * 2 }
+      : { left: anchor.left, top: anchor.bottom + MARGIN, maxHeight: window.innerHeight - anchor.bottom - MARGIN * 2 }
+  )
 
   // 量到選單寬度後限制在視窗內
   useLayoutEffect(() => {
@@ -53,7 +55,7 @@ export function PopupMenu({ anchor, items, onSelect, onClose }: Props) {
   }, [onClose])
 
   return (
-    <div className="popup-menu" ref={ref} style={{ left: pos.left, bottom: pos.bottom, maxHeight: pos.maxHeight }}>
+    <div className="popup-menu" ref={ref} style={pos}>
       {items.map((i) => (
         <button
           key={i.key}

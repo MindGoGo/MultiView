@@ -157,7 +157,8 @@ ipcMain.handle('settings:getView', () => ({
   layout: settings.layout,
   ratios: settings.ratios,
   slots: settings.slots,
-  brightness: settings.brightness
+  brightness: settings.brightness,
+  autoYoutubeWeb: settings.autoYoutubeWeb
 }))
 ipcMain.on('settings:saveView', (_, view: unknown) => {
   settings = { ...settings, ...normalizeView(view) }

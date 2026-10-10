@@ -52,6 +52,12 @@ import { ListPanel } from './components/ListPanel'
 
 const TOAST_MS = 3000
 
+/** 改用 YouTube 網頁播放：廣告阻擋預設關閉；使用者放入的影片在網頁載入完成時記錄到歷史（R48） */
+function toYoutubeWeb(s: Source, autoplay: boolean): Source | null {
+  const parsed = resolveSource(s.url, true)
+  return parsed && { ...s, id: newSourceId(), parsed, youtubeWeb: true, adblock: false, autoplay }
+}
+
 /** 還原上次的來源：一律先暫停，等使用者按播放（R10 AC1） */
 function restoreSlots(saved: ViewSettings['slots']): Slots {
   const slots = emptySlots()
@@ -86,6 +92,10 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const [ratiosMap, setRatiosMap] = useState<Partial<Record<LayoutId, Ratios>>>(initial.ratios)
   /** 總亮度（R41） */
   const [masterBrightness, setMasterBrightness] = useState(initial.brightness)
+  /** YouTube 無法嵌入時自動改用網頁播放（R49） */
+  const [autoYoutubeWeb, setAutoYoutubeWeb] = useState(initial.autoYoutubeWeb)
+  const autoYoutubeWebRef = useRef(autoYoutubeWeb)
+  autoYoutubeWebRef.current = autoYoutubeWeb
   /** 工具列的總亮度選單開著時，工具列不自動隱藏（R41 AC4） */
   const [toolbarPopup, setToolbarPopup] = useState(false)
   const ratios = ratiosMap[layout] ?? defaultRatios(layout)
@@ -132,6 +142,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
       layout,
       ratios: ratiosMap,
       brightness: masterBrightness,
+      autoYoutubeWeb,
       slots: slots.map((s) =>
         s
           ? {
@@ -147,7 +158,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
           : null
       )
     })
-  }, [layout, ratiosMap, slots, masterBrightness])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb])
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
     if (handle) players.current.set(id, handle)
@@ -168,6 +179,15 @@ export default function App({ initial }: { initial: ViewSettings }) {
   }, [])
 
   const onStatus = useCallback((id: number, status: PlayStatus, failure?: Failure) => {
+    // 自動改用網頁播放：不顯示錯誤，維持原本是否自動播放（開啟程式時還原的格子仍然先暫停）（R49）
+    if (failure === 'embed' && autoYoutubeWebRef.current) {
+      setSlots((prev) => {
+        const index = prev.findIndex((x) => x?.id === id)
+        const next = index >= 0 && prev[index] ? toYoutubeWeb(prev[index]!, prev[index]!.autoplay) : null
+        return next ? setSlot(prev, index, next) : prev
+      })
+      return
+    }
     // 網頁來源以「網頁載入完成」為準，其他來源以開始播放或暫停為準
     const s = slotsRef.current.find((x) => x?.id === id)
     if (s && s.parsed.kind !== 'web' && (status === 'playing' || status === 'paused' || status === 'ended')) onLoaded(id)
@@ -306,14 +326,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (s) setSlots(setSlot(slots, index, { ...s, id: newSourceId(), autoplay: true, record: true }))
   }
 
-  // 改用 YouTube 網頁播放：廣告阻擋預設關閉；使用者放入的影片在網頁載入完成時記錄到歷史（R48）
-  const useYoutubeWeb = (s: Source): Source | null => {
-    const parsed = resolveSource(s.url, true)
-    return parsed && { ...s, id: newSourceId(), parsed, youtubeWeb: true, adblock: false, autoplay: true }
-  }
   const onUseYoutubeWeb = (index: number) => {
     const s = slots[index]
-    const next = s && useYoutubeWeb(s)
+    const next = s && toYoutubeWeb(s, true)
     if (next) setSlots(setSlot(slots, index, next))
   }
 
@@ -526,6 +541,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         brightness={masterBrightness}
         onBrightness={setMasterBrightness}
         onPopupChange={setToolbarPopup}
+        autoYoutubeWeb={autoYoutubeWeb}
+        onAutoYoutubeWeb={setAutoYoutubeWeb}
       />
       {listOpen && (
         <ListPanel
