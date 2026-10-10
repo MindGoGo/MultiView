@@ -101,7 +101,9 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
                 [YT_STATE.PAUSED]: 'paused',
                 [YT_STATE.ENDED]: 'ended',
                 [YT_STATE.BUFFERING]: 'loading',
-                [YT_STATE.CUED]: 'paused'
+                [YT_STATE.CUED]: 'paused',
+                // 還沒播放過時跳轉，YouTube 會停在「尚未開始」；視為暫停，播放鈕才會和實際狀態一致（R53 AC3）
+                [YT_STATE.UNSTARTED]: 'paused'
               }
               const status = map[data]
               if (status) latest.current.onStatus(status)
@@ -189,8 +191,10 @@ export const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePla
       if (!p || !readyRef.current) return
       const wasPlaying = p.getPlayerState() === YT_STATE.PLAYING || p.getPlayerState() === YT_STATE.BUFFERING
       p.seekTo(seconds, true)
+      // 還沒播放過的影片跳轉後直接播放：YouTube 在播放前跳轉再暫停會停在「尚未開始」，畫面全黑（R53）
+      if (!playedAtRef.current) p.playVideo()
       // YouTube 在暫停或播完時跳轉會自動開始播放，依規格維持原本的狀態（R19 AC2、AC11）
-      if (!wasPlaying) p.pauseVideo()
+      else if (!wasPlaying) p.pauseVideo()
     }
   }))
 
