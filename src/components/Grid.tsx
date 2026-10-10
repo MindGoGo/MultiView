@@ -148,7 +148,6 @@ export function Grid(props: Props) {
                 mode={props.webModes[source.id] ?? 'video'}
                 onModeChange={(mode) => props.onWebMode(source.id, mode)}
                 onNavState={(s) => props.onNavState(source.id, s)}
-                noScale={source.youtubeWeb}
                 {...common}
               />
             ) : (

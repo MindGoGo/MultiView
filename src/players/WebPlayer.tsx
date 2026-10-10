@@ -15,11 +15,6 @@ interface Props extends PlayerProps {
   onModeChange(mode: WebMode): void
   /** 能不能上一頁／下一頁改變時通知（R28） */
   onNavState(state: NavState): void
-  /**
-   * 影片模式也以格子大小排版、不縮小（R48 YouTube 網頁播放）：
-   * YouTube 網頁的影片只要被縮小顯示（transform、zoom、網頁縮放比例都一樣）就會變成全黑
-   */
-  noScale?: boolean
 }
 
 /** 網頁載入完成或主要影片消失後，找不到主要影片多久就切換成整頁模式（R13 AC4） */
@@ -30,7 +25,7 @@ export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「�
 export const NOTICE_NOT_FOUND = '找不到影片'
 
 export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
-  { url, adblock, mode, onModeChange, onNavState, noScale, muted, volume, autoplay, active, onStatus, onLoaded },
+  { url, adblock, mode, onModeChange, onNavState, muted, volume, autoplay, active, onStatus, onLoaded },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -245,7 +240,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
       if (!view) return
       const w = host.clientWidth
       const h = host.clientHeight
-      const f = mode === 'video' && !noScale ? videoModeScale(w, h) : 1
+      const f = mode === 'video' ? videoModeScale(w, h) : 1
       view.style.width = `${w / f}px`
       view.style.height = `${h / f}px`
       view.style.transform = f === 1 ? '' : `scale(${f})`
@@ -254,7 +249,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     const ro = new ResizeObserver(layout)
     ro.observe(host)
     return () => ro.disconnect()
-  }, [mode, url, noScale])
+  }, [mode, url])
 
   useImperativeHandle(ref, () => ({
     play: () => updateStateRef.current({ intent: 'play' }),

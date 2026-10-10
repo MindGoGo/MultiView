@@ -286,7 +286,19 @@ let styled: {
   overlays: HTMLStyleElement[]
   /** 網站改寫主要影片的 style 時（例如 YouTube 會一直設定影片的位置和大小），立刻把放大的樣式補回來 */
   observer: MutationObserver
+  /** 移到 body 底下的主要影片與它原本的位置（YouTube 網頁，見 needsMove） */
+  moved: { el: HTMLVideoElement; parent: Node; next: Node | null } | null
 } | null = null
+
+/**
+ * YouTube 網頁的影片留在播放器容器（#player-container）裡時，放大到格子大小後整個網頁都畫不出來
+ * （全黑但有聲音，關閉硬體解碼、影片疊加層都一樣），移到 body 底下就正常（R48）。只對 YouTube 這樣做，
+ * 其他網站維持原本的位置。
+ */
+function needsMove(path: Target[]): path is [HTMLVideoElement] {
+  const host = location.hostname
+  return (host === 'youtube.com' || host.endsWith('.youtube.com')) && path.length === 1 && path[0] instanceof HTMLVideoElement
+}
 
 function parentOf(el: Element): Element | null {
   if (el.parentElement) return el.parentElement
@@ -302,6 +314,8 @@ function setStyles(el: HTMLElement, css: [string, string][], saved: [HTMLElement
 function unstyle() {
   if (!styled) return
   styled.observer.disconnect()
+  const m = styled.moved
+  if (m && m.parent.isConnected) m.parent.insertBefore(m.el, m.next && m.next.parentNode === m.parent ? m.next : null)
   for (const [el, attr] of styled.saved.reverse()) {
     if (attr === null) el.removeAttribute('style')
     else el.setAttribute('style', attr)
@@ -335,6 +349,8 @@ function applyStyles() {
   if (globalStyle && !globalStyle.isConnected) document.documentElement.appendChild(globalStyle)
 
   if (styled && !(best && samePath(styled.path, best.path))) unstyle()
+  // 網站把影片搬回自己的容器時再移出來
+  if (styled?.moved && styled.moved.el.parentNode !== document.body) document.body.appendChild(styled.moved.el)
   if (best && !styled) {
     const saved: [HTMLElement, string | null][] = []
     const overlays: HTMLStyleElement[] = []
@@ -360,7 +376,13 @@ function applyStyles() {
         setStyles(h, pos === 'fixed' || pos === 'sticky' ? [...ANCESTOR_CSS, ['position', 'static']] : ANCESTOR_CSS, saved)
       }
     })
-    styled = { path: best.path, rect: best.rect, saved, overlays, observer }
+    let moved: { el: HTMLVideoElement; parent: Node; next: Node | null } | null = null
+    if (needsMove(best.path) && best.path[0].parentNode) {
+      const el = best.path[0]
+      moved = { el, parent: el.parentNode!, next: el.nextSibling }
+      document.body.appendChild(el)
+    }
+    styled = { path: best.path, rect: best.rect, saved, overlays, observer, moved }
   }
 }
 
