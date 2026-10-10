@@ -55,6 +55,7 @@ import {
   type Lists
 } from './lib/lists'
 import { ListPanel, type ListTab } from './components/ListPanel'
+import { CellPicker, type PickerCell } from './components/CellPicker'
 
 const TOAST_MS = 3000
 /** 觀看進度多久讀一次（R55） */
@@ -373,11 +374,25 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (err) showToast(LIST_ERROR.unsupported)
   }
   // 點一下：放進第一個顯示中的空格（R21）
+  // 點一下：放進第一個顯示中的空格（R21）；沒有空格時，單格顯示直接取代那一格，其他情況選擇要取代的格子（R64）
+  const [picking, setPicking] = useState<{ item: ListItem; cells: PickerCell[] } | null>(null)
   const onPickItem = (item: ListItem) => {
-    const empty = slots.findIndex((s, i) => s === null && isVisible(i, layout, soloIndex))
-    if (empty < 0) showToast('沒有空格，請拖到要更換的格子')
-    else putItem(empty, item)
+    const visible = slots.map((_, i) => i).filter((i) => isVisible(i, layout, soloIndex))
+    const empty = visible.find((i) => slots[i] === null)
+    if (empty !== undefined) putItem(empty, item)
+    else if (visible.length === 1) putItem(visible[0], item)
+    else {
+      const cells: PickerCell[] = []
+      for (const el of document.querySelectorAll<HTMLElement>('.cell[data-index]')) {
+        const index = Number(el.dataset.index)
+        const s = slots[index]
+        if (!s || !visible.includes(index)) continue
+        cells.push({ index, rect: el.getBoundingClientRect(), name: players.current.get(s.id)?.getTitle() ?? defaultName(s.url) })
+      }
+      setPicking({ item, cells })
+    }
   }
+  const cancelPicking = useCallback(() => setPicking(null), [])
   const onDropItem = (item: ListItem, cell: number | null) => {
     setListOver(null)
     if (cell !== null) putItem(cell, item)
@@ -726,6 +741,16 @@ export default function App({ initial }: { initial: ViewSettings }) {
         autoYoutubeWeb={autoYoutubeWeb}
         onAutoYoutubeWeb={setAutoYoutubeWeb}
       />
+      {picking && (
+        <CellPicker
+          cells={picking.cells}
+          onChoose={(index) => {
+            putItem(index, picking.item)
+            setPicking(null)
+          }}
+          onCancel={cancelPicking}
+        />
+      )}
       {listOpen && (
         <ListPanel
           lists={lists}

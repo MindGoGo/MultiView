@@ -515,6 +515,60 @@ button.link {
   }
 }
 
+/* 選擇要取代的格子（R64）：蓋在清單面板與網頁上面 */
+.cell-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.cell-picker-cell {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  overflow: hidden;
+}
+
+.cell-picker-cell:hover {
+  border-color: var(--accent);
+  background: rgba(30, 60, 120, 0.6);
+}
+
+.cell-picker-number {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.cell-picker-name {
+  max-width: 100%;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-picker-bar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--panel);
+}
+
 /* 訂閱分頁（R59） */
 .subscriptions {
   display: flex;
