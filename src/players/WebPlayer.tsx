@@ -19,6 +19,8 @@ interface Props extends PlayerProps {
 
 /** 網頁載入完成或主要影片消失後，找不到主要影片多久就切換成整頁模式（R13 AC4） */
 export const NO_VIDEO_MS = 15000
+/** 上次的觀看進度最多等多久才放棄（R55） */
+const PENDING_START_MS = 30000
 const NOTICE_AUTO_MS = 5000
 const NOTICE_NOT_FOUND_MS = 3000
 export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「只顯示影片」'
@@ -38,8 +40,12 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   const page = useRef({ loaded: false, found: false, attached: false, failed: false })
   /** 網頁回報的主要影片進度（R19） */
   const progressRef = useRef<WebReport['progress']>(null)
-  /** 還沒跳過去的上次觀看進度（R55）：網站提供長度後才跳；跳過去之前進度顯示這個位置 */
+  /**
+   * 還沒跳過去的上次觀看進度（R55）：等影片長度大於這個位置才跳（YouTube 網頁會先播比較短的廣告）；
+   * 跳過去之前不回報進度，存檔時保留原本的位置。第一次有進度後 30 秒內都等不到就放棄，從頭開始。
+   */
   const pendingStart = useRef(startAt)
+  const pendingSince = useRef(0)
   // 新加入的來源播放意圖是「播放」，從設定檔還原的是「暫停」（R15）
   const stateRef = useRef<WebState>({ v: 0, mode, intent: autoplay ? 'play' : 'pause', volume, muted })
   const noVideoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -180,9 +186,12 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
         progressRef.current = r.progress
         const t = pendingStart.current
         if (t && r.progress) {
-          pendingStart.current = null
-          // 直播或比影片還長時不跳（R55）
-          if (!r.progress.live && t < r.progress.end) view.send('mv:seek', t)
+          pendingSince.current ||= Date.now()
+          if (r.progress.live) pendingStart.current = null
+          else if (t < r.progress.end) {
+            pendingStart.current = null
+            view.send('mv:seek', t)
+          } else if (Date.now() - pendingSince.current > PENDING_START_MS) pendingStart.current = null
         }
         checkNoVideoRef.current()
         report(r.status ?? 'loading')
@@ -262,7 +271,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   useImperativeHandle(ref, () => ({
     play: () => updateStateRef.current({ intent: 'play' }),
     pause: () => updateStateRef.current({ intent: 'pause' }),
-    getProgress: () => (page.current.failed ? null : progressRef.current),
+    getProgress: () => (page.current.failed || pendingStart.current ? null : progressRef.current),
     getTitle: () => (viewRef.current && page.current.attached ? viewRef.current.getTitle() || null : null),
     goBack: () => {
       const view = viewRef.current
