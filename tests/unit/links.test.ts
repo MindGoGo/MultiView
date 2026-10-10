@@ -1,6 +1,6 @@
 // R45：YouTube 播放器裡會開新視窗的連結
 import { describe, expect, it } from 'vitest'
-import { canonicalYouTubeUrl, classifyLink } from '../../src/lib/links'
+import { canonicalYouTubeUrl, classifyLink, youtubePageUrl } from '../../src/lib/links'
 
 const CURRENT = 'iG9CE55wbtY'
 const OTHER = 'wX78iKhInsc'
@@ -56,5 +56,16 @@ describe('classifyLink（R45）', () => {
 describe('canonicalYouTubeUrl（R45）', () => {
   it('整理成 watch?v= 網址', () => {
     expect(canonicalYouTubeUrl(OTHER)).toBe(`https://www.youtube.com/watch?v=${OTHER}`)
+  })
+})
+
+describe('youtubePageUrl（R66）', () => {
+  it('影片的 YouTube 網頁，從指定的秒數開始（取整數秒）', () => {
+    expect(youtubePageUrl(OTHER, 123.8)).toBe(`https://www.youtube.com/watch?v=${OTHER}&t=123s`)
+  })
+
+  it('0 秒或不到 1 秒時不加開始時間', () => {
+    expect(youtubePageUrl(OTHER, 0)).toBe(`https://www.youtube.com/watch?v=${OTHER}`)
+    expect(youtubePageUrl(OTHER, 0.6)).toBe(`https://www.youtube.com/watch?v=${OTHER}`)
   })
 })
