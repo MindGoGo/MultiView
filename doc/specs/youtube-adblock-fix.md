@@ -2,7 +2,7 @@
 
 - 功能代號：`youtube-adblock-fix`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-10-14
 - 前置規格：[web-page-source](web-page-source.md)（R12–R18）、[youtube-web-and-seek](youtube-web-and-seek.md)（R48–R52）、[youtube-browse-and-subscriptions](youtube-browse-and-subscriptions.md)（R57–R62）、[youtube-page-mode](youtube-page-mode.md)（R66–R68）、[youtube-menu-tweaks](youtube-menu-tweaks.md)（R69–R72）。本規格的需求編號從 R73 開始。
 
@@ -79,7 +79,8 @@
 
 ## 10. 未決事項
 
-- [ ] 分支：從 `youtube-menu-tweaks` 開出 `youtube-adblock-fix`。
+- [x] 分支：從 `youtube-menu-tweaks` 開出 `youtube-adblock-fix`（2026-10-14）。
+- [ ] 實際效果依 YouTube 而定：開著時擋下廣告投放與片頭廣告的請求（實測 30 秒 7 個），但 YouTube 可能改用擋不掉的方式播放廣告，或偵測到阻擋。
 - [x] 版本號：0.5.4（2026-10-14 確認）。
 
 ## 變更紀錄
@@ -88,3 +89,4 @@
 |---|---|---|
 | 2026-10-14 | 初版 | 使用者回報與排查結果，使用者選擇讓廣告阻擋實際作用 |
 | 2026-10-14 | 以請求所屬的最上層框架網址判斷；新增內嵌 YouTube 的測試網頁；版本號確定 0.5.4 | 第 2 步複查 |
+| 2026-10-14 | 實作完成；驗收結果見 tests/manual/youtube-adblock-fix.md | 實作完成 |
