@@ -197,12 +197,22 @@ const watched = new WeakSet<HTMLVideoElement>()
  * - 影片模式下，網站自己開始播放但播放意圖是暫停時，把它暫停（R15 AC5）；
  *   整頁模式下使用者可能直接按了網站的播放，這時改由程式依回報更新播放意圖
  */
+/** 這個網頁已經做過「剛載入時暫停一次」（R75） */
+let startPaused = false
+
 function watchVideo(v: HTMLVideoElement) {
   if (watched.has(v)) return
   watched.add(v)
   for (const type of ['play', 'pause', 'playing', 'waiting', 'ended', 'emptied', 'loadedmetadata', 'seeked'])
     v.addEventListener(type, scheduleScan)
   v.addEventListener('play', () => {
+    // 暫停中切到網頁：網站自己開始播放的當下就暫停，不等下一次回報（R75）
+    if (state.pauseOnStart && !startPaused && (v === leafVideo || !leafVideo)) {
+      startPaused = true
+      v.pause()
+      ipcRenderer.sendToHost('mv:startPaused')
+      return
+    }
     if (v === leafVideo && state.mode === 'video' && state.intent === 'pause') v.pause()
   })
   v.addEventListener('encrypted', () => {

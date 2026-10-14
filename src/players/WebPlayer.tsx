@@ -68,7 +68,8 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     intent: autoplay ? 'play' : 'pause',
     volume,
     muted,
-    interceptYouTube: !!onYouTubeVideo
+    interceptYouTube: !!onYouTubeVideo,
+    pauseOnStart: !!pauseOnStart
   })
   const noVideoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -214,6 +215,10 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     const onIpc = (e: Electron.IpcMessageEvent) => {
       if (e.channel === 'mv:hello') {
         sendState()
+      } else if (e.channel === 'mv:startPaused') {
+        // 網頁已經在開始播放的當下暫停（R75）：之後在網頁裡換頁、按播放都照常
+        pauseOnce.current = false
+        updateStateRef.current({ pauseOnStart: false, intent: 'pause' })
       } else if (e.channel === 'mv:ytvideo') {
         // YouTube 網站頁面點了影片連結：網頁沒有換頁，停在原本的位置（R57、R63）
         const [href, from] = e.args as [string, string]
@@ -242,9 +247,10 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
         }
         checkNoVideoRef.current()
         report(r.status ?? 'loading')
+        // 備援：網頁沒有在開始播放的當下暫停時（例如狀態還沒傳到網頁），回報播放中就暫停一次
         if (pauseOnce.current && r.status === 'playing') {
           pauseOnce.current = false
-          updateStateRef.current({ intent: 'pause' })
+          updateStateRef.current({ intent: 'pause', pauseOnStart: false })
           return
         }
         // 整頁模式中使用者直接按網站的播放 / 暫停，也算播放意圖（R15 AC7）

@@ -18,6 +18,8 @@ export interface WebState {
   muted: boolean
   /** YouTube 網站頁面：攔截影片連結的點擊，不換頁，交給程式在這一格播放（R57、R63） */
   interceptYouTube?: boolean
+  /** 網頁剛載入、主要影片第一次開始播放時立即暫停（R75）；暫停後由程式關掉 */
+  pauseOnStart?: boolean
 }
 
 /** 網頁最上層框架每秒回報給程式 */
