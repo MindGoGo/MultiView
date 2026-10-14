@@ -1,5 +1,6 @@
 import type { WinState } from '../../electron/preload'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { versionLabel } from '../lib/appInfo'
 import { LAYOUT_IDS, LAYOUT_LABELS, type LayoutId } from '../lib/layout'
 import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } from '../lib/brightness'
 import { SliderPopup } from './SliderPopup'
@@ -39,6 +40,11 @@ const AUTO_YOUTUBE_WEB = 'autoYoutubeWeb'
 export function Toolbar(props: Props) {
   const { visible, win, layout, onLayout, toast, canControl } = props
   const api = window.multiview
+  // 程式的版本號（R76）
+  const [version, setVersion] = useState('')
+  useEffect(() => {
+    void window.multiview.getVersion().then(setVersion)
+  }, [])
   const [popup, setPopup] = useState<{ kind: 'brightness' | 'settings'; anchor: DOMRect } | null>(null)
   const openPopup = (next: { kind: 'brightness' | 'settings'; anchor: DOMRect } | null) => {
     setPopup(next)
@@ -107,7 +113,10 @@ export function Toolbar(props: Props) {
           <PopupMenu
             anchor={popup.anchor}
             placement="below"
-            items={[{ key: AUTO_YOUTUBE_WEB, label: 'YouTube 無法嵌入時自動改用網頁播放', checked: props.autoYoutubeWeb }]}
+            items={[
+              { key: AUTO_YOUTUBE_WEB, label: 'YouTube 無法嵌入時自動改用網頁播放', checked: props.autoYoutubeWeb },
+              ...(version ? [{ key: 'version', label: versionLabel(version), disabled: true }] : [])
+            ]}
             onSelect={(key) => key === AUTO_YOUTUBE_WEB && props.onAutoYoutubeWeb(!props.autoYoutubeWeb)}
             onClose={() => openPopup(null)}
           />

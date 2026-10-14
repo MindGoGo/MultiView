@@ -46,6 +46,8 @@ const api = {
     }
   },
   close: () => ipcRenderer.send('win:close'),
+  /** 程式的版本號（R76） */
+  getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
   /** 程式要關閉時通知（R55）：送出最新的設定後呼叫 closingDone */
   onClosing: (cb: () => void) => {
     const listener = () => cb()

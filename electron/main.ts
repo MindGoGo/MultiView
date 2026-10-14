@@ -231,6 +231,8 @@ ipcMain.on('win:toggleAlwaysOnTop', () => {
   saveSoon()
 })
 ipcMain.on('win:minimize', () => win?.minimize())
+// 設定選單顯示的版本號（R76）：和安裝檔、檔案內容的版本相同
+ipcMain.handle('app:version', () => app.getVersion())
 
 // YouTube 預覽縮圖的資訊（R50）：從這部影片的 YouTube 網頁取出，每部影片只取得一次
 const storyboardSpecs = new Map<string, Promise<string | null>>()
