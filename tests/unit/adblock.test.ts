@@ -1,9 +1,9 @@
-// R17：廣告阻擋的判斷規則，以及打包的 EasyList 實際比對結果
+﻿// R17：廣告阻擋的判斷規則，以及打包的 EasyList 實際比對結果
 import fs from 'node:fs'
 import path from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { FiltersEngine, Request } from '@ghostery/adblocker'
-import { isYouTubeFrame, shouldCheck, toFilterType } from '../../src/lib/adblockRules'
+import { isEmbeddedYouTube, isYouTubeFrame, shouldCheck, toFilterType } from '../../src/lib/adblockRules'
 
 describe('isYouTubeFrame（R17：內嵌的 YouTube 播放器不阻擋）', () => {
   it.each([
@@ -108,5 +108,27 @@ describe('打包的 EasyList（R17 AC1、AC5）', () => {
     })
     expect(styles).toContain('.ADBox')
     expect(styles).toContain('display: none')
+  })
+})
+
+describe('YouTube 網頁類格子的廣告阻擋（R73）', () => {
+  const yt = 'https://www.youtube.com/watch?v=iG9CE55wbtY'
+  const news = 'https://news.example.com/live'
+  it('其他網站裡內嵌的 YouTube 播放器不阻擋（第二版 R17 AC4）', () => {
+    expect(isEmbeddedYouTube('https://www.youtube.com/embed/iG9CE55wbtY', news)).toBe(true)
+    expect(shouldCheck({ webContentsId: 1, resourceType: 'xhr', frameUrl: 'https://www.youtube.com/embed/x', topUrl: news }, new Set())).toBe(false)
+  })
+
+  it('整個格子就是 YouTube 網頁時照常阻擋（AC1）', () => {
+    expect(isEmbeddedYouTube(yt, yt)).toBe(false)
+    expect(shouldCheck({ webContentsId: 1, resourceType: 'xhr', frameUrl: yt, topUrl: yt }, new Set())).toBe(true)
+  })
+
+  it('廣告阻擋關閉時不阻擋（AC2）', () => {
+    expect(shouldCheck({ webContentsId: 1, resourceType: 'xhr', frameUrl: yt, topUrl: yt }, new Set([1]))).toBe(false)
+  })
+
+  it('不知道最上層網頁時視為內嵌，不阻擋（維持原本的合規行為）', () => {
+    expect(shouldCheck({ webContentsId: 1, resourceType: 'xhr', frameUrl: yt }, new Set())).toBe(false)
   })
 })
