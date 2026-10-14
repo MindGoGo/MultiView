@@ -5,7 +5,7 @@ import path from 'node:path'
 import { app, ipcMain, type Session } from 'electron'
 import { FiltersEngine, Request } from '@ghostery/adblocker'
 import { parse } from 'tldts-experimental'
-import { isYouTubeFrame, shouldCheck, toFilterType } from '../src/lib/adblockRules'
+import { isEmbeddedYouTube, shouldCheck, toFilterType } from '../src/lib/adblockRules'
 
 let engine: FiltersEngine | null = null
 /** 關閉廣告阻擋的網頁（webContents id） */
@@ -43,7 +43,12 @@ export function forgetWebContents(webContentsId: number) {
 export function installAdblock(ses: Session) {
   ses.webRequest.onBeforeRequest((details, callback) => {
     const frameUrl = details.frame?.url
-    if (!engine || !shouldCheck({ webContentsId: details.webContentsId, resourceType: details.resourceType, frameUrl }, disabled)) {
+    // 用請求所屬的最上層框架判斷格子本身是不是 YouTube 網頁（R73）；換頁時也不會落差
+    const topUrl = details.frame?.top?.url
+    if (
+      !engine ||
+      !shouldCheck({ webContentsId: details.webContentsId, resourceType: details.resourceType, frameUrl, topUrl }, disabled)
+    ) {
       callback({})
       return
     }
@@ -60,7 +65,8 @@ export function installAdblock(ses: Session) {
   // 網頁中的偵測程式依頁面上出現的 class / id 來要隱藏廣告元素的樣式
   ipcMain.handle('adblock:cosmetics', (event, dom: { url: string; classes: string[]; ids: string[]; hrefs: string[] }) => {
     const frameUrl = event.senderFrame?.url ?? dom.url
-    if (!engine || disabled.has(event.sender.id) || isYouTubeFrame(frameUrl)) return ''
+    const topUrl = event.senderFrame?.top?.url
+    if (!engine || disabled.has(event.sender.id) || isEmbeddedYouTube(frameUrl, topUrl)) return ''
     const { hostname, domain } = parse(dom.url)
     if (!hostname) return ''
     const { styles } = engine.getCosmeticsFilters({

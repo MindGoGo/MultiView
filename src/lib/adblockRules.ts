@@ -41,15 +41,25 @@ export interface RequestInfo {
   resourceType: string
   /** 發出請求的框架網址 */
   frameUrl: string | null | undefined
+  /** 發出請求的框架所屬的最上層框架網址（R73）；不知道時為 undefined */
+  topUrl?: string | null
+}
+
+/**
+ * 不阻擋的 YouTube 框架（第二版 R17 AC4、R73）：其他網站裡內嵌的 YouTube 播放器。
+ * 整個格子就是 YouTube 網頁時（網頁播放、逛 YouTube、網頁模式），依格子的廣告阻擋開關阻擋。
+ */
+export function isEmbeddedYouTube(frameUrl: string | null | undefined, topUrl: string | null | undefined): boolean {
+  return isYouTubeFrame(frameUrl) && !isYouTubeFrame(topUrl)
 }
 
 /**
  * 這個請求要不要拿去比對廣告清單。
- * 不比對：不是網頁發出的、網頁本身（使用者輸入的網址）、關閉廣告阻擋的格子、YouTube 播放器框架。
+ * 不比對：不是網頁發出的、網頁本身（使用者輸入的網址）、關閉廣告阻擋的格子、其他網站裡內嵌的 YouTube 播放器。
  */
 export function shouldCheck(req: RequestInfo, disabled: ReadonlySet<number>): boolean {
   if (req.webContentsId === undefined) return false
   if (req.resourceType === 'mainFrame') return false
   if (disabled.has(req.webContentsId)) return false
-  return !isYouTubeFrame(req.frameUrl)
+  return !isEmbeddedYouTube(req.frameUrl, req.topUrl)
 }
