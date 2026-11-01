@@ -8,7 +8,7 @@
 import { ipcRenderer } from 'electron'
 import { pickMain, toParentRect, type Candidate, type Rect } from '../src/lib/webVideo'
 import { progressFromMedia, rangesOf, type Progress } from '../src/lib/progress'
-import type { WebReport, WebState, WebVideoStatus } from '../src/players/webTypes'
+import type { CompanionSection, WebReport, WebState, WebVideoStatus } from '../src/players/webTypes'
 
 const MARK = '__multiview__'
 const SCAN_MS = 1000
@@ -474,6 +474,7 @@ function broadcast() {
 
 function setState(next: WebState, nextOnPath: boolean) {
   const changed = next.v !== state.v || nextOnPath !== onPath
+  if (isTop && next.section !== state.section) applySection(next.section)
   // 播完的影片按播放時從頭播放（R26 AC4）
   if (next.intent === 'play' && state.intent === 'pause' && leafVideo?.ended) leafVideo.currentTime = 0
   state = next
@@ -579,6 +580,60 @@ if (window === window.top) {
     true
   )
 }
+
+// ---------- YouTube 小視窗的推薦區、留言區（R79、R80） ----------
+// 推薦區和留言區各自固定填滿整個畫面、可以捲動，只有目前分頁的那一個看得到（另一個隱藏但保留捲動位置）；
+// 影片和網頁其他部分被蓋住。YouTube 改版找不到這兩個區域時規則不會套用，顯示整個網頁。
+const SECTION_SELECTORS: Record<CompanionSection, string> = {
+  related: 'ytd-watch-flexy #related',
+  comments: 'ytd-watch-flexy #comments'
+}
+const PANE_CSS = `position: fixed !important; inset: 0 !important; width: auto !important; min-width: 0 !important;
+  max-width: none !important; height: auto !important; margin: 0 !important; padding: 12px 16px !important;
+  box-sizing: border-box !important; overflow-y: auto !important; z-index: 2147483647 !important;
+  display: block !important; background: #fff !important;`
+function sectionCss(active: CompanionSection): string {
+  const sels = Object.values(SECTION_SELECTORS)
+  const inactive = SECTION_SELECTORS[active === 'related' ? 'comments' : 'related']
+  return `
+html:has(${SECTION_SELECTORS[active]}), html:has(${SECTION_SELECTORS[active]}) body { overflow: hidden !important; }
+${sels.join(', ')} { ${PANE_CSS} }
+html[dark] :is(${sels.join(', ')}) { background: #0f0f0f !important; }
+${SECTION_SELECTORS[active]} { visibility: visible !important; }
+${inactive} { visibility: hidden !important; pointer-events: none !important; }
+html:has(${SECTION_SELECTORS[active]}) #masthead-container { display: none !important; }
+`
+}
+let sectionStyle: HTMLStyleElement | null = null
+function applySection(section: CompanionSection | undefined) {
+  if (!section) {
+    sectionStyle?.remove()
+    sectionStyle = null
+    return
+  }
+  // 影片不播放（R79 AC1）：已經在播的也暫停
+  document.querySelectorAll('video').forEach((v) => {
+    v.muted = true
+    if (!v.paused) v.pause()
+  })
+  if (!document.documentElement) return
+  sectionStyle ??= document.createElement('style')
+  sectionStyle.textContent = sectionCss(section)
+  if (!sectionStyle.isConnected) document.documentElement.appendChild(sectionStyle)
+}
+window.addEventListener('DOMContentLoaded', () => state.section && applySection(state.section))
+// 小視窗的影片網頁：影片（包括廣告）一開始播放就暫停（R79、R80）。
+// 媒體事件不會往上傳，但捕獲階段收得到，不等定時找影片
+window.addEventListener(
+  'play',
+  (e) => {
+    const v = e.target as HTMLMediaElement
+    if (!state.section || v.tagName !== 'VIDEO') return
+    v.muted = true
+    v.pause()
+  },
+  true
+)
 
 // ---------- 隱藏廣告元素（R17） ----------
 // 把頁面上出現的 class / id / 連結交給程式比對廣告清單，拿回要隱藏的樣式。

@@ -20,7 +20,15 @@ export interface WebState {
   interceptYouTube?: boolean
   /** 網頁剛載入、主要影片第一次開始播放時立即暫停（R75）；暫停後由程式關掉 */
   pauseOnStart?: boolean
+  /**
+   * YouTube 小視窗的影片網頁（R79、R80）：只顯示推薦區或留言區，網頁裡的影片不播放。
+   * 推薦和留言共用一個網頁，切換分頁時只換顯示的區域
+   */
+  section?: CompanionSection
 }
+
+/** 小視窗影片網頁顯示的區域（R79、R80） */
+export type CompanionSection = 'related' | 'comments'
 
 /** 網頁最上層框架每秒回報給程式 */
 export interface WebReport {
