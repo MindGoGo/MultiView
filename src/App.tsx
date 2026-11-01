@@ -56,10 +56,13 @@ import {
 } from './lib/lists'
 import { ListPanel, type ListTab } from './components/ListPanel'
 import { CellPicker, type PickerCell } from './components/CellPicker'
+import { isCompanionTab, stripYouTubeSuffix, type CompanionAction, type CompanionLink, type CompanionVideo } from './lib/companion'
 
 const TOAST_MS = 3000
 /** 觀看進度多久讀一次（R55） */
 const POSITION_SAVE_MS = 5000
+/** 多久確認一次小視窗連結的格子目前的影片（R78） */
+const COMPANION_LINK_MS = 1000
 
 /** 改用 YouTube 網頁播放：廣告阻擋預設關閉；使用者放入的影片在網頁載入完成時記錄到歷史（R48） */
 function toYoutubeWeb(s: Source, autoplay: boolean): Source | null {
@@ -299,7 +302,11 @@ export default function App({ initial }: { initial: ViewSettings }) {
     const s = slots[index]
     if (!s) return
     if (key === 'back') onBack(index)
-    else if (key === 'page' && s.parsed.kind === 'youtube') {
+    else if (isCompanionTab(key)) {
+      // 開啟小視窗並切到對應的分頁，連結的格子換成這一格（R78）
+      setCompanionCell(index)
+      window.multiview.openCompanion(key)
+    } else if (key === 'page' && s.parsed.kind === 'youtube') {
       // 從播放器目前的時間接著播；暫停時網頁也停在那裡（R66 AC1、AC4）
       const t = players.current.get(s.id)?.getProgress()?.current ?? 0
       setSlots(
@@ -428,7 +435,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 點一下：放進第一個顯示中的空格（R21）
   // 點一下：放進第一個顯示中的空格（R21）；沒有空格時，單格顯示直接取代那一格，其他情況選擇要取代的格子（R64）
   const [picking, setPicking] = useState<{ item: ListItem; cells: PickerCell[] } | null>(null)
-  const onPickItem = (item: ListItem) => {
+  /** 回傳是否跳出選擇要取代的格子 */
+  const onPickItem = (item: ListItem): boolean => {
     const visible = slots.map((_, i) => i).filter((i) => isVisible(i, layout, soloIndex))
     const empty = visible.find((i) => slots[i] === null)
     if (empty !== undefined) putItem(empty, item)
@@ -442,7 +450,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         cells.push({ index, rect: el.getBoundingClientRect(), name: players.current.get(s.id)?.getTitle() ?? defaultName(s.url) })
       }
       setPicking({ item, cells })
+      return true
     }
+    return false
   }
   const cancelPicking = useCallback(() => setPicking(null), [])
   const onDropItem = (item: ListItem, cell: number | null) => {
@@ -459,6 +469,67 @@ export default function App({ initial }: { initial: ViewSettings }) {
     }
     return null
   }
+
+  // ---- YouTube 小視窗（R78–R82） ----
+  /** 小視窗連結的格子（格子的位置）；還沒從格子開啟過時為 null */
+  const [companionCell, setCompanionCell] = useState<number | null>(null)
+  /** 格子目前的 YouTube 影片：一般播放的影片，或網頁模式網頁上目前的影片（R78） */
+  const cellVideo = (index: number): CompanionVideo | null => {
+    const s = slots[index]
+    if (!s) return null
+    let id: string | null = null
+    if (s.youtubePage) id = pageVideoId(s)
+    else {
+      const parsed = parseSource(s.url)
+      if (parsed?.kind === 'youtube') id = parsed.videoId
+    }
+    if (!id) return null
+    const p = players.current.get(s.id)
+    const progress = p?.getProgress() ?? null
+    return { id, title: stripYouTubeSuffix(p?.getTitle() ?? null), live: progress ? progress.live : pageLive(id) }
+  }
+  /** 播放器還沒回報進度時（例如還沒播放過），由影片網頁判斷是不是直播（R81）；每部影片只查一次 */
+  const liveChecks = useRef(new Map<string, boolean | null>())
+  const pageLive = (id: string): boolean => {
+    const known = liveChecks.current.get(id)
+    if (known !== undefined) return known === true
+    liveChecks.current.set(id, null)
+    void window.multiview.ytVideoLive(id).then((live) => liveChecks.current.set(id, live))
+    return false
+  }
+  const companionLinkRef = useRef(() => ({ cell: null, video: null }) as CompanionLink)
+  companionLinkRef.current = () => ({
+    cell: companionCell === null ? null : companionCell + 1,
+    video: companionCell === null ? null : cellVideo(companionCell)
+  })
+  // 連結的格子換了影片時（包括網頁模式在網頁裡換影片）通知小視窗；只在改變時送出
+  const sentLink = useRef('')
+  const sendCompanionLink = () => {
+    const link = companionLinkRef.current()
+    const key = JSON.stringify(link)
+    if (key === sentLink.current) return
+    sentLink.current = key
+    window.multiview.sendCompanionLink(link)
+  }
+  useEffect(() => {
+    const timer = setInterval(sendCompanionLink, COMPANION_LINK_MS)
+    return () => clearInterval(timer)
+  }, [])
+  useEffect(sendCompanionLink, [slots, companionCell])
+  const onCompanionActionRef = useRef<(a: CompanionAction) => void>(() => undefined)
+  onCompanionActionRef.current = (a: CompanionAction) => {
+    if (a.type === 'place') {
+      // 放入格子的規則和清單面板「點一下」相同；需要選擇格子時主視窗切到最前面（R82）
+      if (onPickItem({ url: a.url, name: '', time: 0 })) window.multiview.focusWindow()
+      return
+    }
+    if (companionCell === null) return
+    // 推薦、留言裡的影片：連結的格子換成那部影片，和「更換網址」相同（R79、R80）
+    if (a.type === 'play') {
+      if (onSubmitUrl(companionCell, a.url)) showToast(LIST_ERROR.unsupported)
+    } else if (a.type === 'seek') onSeek(companionCell, a.seconds)
+  }
+  useEffect(() => window.multiview.onCompanionAction((a) => onCompanionActionRef.current(a)), [])
 
   // ---- 單格全螢幕（R20） ----
   const enterSolo = (index: number) => {
@@ -813,6 +884,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onPopupChange={setToolbarPopup}
         autoYoutubeWeb={autoYoutubeWeb}
         onAutoYoutubeWeb={setAutoYoutubeWeb}
+        onOpenCompanion={() => window.multiview.openCompanion(null)}
       />
       {picking && (
         <CellPicker

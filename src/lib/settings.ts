@@ -4,6 +4,7 @@ import { isYouTubeSite, parseSource } from './source'
 import { SLOT_COUNT, type Quality } from './slots'
 import { normalizeQuality } from './quality'
 import { BRIGHTNESS_DEFAULT, normalizeBrightness } from './brightness'
+import { DEFAULT_COMPANION, normalizeCompanion, type CompanionWindowState } from './companion'
 
 export interface WindowState {
   x?: number
@@ -51,6 +52,8 @@ export interface ViewSettings {
 export interface Settings extends ViewSettings {
   version: 1
   window: WindowState
+  /** YouTube 小視窗的位置、大小與上次的分頁（R78）；舊的設定檔沒有時用預設值 */
+  companion: CompanionWindowState
 }
 
 export const DEFAULT_WINDOW: WindowState = { width: 1280, height: 720, alwaysOnTop: false }
@@ -59,6 +62,7 @@ export function defaultSettings(): Settings {
   return {
     version: 1,
     window: { ...DEFAULT_WINDOW },
+    companion: { ...DEFAULT_COMPANION },
     layout: DEFAULT_LAYOUT,
     ratios: {},
     slots: Array.from({ length: SLOT_COUNT }, () => null),
@@ -147,7 +151,7 @@ export function normalizeView(raw: unknown): ViewSettings {
 /** 把讀到的 JSON 轉成合法設定；整體結構不對時回傳 null（視為損毀）。個別欄位不合法時改用預設值。 */
 export function normalizeSettings(raw: unknown): Settings | null {
   if (!isObject(raw) || raw.version !== 1) return null
-  return { version: 1, window: normalizeWindow(raw.window), ...normalizeView(raw) }
+  return { version: 1, window: normalizeWindow(raw.window), companion: normalizeCompanion(raw.companion), ...normalizeView(raw) }
 }
 
 /** 解析設定檔內容。JSON 錯誤或結構不對時 corrupt 為 true，settings 為預設值。 */

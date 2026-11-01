@@ -1,0 +1,77 @@
+/* YouTube 小視窗（R78） */
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: #0f0f0f;
+  color: #eee;
+  font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+}
+.companion {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.companion-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #333;
+}
+.companion-tabs button {
+  flex: 1;
+  padding: 6px 4px;
+  background: #222;
+  color: #ddd;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.companion-tabs button:hover {
+  background: #2c2c2c;
+}
+.companion-tabs button.active {
+  background: #3a3a3a;
+  color: #fff;
+  border-color: #666;
+}
+.companion-header {
+  padding: 6px 10px;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid #333;
+}
+.companion-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+/* 切換分頁時網頁保留在原本的大小，只是看不到，捲動位置不變（R78） */
+.companion-pane {
+  position: absolute;
+  inset: 0;
+}
+.companion-pane.hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+.companion-web {
+  width: 100%;
+  height: 100%;
+}
+.companion-message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #aaa;
+}

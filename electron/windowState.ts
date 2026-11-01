@@ -33,20 +33,21 @@ export function isOnSomeDisplay(bounds: Rect, workAreas: Rect[]): boolean {
 export function resolveBounds(
   saved: { x?: number; y?: number; width: number; height: number },
   workAreas: Rect[],
-  primary: Rect
+  primary: Rect,
+  min: { width: number; height: number } = { width: MIN_WIDTH, height: MIN_HEIGHT }
 ): Rect {
   if (saved.x !== undefined && saved.y !== undefined) {
     const candidate = {
       x: saved.x,
       y: saved.y,
-      width: Math.max(saved.width, MIN_WIDTH),
-      height: Math.max(saved.height, MIN_HEIGHT)
+      width: Math.max(saved.width, min.width),
+      height: Math.max(saved.height, min.height)
     }
     if (isOnSomeDisplay(candidate, workAreas)) return candidate
   }
   // 置中時不能比主螢幕大
-  const width = Math.max(Math.min(saved.width, primary.width), MIN_WIDTH)
-  const height = Math.max(Math.min(saved.height, primary.height), MIN_HEIGHT)
+  const width = Math.max(Math.min(saved.width, primary.width), min.width)
+  const height = Math.max(Math.min(saved.height, primary.height), min.height)
   return {
     x: Math.round(primary.x + (primary.width - width) / 2),
     y: Math.round(primary.y + (primary.height - height) / 2),

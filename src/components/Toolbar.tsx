@@ -32,6 +32,8 @@ interface Props {
   /** YouTube 無法嵌入時自動改用網頁播放（R49） */
   autoYoutubeWeb: boolean
   onAutoYoutubeWeb(on: boolean): void
+  /** YouTube 小視窗（R78） */
+  onOpenCompanion(): void
 }
 
 /** 設定選單的項目（R49） */
@@ -123,6 +125,9 @@ export function Toolbar(props: Props) {
         )}
         <button className={props.listOpen ? 'active' : ''} title="最愛與歷史清單" onClick={props.onToggleList}>
           ☰ 清單
+        </button>
+        <button title="YouTube 小視窗：推薦、留言、聊天室、搜尋" onClick={props.onOpenCompanion}>
+          YouTube 小視窗
         </button>
         <button
           className={win.alwaysOnTop ? 'active' : ''}

@@ -14,7 +14,9 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'electron/preload.ts'),
           // 注入網頁來源的偵測程式（R13）
-          web: resolve(__dirname, 'electron/webPreload.ts')
+          web: resolve(__dirname, 'electron/webPreload.ts'),
+          // YouTube 小視窗（R78）
+          companion: resolve(__dirname, 'electron/companionPreload.ts')
         }
       }
     }
@@ -23,7 +25,7 @@ export default defineConfig({
     root: '.',
     plugins: [react()],
     build: {
-      rollupOptions: { input: { index: resolve(__dirname, 'index.html') } }
+      rollupOptions: { input: { index: resolve(__dirname, 'index.html'), companion: resolve(__dirname, 'companion.html') } }
     }
   }
 })

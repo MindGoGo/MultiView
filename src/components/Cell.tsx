@@ -27,7 +27,10 @@ interface Props {
   onRetry(index: number): void
   /** 回到 YouTube 頁面（R63） */
   onBack(index: number): void
-  /** 「YouTube ▾」選單（R66）：page 看影片的網頁、player 回到播放器、back 回到剛才的 YouTube 頁面 */
+  /**
+   * 「YouTube ▾」選單（R66）：page 看影片的網頁、player 回到播放器、back 回到剛才的 YouTube 頁面；
+   * related、comments、chat 開啟 YouTube 小視窗（R78）
+   */
   onYouTubeMenu(index: number, key: string): void
   onSkip(index: number, seconds: number): void
   /** 用方向鍵跳轉時增加，顯示操作區（R51） */
@@ -329,7 +332,7 @@ export function Cell(props: Props) {
           {(source.parsed.kind === 'youtube' || source.youtubePage) && (
             <button
               className={source.youtubePage ? 'active' : ''}
-              title="YouTube：回到網頁（留言、推薦）、回到播放器、回到剛才的 YouTube 頁面"
+              title="YouTube：回到網頁、回到播放器、回到剛才的 YouTube 頁面、推薦影片、留言、聊天室"
               onPointerDown={(e) => menu?.kind === 'youtube' && e.stopPropagation()}
               onClick={(e) => toggleMenu('youtube', e)}
             >
@@ -499,7 +502,11 @@ export function Cell(props: Props) {
                 source.youtubePage
                   ? { key: 'player', label: '回到播放器' }
                   : { key: 'page', label: '回到網頁' },
-                ...(source.back || source.backUrl ? [{ key: 'back', label: '回到剛才的 YouTube 頁面' }] : [])
+                ...(source.back || source.backUrl ? [{ key: 'back', label: '回到剛才的 YouTube 頁面' }] : []),
+                // YouTube 小視窗（R78）
+                { key: 'related', label: '推薦影片' },
+                { key: 'comments', label: '留言' },
+                { key: 'chat', label: '聊天室' }
               ]}
               onSelect={(key) => props.onYouTubeMenu(index, key)}
               onClose={() => setMenu(null)}

@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, screen, session, shell, type Rectangle } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, screen, session, shell, type Rectangle, type WebContents } from 'electron'
 import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
@@ -11,6 +11,14 @@ import { forgetWebContents, installAdblock, loadAdblockList, setAdblockEnabled }
 import { createListsSaver, loadLists } from './listsStore'
 import { normalizeLists, type Lists } from '../src/lib/lists'
 import { pageMenuItems, type PageMenuAction } from '../src/lib/pageMenu'
+import {
+  COMPANION_MIN_HEIGHT,
+  COMPANION_MIN_WIDTH,
+  isCompanionTab,
+  type CompanionAction,
+  type CompanionLink,
+  type CompanionTab
+} from '../src/lib/companion'
 import { extractStoryboardSpec } from '../src/lib/storyboard'
 import {
   channelFeedUrl,
@@ -40,6 +48,12 @@ let settings: Settings
 let saver: ReturnType<typeof createSaver>
 let lists: Lists
 let listsSaver: ReturnType<typeof createListsSaver>
+/** 畫面檔案的網址（開發時是開發伺服器，正式版是本機 http） */
+let rendererUrl = ''
+/** YouTube 小視窗（R78）：只有一個 */
+let companion: BrowserWindow | null = null
+/** 小視窗連結的格子與它目前的影片，由主畫面告知（R78） */
+let companionLink: CompanionLink = { cell: null, video: null }
 
 function saveSoon() {
   saver.schedule(settings)
@@ -162,8 +176,17 @@ async function createWindow() {
     return { action: 'deny' }
   })
 
-  // 網頁來源一律在沙箱中執行，只載入我們的偵測程式（非功能需求：安全）
-  win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+  secureWebviews(win.webContents)
+  win.webContents.on('did-attach-webview', (_, guest) => attachWebGuest(guest))
+
+  const devUrl = process.env['ELECTRON_RENDERER_URL']
+  rendererUrl = devUrl ?? (await startStaticServer(path.join(__dirname, '../renderer')))
+  await win.loadURL(rendererUrl)
+}
+
+// 網頁來源一律在沙箱中執行，只載入我們的偵測程式（非功能需求：安全）；小視窗的網頁也一樣（R78）
+function secureWebviews(contents: WebContents) {
+  contents.on('will-attach-webview', (event, webPreferences, params) => {
     // 先以空白頁建立，設定好廣告阻擋後才載入使用者的網址（R17）
     if (params.partition !== WEB_PARTITION || (params.src !== 'about:blank' && !/^https?:/i.test(params.src))) {
       event.preventDefault()
@@ -177,12 +200,93 @@ async function createWindow() {
     // 偵測程式也要注入子框架，主要影片可能在別家網站的播放器裡（R13）
     webPreferences.nodeIntegrationInSubFrames = true
   })
-  win.webContents.on('did-attach-webview', (_, guest) => attachWebGuest(guest))
-
-  const devUrl = process.env['ELECTRON_RENDERER_URL']
-  const url = devUrl ?? (await startStaticServer(path.join(__dirname, '../renderer')))
-  await win.loadURL(url)
 }
+
+// ---- YouTube 小視窗（R78–R82） ----
+
+/** 只記錄一般狀態下的位置與大小 */
+function trackCompanionBounds() {
+  if (!companion || companion.isMinimized() || companion.isMaximized() || companion.isFullScreen()) return
+  const b = companion.getBounds()
+  settings.companion = { ...settings.companion, x: b.x, y: b.y, width: b.width, height: b.height }
+  saveSoon()
+}
+
+/** 開啟小視窗，已經開著時切到最前面；tab 為 null 時顯示上次的分頁 */
+function openCompanion(tab: CompanionTab | null) {
+  if (!win) return
+  if (tab) {
+    settings.companion = { ...settings.companion, tab }
+    saveSoon()
+  }
+  if (companion) {
+    if (tab) companion.webContents.send('companion:tab', tab)
+    if (companion.isMinimized()) companion.restore()
+    companion.show()
+    companion.focus()
+    return
+  }
+  const displays = screen.getAllDisplays().map((d) => d.workArea)
+  const bounds = resolveBounds(settings.companion, displays, screen.getPrimaryDisplay().workArea, {
+    width: COMPANION_MIN_WIDTH,
+    height: COMPANION_MIN_HEIGHT
+  })
+  // 附屬主視窗：永遠在主視窗上面，主視窗最小化時一起縮小（R78）
+  companion = new BrowserWindow({
+    ...bounds,
+    parent: win,
+    title: 'YouTube 小視窗',
+    minWidth: COMPANION_MIN_WIDTH,
+    minHeight: COMPANION_MIN_HEIGHT,
+    backgroundColor: '#0f0f0f',
+    autoHideMenuBar: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/companion.js'),
+      sandbox: true,
+      contextIsolation: true,
+      webviewTag: true
+    }
+  })
+  companion.setMenu(null)
+  companion.on('ready-to-show', () => companion?.show())
+  companion.on('move', trackCompanionBounds)
+  companion.on('resize', trackCompanionBounds)
+  companion.on('closed', () => (companion = null))
+  // 小視窗不開新視窗
+  companion.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  secureWebviews(companion.webContents)
+  companion.webContents.on('did-attach-webview', (_, guest) => {
+    const id = guest.id
+    guest.setWindowOpenHandler(() => ({ action: 'deny' }))
+    guest.once('destroyed', () => forgetWebContents(id))
+  })
+  void companion.loadURL(new URL('companion.html', rendererUrl).href)
+}
+
+ipcMain.on('companion:open', (e, tab: unknown) => {
+  if (e.sender === win?.webContents) openCompanion(isCompanionTab(tab) ? tab : null)
+})
+ipcMain.on('companion:link', (e, link: CompanionLink) => {
+  if (e.sender !== win?.webContents) return
+  companionLink = link
+  companion?.webContents.send('companion:link', link)
+})
+ipcMain.handle('companion:init', () => ({ tab: settings.companion.tab, link: companionLink }))
+ipcMain.on('companion:tab', (e, tab: unknown) => {
+  if (e.sender !== companion?.webContents || !isCompanionTab(tab)) return
+  settings.companion = { ...settings.companion, tab }
+  saveSoon()
+})
+ipcMain.on('companion:action', (e, action: CompanionAction) => {
+  if (e.sender === companion?.webContents) win?.webContents.send('companion:action', action)
+})
+// 小視窗放入影片需要選擇格子時，主視窗切到最前面（R82）
+ipcMain.on('win:focus', () => {
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.focus()
+})
 
 // 畫面這一側的設定（版型、比例、來源）（R10）
 ipcMain.handle('settings:getView', () => ({
@@ -292,6 +396,13 @@ ipcMain.handle('yt:live', async (_, id: unknown) => {
   if (!isChannelId(id)) return null
   const html = await fetchText(channelLiveUrl(id))
   return html ? parseLiveStatus(html) : null
+})
+
+// 這部影片是不是正在直播（R81）：播放器還沒回報時（例如還沒播放過）由影片網頁判斷；判斷不了時為 false
+ipcMain.handle('yt:videoLive', async (_, id: unknown) => {
+  if (typeof id !== 'string' || !/^[\w-]{11}$/.test(id)) return false
+  const html = await fetchText(`https://www.youtube.com/watch?v=${id}`)
+  return html ? parseLiveStatus(html) === id : false
 })
 
 // 只有 http／https 網址交給系統瀏覽器（R45，非功能需求：安全）
