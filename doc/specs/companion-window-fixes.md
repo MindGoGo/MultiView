@@ -111,7 +111,6 @@
 - `electron/main.ts`、`electron/companionPreload.ts`：一般視窗、置頂、一起縮小／還原（R84、R85）
 - `src/lib/companion.ts`：置頂設定（R84）
 - `src/companion/`：置頂按鈕、讀取畫面（R84、R86）
-- `electron/windowState.ts`：不變
 - `electron/webPreload.ts`、`src/players/webTypes.ts`：回報推薦區／留言區已經顯示（R86）
 - `package.json`、`package-lock.json`：版本號（R87）
 - `tests/unit/`、`tests/manual/`：測試
