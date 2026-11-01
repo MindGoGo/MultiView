@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   companionHeader,
   companionLinkAction,
+  companionOnTop,
+  createMinimizeFollower,
   DEFAULT_COMPANION,
   isCompanionTab,
   liveChatUrl,
@@ -92,11 +94,11 @@ describe('companionHeader（R78）', () => {
 
 describe('小視窗的設定（R78 AC5）', () => {
   it('第一次開啟是「搜尋」分頁，沒有記錄位置', () => {
-    expect(defaultSettings().companion).toEqual({ width: 480, height: 760, tab: 'search' })
+    expect(defaultSettings().companion).toEqual({ width: 480, height: 760, tab: 'search', pinned: false })
     expect(DEFAULT_COMPANION.x).toBeUndefined()
   })
   it('位置、大小與上次的分頁原樣讀回', () => {
-    const s = { ...defaultSettings(), companion: { x: 1200, y: 150, width: 420, height: 700, tab: 'comments' } }
+    const s = { ...defaultSettings(), companion: { x: 1200, y: 150, width: 420, height: 700, tab: 'comments', pinned: true } }
     expect(parseSettings(JSON.stringify(s)).settings.companion).toEqual(s.companion)
   })
   it('舊的設定檔沒有小視窗的設定時用預設值', () => {
@@ -108,7 +110,8 @@ describe('小視窗的設定（R78 AC5）', () => {
     expect(normalizeCompanion({ x: 'a', y: 1, width: -5, height: 600, tab: 'video' })).toEqual({
       width: 480,
       height: 600,
-      tab: 'search'
+      tab: 'search',
+      pinned: false
     })
     expect(normalizeCompanion(null)).toEqual(DEFAULT_COMPANION)
   })
@@ -122,5 +125,45 @@ describe('小視窗的設定（R78 AC5）', () => {
     expect(resolveBounds(saved, [primary], primary, { width: 360, height: 400 })).toEqual(saved)
     // 主視窗的最小大小不變
     expect(resolveBounds(saved, [primary], primary).width).toBe(480)
+  })
+})
+
+describe('置頂（R84）', () => {
+  it('0.6.0 的設定檔沒有置頂時視為關閉', () => {
+    expect(normalizeCompanion({ width: 420, height: 700, tab: 'related' }).pinned).toBe(false)
+    expect(normalizeCompanion({ width: 420, height: 700, tab: 'related', pinned: 'yes' }).pinned).toBe(false)
+  })
+  it('小視窗自己置頂，或主視窗置頂時，小視窗放在其他程式上面', () => {
+    expect(companionOnTop(false, false)).toBe(false)
+    expect(companionOnTop(true, false)).toBe(true)
+    expect(companionOnTop(false, true)).toBe(true)
+    expect(companionOnTop(true, true)).toBe(true)
+  })
+})
+
+describe('和主視窗一起縮小、一起還原（R85）', () => {
+  it('AC1：主視窗縮小時一起縮小，還原時一起還原', () => {
+    const f = createMinimizeFollower()
+    expect(f.mainMinimized(false)).toBe(true)
+    expect(f.mainRestored()).toBe(true)
+  })
+  it('AC2：小視窗原本就縮小時，主視窗還原不還原小視窗', () => {
+    const f = createMinimizeFollower()
+    expect(f.mainMinimized(true)).toBe(false)
+    expect(f.mainRestored()).toBe(false)
+  })
+  it('主視窗縮小期間使用者自己還原了小視窗，之後主視窗還原時不再處理', () => {
+    const f = createMinimizeFollower()
+    f.mainMinimized(false)
+    f.companionRestored()
+    expect(f.mainRestored()).toBe(false)
+  })
+  it('還原後再縮小一次也正確', () => {
+    const f = createMinimizeFollower()
+    f.mainMinimized(false)
+    f.mainRestored()
+    expect(f.mainRestored()).toBe(false)
+    expect(f.mainMinimized(false)).toBe(true)
+    expect(f.mainRestored()).toBe(true)
   })
 })
