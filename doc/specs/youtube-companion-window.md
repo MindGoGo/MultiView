@@ -2,7 +2,7 @@
 
 - 功能代號：`youtube-companion-window`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-11-01
 - 前置規格：[youtube-browse-and-subscriptions](youtube-browse-and-subscriptions.md)（R57–R62）、[youtube-back-to-page](youtube-back-to-page.md)（R63–R65）、[youtube-page-mode](youtube-page-mode.md)（R66–R68）、[youtube-menu-tweaks](youtube-menu-tweaks.md)（R69–R72）、[youtube-adblock-fix](youtube-adblock-fix.md)（R73–R74）、[pause-start-and-version](pause-start-and-version.md)（R75–R77）。本規格的需求編號從 R78 開始。
 
@@ -41,7 +41,7 @@
   - 開啟方式：
     - 一般 YouTube 播放與網頁模式的格子，「YouTube ▾」選單多三項：「推薦影片」「留言」「聊天室」→ 開啟小視窗並切到對應的分頁，連結的格子是這一格。
     - 工具列多一個「YouTube 小視窗」按鈕 → 開啟小視窗（已開啟時切到最前面），顯示上次的分頁；第一次開啟時是「搜尋」。
-  - 小視窗上方：分頁「推薦」「留言」「聊天室」「搜尋」，以及推薦、留言、聊天室分頁顯示的「第 N 格：影片名稱」。
+  - 小視窗上方：分頁「推薦」「留言」「聊天室」「搜尋」，以及推薦、留言、聊天室分頁顯示的「第 N 格：影片名稱」（播放器還沒播放過、拿不到名稱時，用影片網頁的標題；這一格沒有影片時只顯示「第 N 格」）。還沒從格子開啟過時，這三個分頁提示從格子的「YouTube ▾」選擇。
   - 只有一個小視窗；已經開著時，再次開啟就切換分頁、更新連結的格子，並切到最前面。
   - 連結的格子換了影片（更換網址、從清單放入、在網頁模式換影片、回到剛才的 YouTube 頁面後再點影片），推薦、留言、聊天室自動換成新的影片。
   - 連結的格子沒有 YouTube 影片（空格、移除、換成其他網站）時，推薦、留言、聊天室顯示「這一格沒有 YouTube 影片」。
@@ -76,7 +76,7 @@
 
 ### R81：聊天室
 - 描述：
-  - 「聊天室」分頁顯示格子目前影片的 YouTube 聊天室（YouTube 的彈出式聊天室）。只支援正在直播的影片（以播放器回報的「直播」判斷）；聊天重播不支援。
+  - 「聊天室」分頁顯示格子目前影片的 YouTube 聊天室（YouTube 的彈出式聊天室）。只支援正在直播的影片（以播放器回報的「直播」判斷；播放器還沒回報時，例如重開程式後還沒播放過，以影片網頁判斷，每部影片查一次）；聊天重播不支援。
   - 不是直播的影片顯示「這部影片沒有聊天室（只有直播有）」。
 - 驗收條件：
   - AC1：連結的格子是直播 → 聊天室分頁顯示即時訊息並持續更新。
@@ -109,7 +109,7 @@
 
 ## 6. API 變更
 
-無（聊天室使用 YouTube 公開的彈出式聊天室網址 `https://www.youtube.com/live_chat?v=<代碼>`）。
+無（聊天室使用 YouTube 公開的彈出式聊天室網址 `https://www.youtube.com/live_chat?v=<代碼>`；判斷直播時讀取公開的影片網頁，和第十二版 R60 判斷頻道直播的方式相同）。
 
 ## 7. 資料表變更
 
@@ -126,8 +126,12 @@
 
 ## 9. 預計影響的檔案
 
-- `electron/main.ts`、`electron/preload.ts`：小視窗的建立、位置保存、與主視窗之間的訊息（R78）
-- 小視窗的畫面（新，例如 `src/companion/`）：分頁、網頁（R78–R82）
+- `electron/main.ts`、`electron/preload.ts`：小視窗的建立、位置保存、與主視窗之間的訊息（R78）；影片網頁判斷直播（R81）
+- `electron/companionPreload.ts`（新）：小視窗畫面可以使用的功能（R78）
+- `electron/windowState.ts`：還原位置時可以指定最小大小（R78）
+- `companion.html`、`src/companion/`（新）、`electron.vite.config.ts`：小視窗的畫面：分頁、網頁（R78–R82）
+- `src/lib/companion.ts`（新）、`src/lib/settings.ts`：網址、留言裡的連結、標題、設定檔（R78–R82）
+- `src/players/webTypes.ts`：網頁的「只顯示推薦區／留言區」狀態（R79、R80）
 - `electron/webPreload.ts`：只顯示推薦區／留言區、攔下影片連結與時間連結（R79、R80、R82）
 - `src/components/Cell.tsx`、`Toolbar.tsx`、`src/App.tsx`：選單、按鈕、連結的格子（R78）
 - `package.json`、`package-lock.json`：版本號（R83）
@@ -135,7 +139,9 @@
 
 ## 10. 未決事項
 
-- [ ] 分支：從 `pause-start-and-version` 開出 `youtube-companion-window`。
+- [x] 分支：從 `pause-start-and-version` 開出 `youtube-companion-window`（2026-11-01）。
+- [ ] R80 AC2：測試時前 140 則留言沒有時間標記，以插入相同格式的連結驗證；實際留言裡的時間連結待使用者確認。
+- [ ] 「只顯示推薦區／留言區」依賴 YouTube 網頁結構（`ytd-watch-flexy #related`、`#comments`），YouTube 改版時可能失效（失效時顯示整個網頁）。
 - [x] 版本號：0.6.0（2026-11-01 確認）。
 
 ## 變更紀錄
@@ -144,3 +150,4 @@
 |---|---|---|
 | 2026-11-01 | 初版 | 依 2026-11-01 使用者需求與選擇（獨立小視窗、一個視窗分頁、從哪格開就跟哪格並跟著換） |
 | 2026-11-01 | 連結的是格子位置；小視窗附屬主視窗；分頁網頁保留、推薦與留言共用網頁；網頁影片一開始就暫停並隱藏；點推薦時網頁不換頁；留言裡的連結；聊天室只支援直播；需要選擇格子時主視窗切到最前面；版本號確定 0.6.0 | 第 2 步複查 |
+| 2026-11-01 | 標題拿不到名稱時用影片網頁的標題、沒有影片時只顯示格子；聊天室在播放器還沒回報時以影片網頁判斷直播；實作完成，驗收見 tests/manual/youtube-companion-window.md | 實作時發現重開程式後還沒播放過的格子，播放器回報不出名稱與直播 |
