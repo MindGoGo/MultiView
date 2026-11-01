@@ -30,6 +30,12 @@ export interface WebState {
 /** 小視窗影片網頁顯示的區域（R79、R80） */
 export type CompanionSection = 'related' | 'comments'
 
+/**
+ * 小視窗影片網頁回報：推薦區、留言區是否已經有內容（R86）；
+ * commentsOff：YouTube 把留言區藏起來了（例如直播中只有聊天室）
+ */
+export type SectionsReady = Record<CompanionSection, boolean> & { commentsOff?: boolean }
+
 /** 網頁最上層框架每秒回報給程式 */
 export interface WebReport {
   /** 是否找到主要影片 */

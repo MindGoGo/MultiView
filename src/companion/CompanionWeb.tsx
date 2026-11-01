@@ -1,7 +1,13 @@
 // 小視窗裡的一個網頁（R78）：和網頁來源一樣在沙箱中執行、套用廣告阻擋；建立後一直保留，切換分頁時不重新載入
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
-import { WEB_PARTITION, type CompanionSection, type WebState } from '../players/webTypes'
+import { WEB_PARTITION, type CompanionSection, type SectionsReady, type WebState } from '../players/webTypes'
+
+/** 網頁載入完成後這麼久仍然沒有推薦區／留言區，就拿掉讀取畫面顯示整個網頁（R86） */
+export const SECTION_WAIT_MS = 15000
+export const LOADING_TEXT = '讀取中…'
+export const NO_COMMENTS = '這部影片目前沒有留言（直播中請看聊天室）'
+const NOT_READY: SectionsReady = { related: false, comments: false }
 
 interface Props {
   /** 要顯示的網址；null 時維持目前的網頁 */
@@ -25,6 +31,13 @@ export function CompanionWeb({ url, shown, section, userAgent, onVideo, onTitle 
   const latest = useRef({ url, section, onVideo, onTitle })
   latest.current = { url, section, onVideo, onTitle }
   const stateRef = useRef<WebState>({ v: 0, mode: 'page', intent: 'pause', volume: 0, muted: true })
+  /** 推薦區、留言區是否已經有內容；等太久時改顯示整個網頁（R86） */
+  const [ready, setReady] = useState<SectionsReady>(NOT_READY)
+  const [gaveUp, setGaveUp] = useState(false)
+  /** 目前的區域等太久仍然沒有內容：取消只顯示那一區，顯示整個網頁（R86） */
+  const fallback = gaveUp && !!section && !ready[section] && !(section === 'comments' && ready.commentsOff)
+  const fallbackRef = useRef(false)
+  fallbackRef.current = fallback
 
   const sendState = () => {
     const view = viewRef.current
@@ -33,7 +46,7 @@ export function CompanionWeb({ url, shown, section, userAgent, onVideo, onTitle 
       ...stateRef.current,
       v: stateRef.current.v + 1,
       interceptYouTube: !!latest.current.onVideo,
-      section: latest.current.section
+      section: fallbackRef.current ? undefined : latest.current.section
     }
     view.send('mv:state', stateRef.current)
   }
@@ -67,23 +80,51 @@ export function CompanionWeb({ url, shown, section, userAgent, onVideo, onTitle 
     const onMessage = (e: Electron.IpcMessageEvent) => {
       if (e.channel === 'mv:hello') sendState()
       else if (e.channel === 'mv:ytvideo' && typeof e.args[0] === 'string') latest.current.onVideo?.(e.args[0])
+      else if (e.channel === 'mv:sections') setReady({ ...NOT_READY, ...(e.args[0] as SectionsReady) })
+    }
+    // 換頁（換影片）時重新顯示讀取畫面；網頁載入完成後開始計時（R86）
+    let waitTimer: ReturnType<typeof setTimeout> | undefined
+    const onStartNavigation = (e: Electron.DidStartNavigationEvent) => {
+      if (!e.isMainFrame || e.isInPlace) return
+      clearTimeout(waitTimer)
+      setReady(NOT_READY)
+      fallbackRef.current = false
+      setGaveUp(false)
+    }
+    const onFinishLoad = () => {
+      if (view.getURL() === 'about:blank') return
+      clearTimeout(waitTimer)
+      waitTimer = setTimeout(() => setGaveUp(true), SECTION_WAIT_MS)
     }
     const onPageTitle = (e: Electron.PageTitleUpdatedEvent) => latest.current.onTitle?.(view.getURL(), e.title)
     view.addEventListener('dom-ready', onReady)
     view.addEventListener('ipc-message', onMessage)
     view.addEventListener('page-title-updated', onPageTitle)
+    view.addEventListener('did-start-navigation', onStartNavigation)
+    view.addEventListener('did-finish-load', onFinishLoad)
     hostRef.current?.appendChild(view)
     return () => {
       view.removeEventListener('dom-ready', onReady)
       view.removeEventListener('ipc-message', onMessage)
       view.removeEventListener('page-title-updated', onPageTitle)
+      view.removeEventListener('did-start-navigation', onStartNavigation)
+      view.removeEventListener('did-finish-load', onFinishLoad)
+      clearTimeout(waitTimer)
       view.remove()
       viewRef.current = null
     }
   }, [])
 
   useEffect(load, [url])
-  useEffect(sendState, [section])
+  useEffect(sendState, [section, fallback])
 
-  return <div ref={hostRef} className={`companion-pane ${shown ? '' : 'hidden'}`} />
+  // 讀取畫面蓋在網頁上面，網頁在背後照常載入（留言要在畫面上才會開始載入）（R86）
+  const commentsOff = section === 'comments' && !!ready.commentsOff
+  const loading = !!section && !ready[section] && !gaveUp
+  return (
+    <div className={`companion-pane ${shown ? '' : 'hidden'}`}>
+      <div ref={hostRef} className="companion-web-host" />
+      {(loading || commentsOff) && <div className="companion-loading">{commentsOff ? NO_COMMENTS : LOADING_TEXT}</div>}
+    </div>
+  )
 }

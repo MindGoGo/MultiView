@@ -8,7 +8,7 @@
 import { ipcRenderer } from 'electron'
 import { pickMain, toParentRect, type Candidate, type Rect } from '../src/lib/webVideo'
 import { progressFromMedia, rangesOf, type Progress } from '../src/lib/progress'
-import type { CompanionSection, WebReport, WebState, WebVideoStatus } from '../src/players/webTypes'
+import type { CompanionSection, SectionsReady, WebReport, WebState, WebVideoStatus } from '../src/players/webTypes'
 
 const MARK = '__multiview__'
 const SCAN_MS = 1000
@@ -583,7 +583,10 @@ if (window === window.top) {
 
 // ---------- YouTube 小視窗的推薦區、留言區（R79、R80） ----------
 // 推薦區和留言區各自固定填滿整個畫面、可以捲動，只有目前分頁的那一個看得到（另一個隱藏但保留捲動位置）；
-// 影片和網頁其他部分被蓋住。YouTube 改版找不到這兩個區域時規則不會套用，顯示整個網頁。
+// 網頁其他部分（影片、頂端列）設成看不見，只有目前的區域看得見（子元素可以覆蓋上層的 visibility）；
+// 不靠 z-index 蓋住，YouTube 的層級設定會讓其他固定位置的元素畫在上面。
+// 一開始（區域還沒出現時）整個網頁就看不見，讀取中不會透出影片；
+// YouTube 改版、一直找不到這兩個區域時，由小視窗取消這個模式，顯示整個網頁（R86）。
 const SECTION_SELECTORS: Record<CompanionSection, string> = {
   related: 'ytd-watch-flexy #related',
   comments: 'ytd-watch-flexy #comments'
@@ -602,6 +605,9 @@ html[dark] :is(${sels.join(', ')}) { background: #0f0f0f !important; }
 ${SECTION_SELECTORS[active]} { visibility: visible !important; }
 ${inactive} { visibility: hidden !important; pointer-events: none !important; }
 html:has(${SECTION_SELECTORS[active]}) #masthead-container { display: none !important; }
+body { visibility: hidden !important; }
+html { background: #fff !important; }
+html[dark] { background: #0f0f0f !important; }
 `
 }
 let sectionStyle: HTMLStyleElement | null = null
@@ -622,6 +628,33 @@ function applySection(section: CompanionSection | undefined) {
   if (!sectionStyle.isConnected) document.documentElement.appendChild(sectionStyle)
 }
 window.addEventListener('DOMContentLoaded', () => state.section && applySection(state.section))
+
+// 推薦區、留言區已經有內容時回報，小視窗才拿掉讀取畫面（R86）。
+// 留言區一開始就存在但是空的，所以看內容：留言、留言數與排序、或「留言功能已關閉」等訊息
+const SECTION_CONTENT: Record<CompanionSection, string> = {
+  related: 'a[href*="/watch?v="]',
+  comments: 'ytd-comment-thread-renderer, ytd-comments-header-renderer, ytd-message-renderer'
+}
+const SECTIONS_CHECK_MS = 300
+/** 網頁載入完成後留言區一直被 YouTube 藏起來這麼久，才當作沒有留言（載入中也可能短暫藏起來） */
+const COMMENTS_OFF_MS = 3000
+let sentSections = ''
+let commentsHiddenSince = 0
+if (isTop) {
+  setInterval(() => {
+    if (!state.section || !sectionStyle?.isConnected) return
+    const ready = {} as SectionsReady
+    for (const k of Object.keys(SECTION_SELECTORS) as CompanionSection[])
+      ready[k] = !!document.querySelector(`${SECTION_SELECTORS[k]} :is(${SECTION_CONTENT[k]})`)
+    const hidden = document.readyState === 'complete' && !ready.comments && !!document.querySelector(`${SECTION_SELECTORS.comments}[hidden]`)
+    commentsHiddenSince = hidden ? commentsHiddenSince || Date.now() : 0
+    ready.commentsOff = hidden && Date.now() - commentsHiddenSince >= COMMENTS_OFF_MS
+    const key = JSON.stringify(ready)
+    if (key === sentSections) return
+    sentSections = key
+    ipcRenderer.sendToHost('mv:sections', ready)
+  }, SECTIONS_CHECK_MS)
+}
 // 小視窗的影片網頁：影片（包括廣告）一開始播放就暫停（R79、R80）。
 // 媒體事件不會往上傳，但捕獲階段收得到，不等定時找影片
 window.addEventListener(
