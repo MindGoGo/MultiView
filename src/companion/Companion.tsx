@@ -20,9 +20,11 @@ export const NO_VIDEO = '這一格沒有 YouTube 影片'
 export const NO_CHAT = '這部影片沒有聊天室（只有直播有）'
 export const NO_CELL = '請在格子的「YouTube ▾」選擇「推薦影片」「留言」或「聊天室」'
 
-export function Companion({ initial }: { initial: { tab: CompanionTab; link: CompanionLink } }) {
+export function Companion({ initial }: { initial: { tab: CompanionTab; link: CompanionLink; pinned: boolean } }) {
   const [tab, setTab] = useState(initial.tab)
   const [link, setLink] = useState(initial.link)
+  /** 置頂（R84） */
+  const [pinned, setPinned] = useState(initial.pinned)
   /** 開過的分頁才建立網頁，之後一直保留（R78）；推薦和留言共用影片網頁 */
   const [opened, setOpened] = useState(() => new Set([initial.tab]))
 
@@ -58,6 +60,13 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
             {COMPANION_TAB_LABELS[t]}
           </button>
         ))}
+        <button
+          className={`companion-pin ${pinned ? 'active' : ''}`}
+          title={pinned ? '置頂：開（小視窗永遠在最上層）' : '置頂：關'}
+          onClick={() => void window.companion.togglePin().then(setPinned)}
+        >
+          置頂
+        </button>
       </div>
       {tab !== 'search' && link.cell !== null && <div className="companion-header">{companionHeader({ ...link, video })}</div>}
       <div className="companion-body">

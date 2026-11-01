@@ -21,11 +21,13 @@ export interface CompanionWindowState {
   width: number
   height: number
   tab: CompanionTab
+  /** 置頂（R84）；舊的設定檔沒有時視為關閉 */
+  pinned: boolean
 }
 
 export const COMPANION_MIN_WIDTH = 360
 export const COMPANION_MIN_HEIGHT = 400
-export const DEFAULT_COMPANION: CompanionWindowState = { width: 480, height: 760, tab: DEFAULT_COMPANION_TAB }
+export const DEFAULT_COMPANION: CompanionWindowState = { width: 480, height: 760, tab: DEFAULT_COMPANION_TAB, pinned: false }
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
@@ -35,7 +37,8 @@ export function normalizeCompanion(raw: unknown): CompanionWindowState {
   const out: CompanionWindowState = {
     width: isFiniteNumber(r.width) && r.width > 0 ? r.width : DEFAULT_COMPANION.width,
     height: isFiniteNumber(r.height) && r.height > 0 ? r.height : DEFAULT_COMPANION.height,
-    tab: isCompanionTab(r.tab) ? r.tab : DEFAULT_COMPANION_TAB
+    tab: isCompanionTab(r.tab) ? r.tab : DEFAULT_COMPANION_TAB,
+    pinned: r.pinned === true
   }
   if (isFiniteNumber(r.x) && isFiniteNumber(r.y)) {
     out.x = r.x
@@ -112,3 +115,34 @@ export function companionHeader(link: CompanionLink): string {
 
 /** 網頁標題去掉結尾的「 - YouTube」 */
 export const stripYouTubeSuffix = (title: string | null) => (title ? title.replace(/ - YouTube$/, '') : title)
+
+/**
+ * 小視窗是否放在其他程式上面（R84）：自己置頂，或主視窗置頂時（否則會一直被主視窗蓋住）。
+ * 只有主視窗置頂時，兩個視窗之間依點擊決定前後。
+ */
+export const companionOnTop = (pinned: boolean, mainOnTop: boolean) => pinned || mainOnTop
+
+/**
+ * 和主視窗一起縮小、一起還原（R85）：只還原因為主視窗縮小而一起縮小的小視窗；
+ * 主視窗縮小期間使用者自己還原了小視窗，之後就不再處理。
+ */
+export function createMinimizeFollower() {
+  let byMain = false
+  return {
+    /** 主視窗縮小；回傳是否要把小視窗一起縮小 */
+    mainMinimized(companionMinimized: boolean): boolean {
+      byMain = !companionMinimized
+      return byMain
+    },
+    /** 小視窗被還原（使用者自己或程式） */
+    companionRestored() {
+      byMain = false
+    },
+    /** 主視窗還原；回傳是否要把小視窗一起還原 */
+    mainRestored(): boolean {
+      const r = byMain
+      byMain = false
+      return r
+    }
+  }
+}

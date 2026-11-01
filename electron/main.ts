@@ -14,6 +14,8 @@ import { pageMenuItems, type PageMenuAction } from '../src/lib/pageMenu'
 import {
   COMPANION_MIN_HEIGHT,
   COMPANION_MIN_WIDTH,
+  companionOnTop,
+  createMinimizeFollower,
   isCompanionTab,
   type CompanionAction,
   type CompanionLink,
@@ -54,6 +56,8 @@ let rendererUrl = ''
 let companion: BrowserWindow | null = null
 /** 小視窗連結的格子與它目前的影片，由主畫面告知（R78） */
 let companionLink: CompanionLink = { cell: null, video: null }
+/** 和主視窗一起縮小、一起還原（R85） */
+const companionFollower = createMinimizeFollower()
 
 function saveSoon() {
   saver.schedule(settings)
@@ -129,7 +133,22 @@ async function createWindow() {
     fullscreenGuard = false
     sendWindowState()
   })
-  win.on('always-on-top-changed', sendWindowState)
+  win.on('always-on-top-changed', () => {
+    sendWindowState()
+    applyCompanionOnTop()
+  })
+  // 小視窗和主視窗一起縮小、一起還原（R85）
+  win.on('minimize', () => {
+    if (companion && companionFollower.mainMinimized(companion.isMinimized())) companion.minimize()
+  })
+  win.on('restore', () => {
+    if (companion && companionFollower.mainRestored() && companion.isMinimized()) {
+      companion.restore()
+      win?.focus()
+    }
+  })
+  // 小視窗置頂時，點主視窗（主視窗也置頂時）後小視窗仍在主視窗上面（R84）
+  win.on('focus', raisePinnedCompanion)
   // 關閉前先向畫面要每一格最新的觀看進度，最多等 1 秒（R55 AC9）
   let closingAsked = false
   win.on('close', (event) => {
@@ -150,7 +169,11 @@ async function createWindow() {
     saver.flush()
     listsSaver.flush()
   })
-  win.on('closed', () => (win = null))
+  win.on('closed', () => {
+    win = null
+    // 小視窗不附屬主視窗，要自己關閉（R84 AC6）
+    companion?.close()
+  })
 
   // 焦點在 YouTube 播放器（iframe）裡時，按鍵不會傳到畫面，在這裡攔下來轉給畫面（R9 AC3）
   win.webContents.on('before-input-event', (event, input) => {
@@ -231,10 +254,9 @@ function openCompanion(tab: CompanionTab | null) {
     width: COMPANION_MIN_WIDTH,
     height: COMPANION_MIN_HEIGHT
   })
-  // 附屬主視窗：永遠在主視窗上面，主視窗最小化時一起縮小（R78）
+  // 一般視窗：點主視窗時退到後面，縮小時收到工作列；需要時由使用者置頂（R84）
   companion = new BrowserWindow({
     ...bounds,
-    parent: win,
     title: 'YouTube 小視窗',
     minWidth: COMPANION_MIN_WIDTH,
     minHeight: COMPANION_MIN_HEIGHT,
@@ -249,6 +271,8 @@ function openCompanion(tab: CompanionTab | null) {
     }
   })
   companion.setMenu(null)
+  applyCompanionOnTop()
+  companion.on('restore', () => companionFollower.companionRestored())
   companion.on('ready-to-show', () => companion?.show())
   companion.on('move', trackCompanionBounds)
   companion.on('resize', trackCompanionBounds)
@@ -264,6 +288,25 @@ function openCompanion(tab: CompanionTab | null) {
   void companion.loadURL(new URL('companion.html', rendererUrl).href)
 }
 
+/** 小視窗是否在其他程式上面（R84） */
+function applyCompanionOnTop() {
+  if (!companion) return
+  const onTop = companionOnTop(settings.companion.pinned, win?.isAlwaysOnTop() ?? false)
+  if (companion.isAlwaysOnTop() !== onTop) companion.setAlwaysOnTop(onTop)
+  raisePinnedCompanion()
+}
+
+/**
+ * 置頂的小視窗排回主視窗上面（R84）。主視窗取得焦點、切換置頂時，系統在事件之後才把主視窗排到前面，
+ * 所以稍後再排
+ */
+const RAISE_DELAY_MS = 50
+function raisePinnedCompanion() {
+  setTimeout(() => {
+    if (companion && settings.companion.pinned && !companion.isMinimized()) companion.moveTop()
+  }, RAISE_DELAY_MS)
+}
+
 ipcMain.on('companion:open', (e, tab: unknown) => {
   if (e.sender === win?.webContents) openCompanion(isCompanionTab(tab) ? tab : null)
 })
@@ -272,7 +315,19 @@ ipcMain.on('companion:link', (e, link: CompanionLink) => {
   companionLink = link
   companion?.webContents.send('companion:link', link)
 })
-ipcMain.handle('companion:init', () => ({ tab: settings.companion.tab, link: companionLink }))
+ipcMain.handle('companion:init', () => ({
+  tab: settings.companion.tab,
+  link: companionLink,
+  pinned: settings.companion.pinned
+}))
+// 小視窗的「置頂」按鈕（R84）：選擇保存在設定檔
+ipcMain.handle('companion:togglePin', (e) => {
+  if (e.sender !== companion?.webContents) return settings.companion.pinned
+  settings.companion = { ...settings.companion, pinned: !settings.companion.pinned }
+  saveSoon()
+  applyCompanionOnTop()
+  return settings.companion.pinned
+})
 ipcMain.on('companion:tab', (e, tab: unknown) => {
   if (e.sender !== companion?.webContents || !isCompanionTab(tab)) return
   settings.companion = { ...settings.companion, tab }
