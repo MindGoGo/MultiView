@@ -1,5 +1,6 @@
 // yt-dlp 播放（R88–R93）的共用型別與純邏輯：解析結果的判讀、錯誤判斷、更新輸出、版本比較。
 // 主程序與畫面共用，不依賴 Electron。
+import { getDomain } from 'tldts-experimental'
 
 /** 每一組（直播、一般影片）的播放方式（R88） */
 export type PlayMethod = 'embed' | 'ytdlp'
@@ -132,7 +133,6 @@ export function pickStream(info: unknown, now: number): YtStream | null {
 /** 看起來是 yt-dlp 太舊、無法解析 YouTube 頁面的錯誤（R92） */
 const OUTDATED_PATTERNS = [
   /Unable to extract/i,
-  /Unsupported URL/i,
   /\bnsig\b/i,
   /n challenge/i,
   /Failed to extract any player response/i,
@@ -155,7 +155,9 @@ const NOT_OUTDATED_PATTERNS = [
   /Premieres in/i,
   /getaddrinfo/i,
   /timed out/i,
-  /Unable to download/i
+  /Unable to download/i,
+  // 其他網站：yt-dlp 不支援這個網址是正常的，不是太舊（R111）
+  /Unsupported URL/i
 ]
 
 export function isOutdatedError(stderr: string): boolean {
@@ -291,4 +293,32 @@ export function ytdlpRow(s: YtDlpStatus): YtDlpRow {
     case 'missing':
       return { version, chip: { text: '找不到 yt-dlp', tone: 'error' }, button: { label: '檢查更新', enabled: false } }
   }
+}
+
+/**
+ * 串流請求標頭依「網域」套用（R110）：例如 usher.ttvnw.net 和 aps12.playlist.ttvnw.net 都是 ttvnw.net，
+ * 主清單與各畫質的清單、片段常常在同一個網域的不同主機上
+ */
+export function streamSite(hostname: string): string {
+  return getDomain(hostname) ?? hostname
+}
+
+/** 其他網站的串流要帶的標頭：Referer 是原本的網頁網址，yt-dlp 有提供時用 yt-dlp 的（R110） */
+export function webStreamHeaders(pageUrl: string, fromYtdlp: Record<string, string> | undefined): Record<string, string> {
+  const hasReferer = !!fromYtdlp && Object.keys(fromYtdlp).some((k) => k.toLowerCase() === 'referer')
+  return { ...(hasReferer ? {} : { Referer: pageUrl }), ...fromYtdlp }
+}
+
+/**
+ * 程式畫面發出的串流請求最後送出的標頭（R103、R110）：
+ * 不帶 Origin、Referer（程式畫面的網址 http://127.0.0.1 會被 Twitch 拒絕、被 Dailymotion 拒絕），
+ * 也不帶 Sec-Fetch-*（影片網站 A 看到 Sec-Fetch-Site: cross-site 會換成禁止播放的影片，2026-11-07 實測），
+ * 再補上這個網站要求的標頭
+ */
+export function streamRequestHeaders(
+  headers: Record<string, string>,
+  extra: Record<string, string> | undefined
+): Record<string, string> {
+  const own = Object.fromEntries(Object.entries(headers).filter(([k]) => !/^(origin|referer|sec-fetch-.*)$/i.test(k)))
+  return extra ? { ...own, ...extra } : own
 }

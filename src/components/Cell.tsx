@@ -17,6 +17,7 @@ import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } f
 import type { YtMode } from '../players/YouTubeSource'
 import { LoadingCritter, useLoadingVisible } from './LoadingCritter'
 import { loadingKind } from '../lib/loading'
+import { playbackBadge } from '../lib/playbackBadge'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
 interface Props {
@@ -203,6 +204,9 @@ export function Cell(props: Props) {
 
   const showInput = !source || editing
   const failed = source !== null && status === 'error' && !editing
+  /** 操作區顯示中；播放方式的小標示也一起顯示（R109） */
+  const controlsShown = hover || props.moving || seeking || previewing || !!menu
+  const badge = source ? playbackBadge(source, props.ytMode) : null
   // 讀取動畫（R99）
   const loading = useLoadingVisible(source ? loadingKind({ status, ytMode: props.ytMode, isWeb, showInput }) : null)
   /** 找到影片了（暫停、播放中、播完），還沒有進度條時也可以按播放（R54）；載入中不算 */
@@ -254,9 +258,20 @@ export function Cell(props: Props) {
         if (e.target === e.currentTarget) props.onFocusAudio(index)
       }}
     >
-      {source && isAudible(source) && !showInput && (
-        <div className="audio-indicator" title="有聲音">
-          🔊
+      {/* 左上角：有聲音（R7）與播放方式的小標示（R109，和操作區同時出現） */}
+      {source && !showInput && (isAudible(source) || (badge && controlsShown)) && (
+        <div className="cell-corner">
+          {isAudible(source) && (
+            <div className="audio-indicator" title="有聲音">
+              🔊
+            </div>
+          )}
+          {badge && controlsShown && (
+            <div className={`play-badge ${badge.tone}`} title={badge.tip} onClick={(e) => e.stopPropagation()}>
+              <span className="lbl-full">{badge.text}</span>
+              <span className="lbl-icon">{badge.short}</span>
+            </div>
+          )}
         </div>
       )}
       {showInput && (
@@ -333,7 +348,7 @@ export function Cell(props: Props) {
       )}
       {source && !editing && (
         <div
-          className={`cell-controls ${hover || props.moving || seeking || previewing || menu ? 'show' : ''}`}
+          className={`cell-controls ${controlsShown ? 'show' : ''}`}
           onMouseMove={onMouseMove}
         >
           {!failed && (

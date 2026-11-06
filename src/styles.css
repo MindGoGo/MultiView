@@ -400,10 +400,34 @@ button.link {
 
 
 /* ---- 聲音（R7） ---- */
-.audio-indicator {
+/* 左上角：有聲音的標示與播放方式的小標示（R109）並排 */
+.cell-corner {
   position: absolute;
   top: 6px;
   left: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.play-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  line-height: 16px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #c9c9cd;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.play-badge.ytdlp {
+  background: rgba(46, 160, 67, 0.85);
+  color: #fff;
+}
+
+.audio-indicator {
   padding: 2px 5px;
   border-radius: 4px;
   font-size: 12px;
@@ -1385,4 +1409,19 @@ button.danger {
 
 ::-webkit-scrollbar-button {
   display: none;
+}
+
+/* 播放方式的小標示：寬度 180 像素以上都顯示完整文字，更窄才顯示短字（R109） */
+@container (min-width: 180px) {
+  .play-badge .lbl-full {
+    display: inline;
+  }
+  .play-badge .lbl-icon {
+    display: none;
+  }
+}
+
+/* 整頁模式、直接操作時格子不接收滑鼠，小標示仍然可以停留顯示說明（R109） */
+.cell.direct .cell-corner .play-badge {
+  pointer-events: auto;
 }

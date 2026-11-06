@@ -16,7 +16,7 @@ interface Props extends Omit<WebPlayerProps, 'ref'> {
   forceWeb: boolean
   quality: Quality
   audioLang: string | null
-  /** 'embed' 表示用網頁播放（和 YouTube 的「原本的方式」共用同一組值） */
+  /** 'embed' 表示用網頁播放、'fallback' 表示因 yt-dlp 失敗而用網頁（和 YouTube 共用同一組值） */
   onMode(mode: YtMode): void
   /** 這一格從 yt-dlp 退回網頁（R103） */
   onFallback(): void
@@ -25,7 +25,15 @@ interface Props extends Omit<WebPlayerProps, 'ref'> {
 type Plan = { kind: 'resolving' } | { kind: 'web'; fallback: boolean } | { kind: 'ytdlp'; stream: YtStream }
 
 const modeOf = (plan: Plan): YtMode =>
-  plan.kind === 'ytdlp' ? (plan.stream.kind === 'hls' ? 'ytdlp-hls' : 'ytdlp-mp4') : plan.kind === 'web' ? 'embed' : 'resolving'
+  plan.kind === 'ytdlp'
+    ? plan.stream.kind === 'hls'
+      ? 'ytdlp-hls'
+      : 'ytdlp-mp4'
+    : plan.kind === 'web'
+      ? plan.fallback
+        ? 'fallback'
+        : 'embed'
+      : 'resolving'
 
 export const WebSource = forwardRef<PlayerHandle, Props>(function WebSource(props, ref) {
   const { method, forceWeb, quality, audioLang, onMode, onFallback, onStatus, startAt, autoplay, ...web } = props

@@ -11,6 +11,9 @@ import {
   parseUpdateOutput,
   parseVersion,
   pickStream,
+  streamRequestHeaders,
+  streamSite,
+  webStreamHeaders,
   shouldAutoUpdate,
   statusOf,
   type ResolveResult,
@@ -140,7 +143,7 @@ const webKey = (url: string) => `web:${url}`
 const targetUrl = (key: string) =>
   key.startsWith('yt:') ? `https://www.youtube.com/watch?v=${key.slice(3)}` : key.slice(4)
 
-/** 其他網站的串流要帶的請求標頭，依串流所在的網站（R103） */
+/** 串流要帶的請求標頭，依串流所在的網域（R103、R110） */
 const streamHeaders = new Map<string, Record<string, string>>()
 
 async function run(key: string): Promise<ResolveResult> {
@@ -167,9 +170,11 @@ async function run(key: string): Promise<ResolveResult> {
     stream = null
   }
   if (!stream) return { ok: false, reason: 'failed' }
+  // 其他網站的串流帶上原本的網頁網址當 Referer（R110）；YouTube 不帶
+  if (key.startsWith('web:')) stream = { ...stream, headers: webStreamHeaders(key.slice(4), stream.headers) }
   if (stream.headers) {
     try {
-      streamHeaders.set(new URL(stream.url).host, stream.headers)
+      streamHeaders.set(streamSite(new URL(stream.url).hostname), stream.headers)
     } catch {
       // 網址不合法時不記
     }
@@ -282,14 +287,11 @@ export function installStreamCors(ses: Session, appOrigin: string) {
     fromApp.add(details.id)
     let extra: Record<string, string> | undefined
     try {
-      extra = streamHeaders.get(new URL(details.url).host)
+      extra = streamHeaders.get(streamSite(new URL(details.url).hostname))
     } catch {
       extra = undefined
     }
-    // 不帶程式畫面的網址當 Referer：Dailymotion 看到 http://127.0.0.1 會回 403（2026-11-06 實測）；
-    // 網站要求的 Referer 由 yt-dlp 提供
-    const own = Object.fromEntries(Object.entries(headers).filter(([k]) => k.toLowerCase() !== 'referer'))
-    callback({ requestHeaders: extra ? { ...own, ...extra } : own })
+    callback({ requestHeaders: streamRequestHeaders(headers, extra) })
   })
   ses.webRequest.onHeadersReceived(filter, (details, callback) => {
     if (!fromApp.has(details.id)) return callback({})
