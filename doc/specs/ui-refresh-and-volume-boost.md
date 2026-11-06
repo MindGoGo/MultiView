@@ -2,7 +2,7 @@
 
 - 功能代號：`ui-refresh-and-volume-boost`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-11-06
 - 前置規格：[ytdlp-playback](ytdlp-playback.md)（R88–R95）。本規格的需求編號從 R96 開始（R34–R39 保留給本機播放與下載）。
 
@@ -193,7 +193,7 @@
 ## 11. 未決事項
 
 - [x] 版本號：0.7.1（2026-11-06 使用者選擇）。
-- [ ] 分支：從 `ytdlp-playback` 開出 `ui-refresh-and-volume-boost`。
+- [x] 分支：從 `ytdlp-playback` 開出 `ui-refresh-and-volume-boost`（2026-11-06）。
 - [ ] 第 4 項無法重現，R100 是依據觀察到的大量預先緩衝推定的處理；使用者若再遇到，請記下當時的操作（切換畫質、語音、播放方式）與畫質。
 
 ## 變更紀錄
