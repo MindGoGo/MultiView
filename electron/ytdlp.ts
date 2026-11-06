@@ -151,11 +151,35 @@ async function run(videoId: string): Promise<ResolveResult> {
   )
   if (r.missing) return { ok: false, reason: 'missing' }
   if (r.code !== 0) return { ok: false, reason: isOutdatedError(r.stderr) ? 'outdated' : 'failed' }
+  let stream
   try {
-    const stream = pickStream(JSON.parse(r.stdout), Date.now())
-    return stream ? { ok: true, stream } : { ok: false, reason: 'failed' }
+    stream = pickStream(JSON.parse(r.stdout), Date.now())
   } catch {
-    return { ok: false, reason: 'failed' }
+    stream = null
+  }
+  if (!stream) return { ok: false, reason: 'failed' }
+  if (stream.kind === 'mp4') await waitUntilServed(stream.url)
+  return { ok: true, stream }
+}
+
+const SERVE_WAIT_TRIES = 10
+const SERVE_WAIT_INTERVAL_MS = 1000
+
+/**
+ * 剛解析出來的一般影片網址，前幾秒 YouTube 會回 403（2026-11-06 實測約 3 秒），
+ * 播放器會因此失敗、重新解析又拿到新的網址。先試讀第一個位元組，可以讀了才交給畫面；
+ * 10 秒內都不行就照樣交出去，由播放器的重試處理。
+ */
+async function waitUntilServed(url: string) {
+  for (let i = 0; i < SERVE_WAIT_TRIES; i++) {
+    try {
+      const res = await net.fetch(url, { headers: { Range: 'bytes=0-0' } })
+      await res.body?.cancel()
+      if (res.ok) return
+    } catch {
+      // 網路錯誤也再等一下
+    }
+    await new Promise((r) => setTimeout(r, SERVE_WAIT_INTERVAL_MS))
   }
 }
 

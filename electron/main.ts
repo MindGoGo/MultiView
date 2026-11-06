@@ -357,6 +357,7 @@ ipcMain.handle('settings:getView', () => ({
   slots: settings.slots,
   brightness: settings.brightness,
   autoYoutubeWeb: settings.autoYoutubeWeb,
+  youtubeMethods: settings.youtubeMethods,
   listTab: settings.listTab
 }))
 ipcMain.on('settings:saveView', (_, view: unknown) => {
