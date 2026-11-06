@@ -93,7 +93,13 @@ describe('解析結果（R89）', () => {
     expect(s.title).toBe('christmas lofi radio 🎄 cozy ambience to relax to')
     expect(s.expiresAt).toBe(EXPIRE_S * 1000)
   })
-  it('一般影片：影音合一的 360p（format 18）', () => {
+  it('一般影片有主清單 → HLS 主清單（可選畫質），不用 360p', () => {
+    const info = { ...VOD_INFO, formats: [...VOD_INFO.formats, ...LIVE_INFO.formats] }
+    const s = pickStream(info, NOW)!
+    expect(s).toMatchObject({ kind: 'hls', isLive: false })
+    expect(s.url).toContain('/hls_variant/')
+  })
+  it('一般影片沒有主清單：影音合一的 360p（format 18）', () => {
     const s = pickStream(VOD_INFO, NOW)!
     expect(s.kind).toBe('mp4')
     expect(s.url).toContain('itag=18')

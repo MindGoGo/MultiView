@@ -7,8 +7,8 @@ import { needsResolve, type YouTubeMethods, type YtStream } from '../lib/ytdlp'
 import { YouTubePlayer } from './YouTubePlayer'
 import { VideoPlayer, type Renew } from './VideoPlayer'
 
-/** 格子要知道的播放方式：解析中、內嵌播放器、yt-dlp 播放直播／一般影片（R89） */
-export type YtMode = 'resolving' | 'embed' | 'ytdlp-live' | 'ytdlp-vod'
+/** 格子要知道的播放方式：解析中、內嵌播放器、yt-dlp 播放 HLS 主清單／360p mp4（R89） */
+export type YtMode = 'resolving' | 'embed' | 'ytdlp-hls' | 'ytdlp-mp4'
 
 interface Props extends PlayerProps {
   videoId: string
@@ -27,7 +27,7 @@ type Plan =
   | { kind: 'ytdlp'; stream: YtStream }
 
 const modeOf = (plan: Plan): YtMode =>
-  plan.kind === 'ytdlp' ? (plan.stream.isLive ? 'ytdlp-live' : 'ytdlp-vod') : plan.kind
+  plan.kind === 'ytdlp' ? (plan.stream.kind === 'hls' ? 'ytdlp-hls' : 'ytdlp-mp4') : plan.kind
 
 export const YouTubeSource = forwardRef<PlayerHandle, Props>(function YouTubeSource(props, ref) {
   const { videoId, quality, captions, methods, onStatus, onMode, onFallback, startAt, autoplay, ...rest } = props

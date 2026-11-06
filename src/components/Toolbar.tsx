@@ -49,7 +49,7 @@ const METHOD_ITEMS: { group: keyof YouTubeMethods; method: PlayMethod; label: st
   { group: 'live', method: 'embed', label: 'YouTube 直播：內嵌播放器' },
   { group: 'live', method: 'ytdlp', label: 'YouTube 直播：yt-dlp' },
   { group: 'vod', method: 'embed', label: 'YouTube 一般影片：內嵌播放器' },
-  { group: 'vod', method: 'ytdlp', label: 'YouTube 一般影片：yt-dlp（最高 360p）' }
+  { group: 'vod', method: 'ytdlp', label: 'YouTube 一般影片：yt-dlp' }
 ]
 const YTDLP_UPDATE = 'ytdlpUpdate'
 

@@ -144,7 +144,7 @@ export function Cell(props: Props) {
   const isWeb = source?.parsed.kind === 'web'
   const pageMode = isWeb && props.webMode === 'page'
   /** 用 yt-dlp 播放的 YouTube：沒有可以直接操作的 YouTube 介面、不支援字幕（R89） */
-  const ytdlp = props.ytMode === 'ytdlp-live' || props.ytMode === 'ytdlp-vod'
+  const ytdlp = props.ytMode === 'ytdlp-hls' || props.ytMode === 'ytdlp-mp4'
 
   const onMouseMove = () => {
     setHover(true)
@@ -434,13 +434,13 @@ export function Cell(props: Props) {
           )}
           {(source.parsed.kind === 'youtube' || source.parsed.kind === 'hls') && (
             <button
-              className={source.quality !== 'auto' && props.ytMode !== 'ytdlp-vod' ? 'active' : ''}
+              className={source.quality !== 'auto' && props.ytMode !== 'ytdlp-mp4' ? 'active' : ''}
               title={
-                props.ytMode === 'ytdlp-vod'
-                  ? 'yt-dlp 播放一般影片固定 360p'
+                props.ytMode === 'ytdlp-mp4'
+                  ? 'yt-dlp 播放這部影片固定 360p'
                   : `畫質：${qualityLabel(source.quality)}（按一下選擇畫質）`
               }
-              disabled={props.ytMode === 'ytdlp-vod'}
+              disabled={props.ytMode === 'ytdlp-mp4'}
               onPointerDown={(e) => menu?.kind === 'quality' && e.stopPropagation()}
               onClick={(e) => toggleMenu('quality', e)}
             >

@@ -65,8 +65,8 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : nul
 /**
  * 從 yt-dlp -J 的結果選出要播的串流（R89）：
  * - 直播：HLS 的主清單（影像、聲音分開的軌道都在主清單裡，hls.js 會自己組合，也能切換畫質）
- * - 一般影片：影音合一的 360p mp4（format 18），沒有時用其他影音合一的 https 格式
- * - 一般影片沒有影音合一的格式但有 HLS（例如剛結束的直播）時用 HLS
+ * - 一般影片：也是 HLS 的主清單（2026-11-06 實測一般影片也有，144p–2160p）；
+ *   沒有主清單時用影音合一的 360p mp4（format 18），再沒有時用其他影音合一的 https 格式
  * 沒有可以播的格式時回傳 null。
  */
 export function pickStream(info: unknown, now: number): YtStream | null {
@@ -80,11 +80,11 @@ export function pickStream(info: unknown, now: number): YtStream | null {
   const make = (kind: YtStream['kind'], url: string): YtStream => ({ kind, url, isLive, title, expiresAt: expiryOf(url, now) })
   if (isLive) return hls ? make('hls', hls.manifest_url as string) : null
   if (j.live_status === 'is_upcoming') return null
+  if (hls) return make('hls', hls.manifest_url as string)
   const muxed = (f: RawFormat) =>
     f.protocol === 'https' && str(f.url) && f.vcodec !== 'none' && f.acodec !== 'none' && f.vcodec != null && f.acodec != null
   const mp4 = formats.find((f) => f.format_id === '18' && muxed(f)) ?? formats.find(muxed)
-  if (mp4) return make('mp4', mp4.url as string)
-  return hls ? make('hls', hls.manifest_url as string) : null
+  return mp4 ? make('mp4', mp4.url as string) : null
 }
 
 /** 看起來是 yt-dlp 太舊、無法解析 YouTube 頁面的錯誤（R92） */
