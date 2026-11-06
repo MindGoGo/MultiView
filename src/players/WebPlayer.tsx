@@ -39,6 +39,11 @@ const NOTICE_AUTO_MS = 5000
 const NOTICE_NOT_FOUND_MS = 3000
 export const NOTICE_AUTO = '找不到影片，可以在網頁中操作後按「只顯示影片」'
 export const NOTICE_NOT_FOUND = '找不到影片'
+export const NOTICE_SEARCHING = '正在找影片…'
+/** 影片模式、網頁載入完成後這麼久還找不到影片，自動按一次網站的播放鈕（R113） */
+const AUTO_KICK_MS = 3000
+/** 按「只顯示影片」時自動按播放後，最多等這麼久找影片（R113） */
+const KICK_WAIT_MS = 6000
 
 export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   { url, adblock, mode, onModeChange, onNavState, onYouTubeVideo, parked, pauseOnStart, muted, volume, autoplay, active, startAt, onStatus, onLoaded },
@@ -50,8 +55,12 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   /** 網頁載入中、還沒找到影片（R104 讀取動畫） */
   const [pending, setPending] = useState(true)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const latest = useRef({ mode, onModeChange, onStatus, onLoaded, onNavState, onYouTubeVideo })
-  latest.current = { mode, onModeChange, onStatus, onLoaded, onNavState, onYouTubeVideo }
+  const latest = useRef({ mode, onModeChange, onStatus, onLoaded, onNavState, onYouTubeVideo, parked })
+  latest.current = { mode, onModeChange, onStatus, onLoaded, onNavState, onYouTubeVideo, parked }
+  /** 這次網頁載入是否已經自動按過播放鈕（R113 情況 1） */
+  const autoKick = useRef<{ done: boolean; timer?: ReturnType<typeof setTimeout> }>({ done: false })
+  /** 按「只顯示影片」後等影片出現（R113 情況 2） */
+  const waitVideo = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** 網頁回報的最新結果，以及網頁是否已經載入完成 */
   const page = useRef({ loaded: false, found: false, attached: false, failed: false })
   /** 還要在網站自己開始播放時暫停一次（R66） */
@@ -98,10 +107,19 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   }
   const updateStateRef = useRef(updateState)
   updateStateRef.current = updateState
+  /** 請網頁的每一層框架找播放鈕按一次（R113） */
+  const kick = () => updateStateRef.current({ kick: (stateRef.current.kick ?? 0) + 1 })
 
   /** 影片模式、網頁已載入、但沒有主要影片時開始計時，否則取消（R13 AC4、AC3-3） */
   const checkNoVideo = () => {
     if (shouldWaitForVideo({ mode: latest.current.mode, ...page.current })) {
+      // 切換成整頁模式之前，先自動按一次網站的播放鈕（R113 情況 1）
+      if (!autoKick.current.done && !autoKick.current.timer && !latest.current.parked) {
+        autoKick.current.timer = setTimeout(() => {
+          autoKick.current = { done: true }
+          if (!page.current.found && latest.current.mode === 'video') kick()
+        }, AUTO_KICK_MS)
+      }
       noVideoTimer.current ??= setTimeout(() => {
         noVideoTimer.current = null
         latest.current.onModeChange('page')
@@ -153,6 +171,9 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     const onStartNavigation = (e: Electron.DidStartNavigationEvent) => {
       if (e.isMainFrame && !e.isInPlace) {
         page.current.loaded = false
+        // 換頁後重新允許自動按一次播放鈕（R113）
+        clearTimeout(autoKick.current.timer)
+        autoKick.current = { done: false }
         checkNoVideoRef.current()
         startLoadTimer()
       }
@@ -242,6 +263,13 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
         if (page.current.failed) return
         page.current.found = r.found
         if (r.found) setPending(false)
+        // 按「只顯示影片」後自動按了播放，影片出現了就切到影片模式（R113 情況 2）
+        if (r.found && waitVideo.current) {
+          clearTimeout(waitVideo.current)
+          waitVideo.current = null
+          setNotice(null)
+          latest.current.onModeChange('video')
+        }
         progressRef.current = r.progress
         const t = pendingStart.current
         if (t && r.progress) {
@@ -358,11 +386,26 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
       if (view && page.current.attached) view.send('mv:seek', seconds)
     },
     // 「只顯示影片」：找得到主要影片才切回影片模式（R14 AC2）
+    // 找不到影片時先自動按一次播放鈕，最多等 6 秒（R113 情況 2）
     requestVideoMode: () => {
-      if (page.current.found) latest.current.onModeChange('video')
-      else showNoticeRef.current(NOTICE_NOT_FOUND, NOTICE_NOT_FOUND_MS)
+      if (page.current.found) return latest.current.onModeChange('video')
+      if (waitVideo.current) return
+      showNoticeRef.current(NOTICE_SEARCHING, KICK_WAIT_MS)
+      kick()
+      waitVideo.current = setTimeout(() => {
+        waitVideo.current = null
+        showNoticeRef.current(NOTICE_NOT_FOUND, NOTICE_NOT_FOUND_MS)
+      }, KICK_WAIT_MS)
     }
   }))
+
+  useEffect(
+    () => () => {
+      clearTimeout(autoKick.current.timer)
+      if (waitVideo.current) clearTimeout(waitVideo.current)
+    },
+    []
+  )
 
   // 讀取動畫（R104）：只在影片模式；整頁模式、背景的來源頁面不顯示
   const loading = useLoadingVisible(mode === 'video' && !parked && pending ? 'loading' : null)

@@ -7,6 +7,7 @@
 // 影片模式時，從最上層沿著主要影片所在的框架一路往下，每一層只顯示主要影片（或包著它的子框架）並填滿畫面。
 import { ipcRenderer } from 'electron'
 import { pickMain, toParentRect, type Candidate, type Rect } from '../src/lib/webVideo'
+import { pickPlayButton, PLAY_BUTTON_SELECTORS } from '../src/lib/webKick'
 import { progressFromMedia, rangesOf, type Progress } from '../src/lib/progress'
 import type { CompanionSection, SectionsReady, WebReport, WebState, WebVideoStatus } from '../src/players/webTypes'
 
@@ -477,7 +478,10 @@ function setState(next: WebState, nextOnPath: boolean) {
   if (isTop && next.section !== state.section) applySection(next.section)
   // 播完的影片按播放時從頭播放（R26 AC4）
   if (next.intent === 'play' && state.intent === 'pause' && leafVideo?.ended) leafVideo.currentTime = 0
+  // 之後才出現的框架（例如廣告）第一次收到狀態時不算新的請求，只有已經同步過的框架才按（R113）
+  const kicked = state.v > 0 && (next.kick ?? 0) > (state.kick ?? 0)
   state = next
+  if (kicked) kickPlay()
   onPath = nextOnPath
   if (changed) {
     applyStyles()
@@ -486,6 +490,27 @@ function setState(next: WebState, nextOnPath: boolean) {
     broadcast()
     scheduleScan()
   }
+}
+
+/**
+ * 找不到影片時按一次網站的播放鈕（R113）：在這一層框架找看得見、不是連結的播放鈕，挑最大、最靠近中央的一個。
+ * 有些播放器聽的是按下、放開，所以依序送出這些事件再 click。
+ */
+function kickPlay() {
+  const els = [...document.querySelectorAll<HTMLElement>(PLAY_BUTTON_SELECTORS)]
+  const i = pickPlayButton(
+    els.map((el) => ({ rect: toRect(el.getBoundingClientRect()), inLink: !!el.closest('a[href]'), shown: isShown(el) })),
+    { w: window.innerWidth, h: window.innerHeight }
+  )
+  const el = els[i]
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  const at = { bubbles: true, cancelable: true, composed: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }
+  el.dispatchEvent(new PointerEvent('pointerdown', at))
+  el.dispatchEvent(new MouseEvent('mousedown', at))
+  el.dispatchEvent(new PointerEvent('pointerup', at))
+  el.dispatchEvent(new MouseEvent('mouseup', at))
+  el.click()
 }
 
 /** 同步訊息可能直接來自上面任何一層（中間隔著同網域的子框架時） */

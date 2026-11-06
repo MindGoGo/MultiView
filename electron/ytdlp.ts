@@ -6,6 +6,7 @@ import { execFile, type ChildProcess } from 'node:child_process'
 import { app, net, type Session } from 'electron'
 import {
   compareVersion,
+  isCloudflareChallenge,
   isOutdatedError,
   normalizeUpdateRecord,
   parseUpdateOutput,
@@ -148,19 +149,21 @@ const streamHeaders = new Map<string, Record<string, string>>()
 
 async function run(key: string): Promise<ResolveResult> {
   if (!status.version) return { ok: false, reason: 'missing' }
-  const r = await exec(
-    [
-      '-J',
-      '--no-playlist',
-      '--no-warnings',
-      '--no-progress',
-      '--ignore-config',
-      '--js-runtimes',
-      `node:${process.execPath}`,
-      targetUrl(key)
-    ],
-    RESOLVE_TIMEOUT_MS
-  )
+  const resolveArgs = (extra: string[]) => [
+    '-J',
+    '--no-playlist',
+    '--no-warnings',
+    '--no-progress',
+    '--ignore-config',
+    '--js-runtimes',
+    `node:${process.execPath}`,
+    ...extra,
+    targetUrl(key)
+  ]
+  let r = await exec(resolveArgs([]), RESOLVE_TIMEOUT_MS)
+  // 其他網站遇到 Cloudflare 的機器人驗證：用模擬瀏覽器重試一次（R114）
+  if (r.code !== 0 && key.startsWith('web:') && isCloudflareChallenge(r.stderr))
+    r = await exec(resolveArgs(['--extractor-args', 'generic:impersonate']), RESOLVE_TIMEOUT_MS)
   if (r.missing) return { ok: false, reason: 'missing' }
   if (r.code !== 0) return { ok: false, reason: isOutdatedError(r.stderr) ? 'outdated' : 'failed' }
   let stream

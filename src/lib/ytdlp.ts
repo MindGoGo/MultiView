@@ -157,8 +157,13 @@ const NOT_OUTDATED_PATTERNS = [
   /timed out/i,
   /Unable to download/i,
   // 其他網站：yt-dlp 不支援這個網址是正常的，不是太舊（R111）
-  /Unsupported URL/i
+  /Unsupported URL/i,
+  // 網站的 Cloudflare 機器人驗證，不是 yt-dlp 的問題（R114）
+  /Cloudflare/i
 ]
+
+/** 網站用 Cloudflare 的機器人驗證擋下 yt-dlp（R114）：可以用模擬瀏覽器重試 */
+export const isCloudflareChallenge = (stderr: string) => /Cloudflare anti-bot challenge/i.test(stderr)
 
 export function isOutdatedError(stderr: string): boolean {
   const errors = stderr
