@@ -6,14 +6,17 @@
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {
+    "predev": "npm run ytdlp",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "predist": "npm run ytdlp",
     "dist": "electron-vite build && electron-builder --win nsis --x64",
     "icon": "node scripts/make-icon.mjs",
-    "adblock:update": "node scripts/update-easylist.mjs"
+    "adblock:update": "node scripts/update-easylist.mjs",
+    "ytdlp": "node scripts/fetch-yt-dlp.mjs"
   },
   "dependencies": {
     "@ghostery/adblocker": "^2.18.2",
@@ -49,6 +52,10 @@
       {
         "from": "resources/easylist.txt",
         "to": "easylist.txt"
+      },
+      {
+        "from": "vendor/yt-dlp.exe",
+        "to": "bin/yt-dlp.exe"
       }
     ],
     "electronDist": "node_modules/electron/dist",
