@@ -4,6 +4,7 @@ import type { WebMode } from '../src/players/webTypes'
 import type { Lists } from '../src/lib/lists'
 import type { FeedVideo } from '../src/lib/youtubeFeed'
 import type { CompanionAction, CompanionLink, CompanionTab } from '../src/lib/companion'
+import type { ResolveResult, UpdateOutcome, YtDlpStatus } from '../src/lib/ytdlp'
 
 export interface CursorPos {
   x: number
@@ -68,6 +69,22 @@ const api = {
   },
   /** YouTube 預覽縮圖的資訊；取不到時為 null（R50） */
   getStoryboard: (videoId: string): Promise<string | null> => ipcRenderer.invoke('youtube:storyboard', videoId),
+  /** 用 yt-dlp 解析 YouTube（R89）；refresh 為 true 時不用快取 */
+  ytdlpResolve: (videoId: string, refresh = false): Promise<ResolveResult> =>
+    ipcRenderer.invoke('ytdlp:resolve', videoId, refresh),
+  /** 更新 yt-dlp（R93）；和自動更新同時發生時共用同一次 */
+  ytdlpUpdate: (): Promise<{ result: UpdateOutcome; version: string | null }> => ipcRenderer.invoke('ytdlp:update'),
+  /** 設定選單的 yt-dlp 狀態（R93） */
+  ytdlpStatus: (): Promise<YtDlpStatus> => ipcRenderer.invoke('ytdlp:status'),
+  /** 打開設定選單時查詢最新版（1 小時內查過就不查，R93） */
+  ytdlpCheck: () => ipcRenderer.send('ytdlp:check'),
+  onYtdlpStatus: (cb: (s: YtDlpStatus) => void) => {
+    const listener = (_: unknown, s: YtDlpStatus) => cb(s)
+    ipcRenderer.on('ytdlp:status', listener)
+    return () => {
+      ipcRenderer.removeListener('ytdlp:status', listener)
+    }
+  },
   /** YouTube 訂閱（R59）：由網址取得頻道代碼與名稱、讀取頻道的最新影片；失敗時為 null */
   ytChannelInfo: (input: string): Promise<{ id: string; name: string; url: string } | null> =>
     ipcRenderer.invoke('yt:channelInfo', input),

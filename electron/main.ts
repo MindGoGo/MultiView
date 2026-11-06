@@ -22,6 +22,8 @@ import {
   type CompanionTab
 } from '../src/lib/companion'
 import { extractStoryboardSpec } from '../src/lib/storyboard'
+import { isVideoId } from '../src/lib/ytdlp'
+import { installStreamCors, ytdlp } from './ytdlp'
 import {
   channelFeedUrl,
   channelLiveUrl,
@@ -124,7 +126,11 @@ async function createWindow() {
   win.setContentBounds(bounds)
   restoredBounds = bounds
 
-  win.on('ready-to-show', () => win?.show())
+  win.on('ready-to-show', () => {
+    win?.show()
+    // yt-dlp 的自動更新與查詢最新版在視窗顯示後才在背景進行，不影響開啟速度（R92、R93）
+    void ytdlp.afterStartup()
+  })
   // move / resize 在程式移動視窗時也會觸發（moved / resized 不會）
   win.on('move', trackBounds)
   win.on('resize', trackBounds)
@@ -204,6 +210,7 @@ async function createWindow() {
 
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   rendererUrl = devUrl ?? (await startStaticServer(path.join(__dirname, '../renderer')))
+  installStreamCors(win.webContents.session, new URL(rendererUrl).origin)
   await win.loadURL(rendererUrl)
 }
 
@@ -393,6 +400,15 @@ ipcMain.on('win:minimize', () => win?.minimize())
 // 設定選單顯示的版本號（R76）：和安裝檔、檔案內容的版本相同
 ipcMain.handle('app:version', () => app.getVersion())
 
+// yt-dlp 播放（R89–R93）：失敗時回傳原因，不把例外丟回畫面
+ipcMain.handle('ytdlp:resolve', (_, videoId: unknown, refresh: unknown) =>
+  isVideoId(videoId) ? ytdlp.resolve(videoId, refresh === true) : { ok: false, reason: 'failed' }
+)
+ipcMain.handle('ytdlp:update', () => ytdlp.update())
+ipcMain.handle('ytdlp:status', () => ytdlp.getStatus())
+ipcMain.on('ytdlp:check', () => void ytdlp.checkLatest())
+ytdlp.onStatus((s) => win?.webContents.send('ytdlp:status', s))
+
 // YouTube 預覽縮圖的資訊（R50）：從這部影片的 YouTube 網頁取出，每部影片只取得一次
 const storyboardSpecs = new Map<string, Promise<string | null>>()
 ipcMain.handle('youtube:storyboard', (_, videoId: unknown) => {
@@ -552,3 +568,5 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => app.quit())
+// 結束還在執行的 yt-dlp（R89）；更新途中被結束時 yt-dlp 還沒替換檔案，原本的不受影響
+app.on('before-quit', () => ytdlp.killAll())
