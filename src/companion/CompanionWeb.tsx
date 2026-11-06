@@ -2,6 +2,18 @@
 import { useEffect, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
 import { WEB_PARTITION, type CompanionSection, type SectionsReady, type WebState } from '../players/webTypes'
+import { LoadingCritter } from '../components/LoadingCritter'
+
+/** 小視窗裡 YouTube 網頁的捲軸：深色細捲軸（R105 的共用規則、R106） */
+const SCROLLBAR_CSS = `
+/* 新版 Chromium 在網頁設定了 scrollbar-color 時會忽略 ::-webkit-scrollbar，兩種寫法都加 */
+* { scrollbar-width: thin !important; scrollbar-color: rgba(128, 128, 128, 0.45) transparent !important; }
+::-webkit-scrollbar { width: 8px !important; height: 8px !important; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent !important; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent !important; border-radius: 999px !important; background: rgba(128, 128, 128, 0.35) padding-box !important; }
+:hover::-webkit-scrollbar-thumb { background-color: rgba(128, 128, 128, 0.55) !important; }
+::-webkit-scrollbar-button { display: none !important; }
+`
 
 /** 網頁載入完成後這麼久仍然沒有推薦區／留言區，就拿掉讀取畫面顯示整個網頁（R86） */
 export const SECTION_WAIT_MS = 15000
@@ -70,6 +82,8 @@ export function CompanionWeb({ url, shown, section, userAgent, onVideo, onTitle 
     const onReady = () => {
       // 小視窗的網頁一律靜音（推薦、留言的網頁不播放，搜尋結果的預覽也不出聲）
       view.setAudioMuted(true)
+      // 每次換頁都重新加上深色細捲軸（R106）
+      void view.insertCSS(SCROLLBAR_CSS).catch(() => undefined)
       if (started) return
       started = true
       void window.companion.initWeb(view.getWebContentsId(), { adblock: true }).then(() => {
@@ -124,7 +138,11 @@ export function CompanionWeb({ url, shown, section, userAgent, onVideo, onTitle 
   return (
     <div className={`companion-pane ${shown ? '' : 'hidden'}`}>
       <div ref={hostRef} className="companion-web-host" />
-      {(loading || commentsOff) && <div className="companion-loading">{commentsOff ? NO_COMMENTS : LOADING_TEXT}</div>}
+      {(loading || commentsOff) && (
+        <div className="companion-loading">
+          {commentsOff ? NO_COMMENTS : <LoadingCritter kind="loading" label={LOADING_TEXT} />}
+        </div>
+      )}
     </div>
   )
 }

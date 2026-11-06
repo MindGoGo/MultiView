@@ -5,7 +5,6 @@ import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } f
 import { SliderPopup } from './SliderPopup'
 import {
   CloseIcon,
-  CompanionIcon,
   ExitFullscreenIcon,
   FullscreenIcon,
   GearIcon,
@@ -16,7 +15,8 @@ import {
   PauseIcon,
   PinIcon,
   PlayIcon,
-  SunIcon
+  SunIcon,
+  YouTubeLogo
 } from './icons'
 
 interface Props {
@@ -129,7 +129,7 @@ export function Toolbar(props: Props) {
           aria-label="YouTube 小視窗"
           onClick={props.onOpenCompanion}
         >
-          <CompanionIcon />
+          <YouTubeLogo />
         </button>
         <button
           className={`tb-btn ${win.alwaysOnTop ? 'active' : ''}`}

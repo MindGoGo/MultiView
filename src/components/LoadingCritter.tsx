@@ -2,6 +2,8 @@
 // 只用向量圖與 CSS 動畫，不載入外部檔案；不攔截點擊。
 import { useEffect, useState } from 'react'
 import { LOADING_DELAY_MS, LOADING_TEXT, type LoadingKind } from '../lib/loading'
+// 主畫面與 YouTube 小視窗都會用到，樣式跟著元件（R99、R106）
+import './critter.css'
 
 /** 解析中立即顯示；載入中、緩衝中超過 0.5 秒才顯示 */
 export function useLoadingVisible(kind: LoadingKind | null): LoadingKind | null {
@@ -15,9 +17,11 @@ export function useLoadingVisible(kind: LoadingKind | null): LoadingKind | null 
   return kind === null ? null : shown
 }
 
-export function LoadingCritter({ kind }: { kind: LoadingKind }) {
+/** label：取代預設的「解析中…」「載入中…」（小視窗是「讀取中…」，R106） */
+export function LoadingCritter({ kind, label }: { kind: LoadingKind; label?: string }) {
+  const text = label ?? LOADING_TEXT[kind]
   return (
-    <div className="critter" role="status" aria-label={LOADING_TEXT[kind]}>
+    <div className="critter" role="status" aria-label={text}>
       <svg className="critter-svg" viewBox="10 18 80 80" aria-hidden="true">
         <ellipse className="critter-shadow" cx="50" cy="93" rx="22" ry="4.5" />
         <g className="critter-body">
@@ -42,7 +46,7 @@ export function LoadingCritter({ kind }: { kind: LoadingKind }) {
           <path d="M46.5 75.5v8l7-4z" fill="#fff" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" opacity="0.9" />
         </g>
       </svg>
-      <div className="critter-label">{LOADING_TEXT[kind]}</div>
+      <div className="critter-label">{text}</div>
     </div>
   )
 }

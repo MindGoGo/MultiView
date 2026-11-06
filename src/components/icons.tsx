@@ -74,15 +74,6 @@ export const ListIcon = () => (
   </Icon>
 )
 
-/** YouTube 小視窗：主視窗旁邊的小視窗 */
-export const CompanionIcon = () => (
-  <Icon>
-    <rect x="1.5" y="3" width="8.5" height="10" rx="1.5" />
-    <rect x="11.5" y="3" width="3" height="6.5" rx="1" />
-    <path d="M4.6 6.4v3.2L7.2 8z" fill="currentColor" stroke="none" />
-  </Icon>
-)
-
 export const PinIcon = () => (
   <Icon>
     <path d="M6 2.5h4M6.8 2.5v4L4.5 9.2h7L9.2 6.5v-4M8 9.2v4.3" />

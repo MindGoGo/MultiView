@@ -15,6 +15,7 @@ import {
 } from '../lib/companion'
 import { parseSource } from '../lib/source'
 import { CompanionWeb } from './CompanionWeb'
+import { PinIcon } from '../components/icons'
 
 export const NO_VIDEO = '這一格沒有 YouTube 影片'
 export const NO_CHAT = '這部影片沒有聊天室（只有直播有）'
@@ -54,18 +55,23 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
 
   return (
     <div className="companion">
+      {/* 分頁是分段按鈕，置頂是圖釘圖示（R106） */}
       <div className="companion-tabs">
-        {COMPANION_TABS.map((t) => (
-          <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
-            {COMPANION_TAB_LABELS[t]}
-          </button>
-        ))}
+        <div className="companion-seg" role="tablist" aria-label="小視窗分頁">
+          {COMPANION_TABS.map((t) => (
+            <button key={t} role="tab" aria-selected={t === tab} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
+              {COMPANION_TAB_LABELS[t]}
+            </button>
+          ))}
+        </div>
         <button
           className={`companion-pin ${pinned ? 'active' : ''}`}
           title={pinned ? '置頂：開（小視窗永遠在最上層）' : '置頂：關'}
+          aria-label="置頂"
+          aria-pressed={pinned}
           onClick={() => void window.companion.togglePin().then(setPinned)}
         >
-          置頂
+          <PinIcon />
         </button>
       </div>
       {tab !== 'search' && link.cell !== null && <div className="companion-header">{companionHeader({ ...link, video })}</div>}
