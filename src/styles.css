@@ -69,9 +69,11 @@ button.active {
   z-index: 100;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 6px;
-  background: var(--panel);
+  gap: 10px;
+  padding-left: 8px;
+  background: rgba(16, 16, 18, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
@@ -84,7 +86,9 @@ button.active {
 
 .toolbar-drag {
   flex: 1;
+  min-width: 0;
   align-self: stretch;
+  overflow: hidden;
   -webkit-app-region: drag;
 }
 
@@ -92,17 +96,124 @@ button.active {
   display: flex;
   align-items: center;
   gap: 2px;
+  flex-shrink: 0;
 }
 
-.toolbar button.close:hover {
-  background: var(--danger);
+.icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* ---- 工具列（R97）：分段按鈕與圖示按鈕 ---- */
+.seg {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.seg-btn,
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 26px;
+  min-width: 30px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  color: #b8b8bc;
+  transition: background 0.12s, color 0.12s;
+}
+
+.tb-btn {
+  height: 30px;
+}
+
+.seg-btn:hover:not(:disabled),
+.tb-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
+
+.seg-btn:active:not(:disabled),
+.tb-btn:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.seg-btn.active,
+.seg-btn.active:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.tb-btn.active,
+.tb-btn.active:hover:not(:disabled) {
+  background: rgba(61, 139, 253, 0.18);
+  color: #7fb2ff;
+}
+
+.seg-btn:disabled,
+.tb-btn:disabled {
+  opacity: 0.35;
+}
+
+.tb-text {
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.seg-btn:focus-visible,
+.tb-btn:focus-visible,
+.win-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* 最小化、關閉：和 Windows 的視窗按鈕相同 */
+.win-controls {
+  display: flex;
+  align-self: stretch;
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding-left: 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  color: #d0d0d0;
+}
+
+.win-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.win-btn.close:hover:not(:disabled) {
+  background: #c42b1c;
+  color: #fff;
 }
 
 .toast {
-  display: inline-block;
+  display: block;
   margin-left: 12px;
+  overflow: hidden;
   line-height: 40px;
   color: #ffd166;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* ---- 格子與播放器（R2、R4） ---- */
@@ -841,8 +952,8 @@ button.danger {
 }
 
 .critter-svg {
-  width: clamp(28px, 20cqmin, 72px);
-  height: clamp(28px, 20cqmin, 72px);
+  width: clamp(24px, 14cqmin, 52px);
+  height: clamp(24px, 14cqmin, 52px);
   overflow: visible;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
 }
@@ -923,23 +1034,285 @@ button.danger {
   }
 }
 
-/* Windows 設定「減少動畫」時不彈跳，只輕微地呼吸 */
-@media (prefers-reduced-motion: reduce) {
-  .critter-body {
-    animation: critter-breathe 2.4s ease-in-out infinite;
+/* 使用者希望一直彈跳：不依 Windows 的「減少動畫」改變（R99） */
+
+/* ---- 設定視窗（R96） ---- */
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  animation: settings-fade 0.15s ease-out;
+}
+
+.settings {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  grid-template-rows: auto 1fr;
+  width: min(820px, 100%);
+  height: min(560px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: #1c1c1f;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  outline: none;
+  animation: settings-pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+.settings-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 12px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.settings-head h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings-close {
+  display: inline-flex;
+  padding: 6px;
+  border: none;
+  border-radius: 6px;
+  color: #b8b8bc;
+}
+
+.settings-close:hover:not(:disabled) {
+  color: #fff;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 10px;
+  overflow-y: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  color: #c9c9cd;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.settings-nav-item.active,
+.settings-nav-item.active:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.settings-body {
+  min-height: 0;
+  padding: 8px 24px 24px;
+  overflow-y: auto;
+}
+
+.set-heading {
+  margin: 14px 0 6px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.set-row:last-child {
+  border-bottom: none;
+}
+
+.set-text {
+  min-width: 0;
+}
+
+.set-title {
+  font-size: 14px;
+  color: #f2f2f2;
+}
+
+.set-desc {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #96969c;
+}
+
+.set-control {
+  flex-shrink: 0;
+}
+
+.set-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.chip-ok {
+  background: rgba(70, 167, 88, 0.18);
+  color: #7bd88f;
+}
+
+.chip-warn {
+  background: rgba(245, 165, 36, 0.18);
+  color: #f5c06a;
+}
+
+.chip-busy {
+  background: rgba(61, 139, 253, 0.18);
+  color: #8bb8ff;
+}
+
+.chip-error {
+  background: rgba(229, 72, 77, 0.18);
+  color: #ff8a8e;
+}
+
+.chip-muted {
+  background: rgba(255, 255, 255, 0.08);
+  color: #b0b0b5;
+}
+
+.set-button {
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.set-button:disabled {
+  opacity: 0.5;
+}
+
+/* 兩段的選擇按鈕 */
+.choice {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.choice-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  color: #b8b8bc;
+  white-space: nowrap;
+}
+
+.choice-btn.active,
+.choice-btn.active:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* 開關 */
+.switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #4a4a50;
+  transition: background 0.15s;
+}
+
+.switch:hover:not(:disabled) {
+  background: #57575e;
+}
+
+.switch.on,
+.switch.on:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+.switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s;
+}
+
+.switch.on .switch-knob {
+  transform: translateX(16px);
+}
+
+.settings :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 視窗很小時：左側分類變窄、內容可以捲動（R96 AC8） */
+@media (max-width: 640px) {
+  .settings {
+    grid-template-columns: 128px 1fr;
   }
-  .critter-shadow,
-  .critter-eyes {
-    animation: none;
+  .settings-nav-item .icon {
+    display: none;
+  }
+  .settings-body {
+    padding: 4px 14px 16px;
+  }
+  .set-row {
+    flex-wrap: wrap;
+    gap: 10px;
   }
 }
 
-@keyframes critter-breathe {
-  0%,
-  100% {
-    transform: scale(1, 1);
+@keyframes settings-fade {
+  from {
+    opacity: 0;
   }
-  50% {
-    transform: scale(1.04, 0.97);
+}
+
+@keyframes settings-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-backdrop,
+  .settings {
+    animation: none;
   }
 }

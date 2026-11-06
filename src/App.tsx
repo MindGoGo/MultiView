@@ -34,6 +34,7 @@ import type { Failure } from './lib/webErrors'
 import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
 import type { YtMode } from './players/YouTubeSource'
+import { SettingsDialog } from './components/SettingsDialog'
 import { canonicalYouTubeUrl, classifyLink, youtubePageUrl } from './lib/links'
 import { skipTarget, resumePosition } from './lib/progress'
 import {
@@ -124,6 +125,11 @@ export default function App({ initial }: { initial: ViewSettings }) {
   )
   /** 工具列的總亮度選單開著時，工具列不自動隱藏（R41 AC4） */
   const [toolbarPopup, setToolbarPopup] = useState(false)
+  /** 設定視窗（R96） */
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const closeSettings = useCallback(() => setSettingsOpen(false), [])
+  const settingsOpenRef = useRef(settingsOpen)
+  settingsOpenRef.current = settingsOpen
   const ratios = ratiosMap[layout] ?? defaultRatios(layout)
   const [slots, setSlots] = useState<Slots>(() => restoreSlots(initial.slots))
   const [statuses, setStatuses] = useState<Record<number, PlayStatus>>({})
@@ -812,7 +818,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
       const t = e.target as HTMLElement
       // 只排除文字輸入框；音量滑桿有焦點時快捷鍵照樣有效
       const typing = t instanceof HTMLInputElement ? t.type !== 'range' : t.tagName === 'TEXTAREA'
-      if ((e.repeat && !isRepeatableKey(e.key)) || typing) return
+      // 設定視窗開著時快捷鍵都不作用（R96）
+      if ((e.repeat && !isRepeatableKey(e.key)) || typing || settingsOpenRef.current) return
       if (runShortcutRef.current(e.key)) e.preventDefault()
     }
     // 點擊網頁以外的地方時，把焦點從整頁模式的網頁拿回來，快捷鍵才會恢復（R14 AC5）
@@ -827,7 +834,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     window.addEventListener('keydown', onKey)
     window.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('mouseup', onMouseUp, true)
-    const offShortcut = window.multiview.onShortcut((key) => runShortcutRef.current(key))
+    const offShortcut = window.multiview.onShortcut((key) => !settingsOpenRef.current && runShortcutRef.current(key))
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('pointerdown', onPointerDown, true)
@@ -904,7 +911,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         poke={poke}
       />
       <Toolbar
-        visible={toolbarVisible || toast !== null || listOpen || toolbarPopup}
+        visible={toolbarVisible || toast !== null || listOpen || toolbarPopup || settingsOpen}
         win={win}
         solo={solo !== null}
         layout={layout}
@@ -920,13 +927,19 @@ export default function App({ initial }: { initial: ViewSettings }) {
         brightness={masterBrightness}
         onBrightness={setMasterBrightness}
         onPopupChange={setToolbarPopup}
-        autoYoutubeWeb={autoYoutubeWeb}
-        onAutoYoutubeWeb={setAutoYoutubeWeb}
-        youtubeMethods={youtubeMethods}
-        onYoutubeMethods={setYoutubeMethods}
-        onToast={showToast}
+        onOpenSettings={() => setSettingsOpen(true)}
         onOpenCompanion={() => window.multiview.openCompanion(null)}
       />
+      {settingsOpen && (
+        <SettingsDialog
+          onClose={closeSettings}
+          autoYoutubeWeb={autoYoutubeWeb}
+          onAutoYoutubeWeb={setAutoYoutubeWeb}
+          youtubeMethods={youtubeMethods}
+          onYoutubeMethods={setYoutubeMethods}
+          onToast={showToast}
+        />
+      )}
       {picking && (
         <CellPicker
           cells={picking.cells}

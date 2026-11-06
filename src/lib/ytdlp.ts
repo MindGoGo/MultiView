@@ -225,3 +225,28 @@ export function updateToast(result: UpdateOutcome, version: string | null): stri
 
 /** 影片代碼：11 碼的英數、_、-（主程序不信任畫面傳來的值） */
 export const isVideoId = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9_-]{11}$/.test(v)
+
+/** 設定視窗「yt-dlp」分類的版本列（R96）：狀態標籤與按鈕 */
+export interface YtDlpRow {
+  version: string
+  chip: { text: string; tone: 'ok' | 'warn' | 'busy' | 'error' | 'muted' }
+  button: { label: string; enabled: boolean }
+}
+
+export function ytdlpRow(s: YtDlpStatus): YtDlpRow {
+  const version = s.version ?? '—'
+  switch (s.state) {
+    case 'latest':
+      return { version, chip: { text: '已是最新版', tone: 'ok' }, button: { label: '檢查更新', enabled: false } }
+    case 'available':
+      return { version, chip: { text: `有新版 ${s.latest}`, tone: 'warn' }, button: { label: `更新到 ${s.latest}`, enabled: true } }
+    case 'checking':
+      return { version, chip: { text: '正在檢查更新…', tone: 'busy' }, button: { label: '正在檢查…', enabled: false } }
+    case 'unknown':
+      return { version, chip: { text: '無法檢查更新', tone: 'muted' }, button: { label: '檢查更新', enabled: true } }
+    case 'updating':
+      return { version, chip: { text: '正在更新…', tone: 'busy' }, button: { label: '正在更新…', enabled: false } }
+    case 'missing':
+      return { version, chip: { text: '找不到 yt-dlp', tone: 'error' }, button: { label: '檢查更新', enabled: false } }
+  }
+}
