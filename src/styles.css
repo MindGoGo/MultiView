@@ -1316,3 +1316,41 @@ button.danger {
     animation: none;
   }
 }
+
+.slider-popup:has(.boosted) .slider-popup-value {
+  color: var(--boost-color);
+}
+
+/* 視窗窄的時候工具列變緊湊，按鈕不換行、不被切掉（R97 AC4） */
+@media (max-width: 760px) {
+  .toolbar {
+    gap: 4px;
+    padding-left: 4px;
+  }
+  .toolbar-group,
+  .seg {
+    gap: 0;
+  }
+  .seg {
+    padding: 1px;
+  }
+  .seg-btn,
+  .tb-btn {
+    min-width: 24px;
+    padding: 0 4px;
+  }
+  .win-controls {
+    margin-left: 0;
+    padding-left: 2px;
+  }
+  .win-btn {
+    width: 32px;
+  }
+}
+
+/* 最窄時總亮度只顯示圖示，數值在滑鼠提示裡 */
+@media (max-width: 560px) {
+  .tb-text span {
+    display: none;
+  }
+}

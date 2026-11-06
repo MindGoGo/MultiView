@@ -92,7 +92,7 @@ export function Toolbar(props: Props) {
       <div className="toolbar-group">
         <button
           className={`tb-btn tb-text ${props.brightness !== BRIGHTNESS_DEFAULT ? 'active' : ''}`}
-          title="總亮度：和每一格的亮度相乘"
+          title={`總亮度 ${props.brightness}%：和每一格的亮度相乘`}
           onPointerDown={(e) => brightnessAnchor && e.stopPropagation()}
           onClick={(e) => openBrightness(brightnessAnchor ? null : e.currentTarget.getBoundingClientRect())}
         >
