@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { formatListTime, groupOf, type ListGroup, type ListItem, type ListKind, type Lists } from '../lib/lists'
 import { SubscriptionList } from './SubscriptionList'
+import { CloseIcon, PencilIcon, PlusIcon, TrashIcon, YouTubeLogo } from './icons'
 
 /** 面板的那一邊和分頁（R58）；訂閱只在 YouTube 那一邊（R59） */
 export interface ListTab {
@@ -137,41 +138,64 @@ export function ListPanel(props: Props) {
 
   return (
     <div className="list-panel">
-      <div className="list-groups">
-        {(['youtube', 'other'] as const).map((g) => (
-          <button key={g} className={group === g ? 'active' : ''} onClick={() => choose({ group: g, tab })}>
-            {GROUP_LABEL[g]}
-          </button>
-        ))}
-        <div className="list-head-spacer" />
-        <button title="關閉清單" onClick={props.onClose}>
-          ✕
+      {/* 上方：YouTube／其他網站、關閉；下一行：訂閱／最愛／歷史與這個分頁的圖示按鈕（R105） */}
+      <div className="list-top">
+        <div className="choice list-choice" role="tablist" aria-label="清單分類">
+          {(['youtube', 'other'] as const).map((g) => (
+            <button
+              key={g}
+              role="tab"
+              aria-selected={group === g}
+              className={`choice-btn ${group === g ? 'active' : ''}`}
+              onClick={() => choose({ group: g, tab })}
+            >
+              {GROUP_LABEL[g]}
+            </button>
+          ))}
+        </div>
+        <button className="tb-btn" title="關閉清單" aria-label="關閉清單" onClick={props.onClose}>
+          <CloseIcon />
         </button>
       </div>
-      <div className="list-head">
-        {tabs.map((t) => (
-          <button key={t.kind} className={tab === t.kind ? 'active' : ''} onClick={() => choose({ group, tab: t.kind })}>
-            {t.label}
-          </button>
-        ))}
+      <div className="list-bar">
+        <div className="choice" role="tablist" aria-label="清單分頁">
+          {tabs.map((t) => (
+            <button
+              key={t.kind}
+              role="tab"
+              aria-selected={tab === t.kind}
+              className={`choice-btn ${tab === t.kind ? 'active' : ''}`}
+              onClick={() => choose({ group, tab: t.kind })}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <div className="list-head-spacer" />
         {group === 'youtube' && (
-          <button title="在空格開啟 YouTube 首頁，或拖到要放的格子" {...pickHandlers('youtube-home', YOUTUBE_HOME)}>
-            開啟 YouTube
+          <button
+            className="tb-btn"
+            title="開啟 YouTube 首頁：點一下放進空格，或拖到要放的格子"
+            aria-label="開啟 YouTube"
+            {...pickHandlers('youtube-home', YOUTUBE_HOME)}
+          >
+            <YouTubeLogo size={16} />
           </button>
         )}
         {tab === 'favorites' && (
-          <button title="新增最愛" onClick={() => setAdding({ url: '', name: '', error: null })}>
-            ＋ 新增
+          <button className="tb-btn" title="新增最愛" aria-label="新增最愛" onClick={() => setAdding({ url: '', name: '', error: null })}>
+            <PlusIcon />
           </button>
         )}
         {tab === 'history' && (
           <button
+            className="tb-btn"
             title={`清除全部${GROUP_IN_TEXT[group]}的歷史紀錄`}
+            aria-label="全部清除"
             disabled={items.length === 0}
             onClick={() => setConfirmClear(true)}
           >
-            全部清除
+            <TrashIcon />
           </button>
         )}
       </div>
@@ -195,7 +219,7 @@ export function ListPanel(props: Props) {
           />
           {adding.error && <div className="url-error">{adding.error}</div>}
           <div className="list-form-buttons">
-            <button onClick={saveAdd}>儲存</button>
+            <button className="set-button primary" onClick={saveAdd}>儲存</button>
             <button className="link" onClick={() => setAdding(null)}>
               取消
             </button>
@@ -240,7 +264,7 @@ export function ListPanel(props: Props) {
                 />
                 {editing.error && <div className="url-error">{editing.error}</div>}
                 <div className="list-form-buttons">
-                  <button onClick={saveEdit}>儲存</button>
+                  <button className="set-button primary" onClick={saveEdit}>儲存</button>
                   <button className="link" onClick={() => setEditing(null)}>
                     取消
                   </button>
@@ -260,13 +284,15 @@ export function ListPanel(props: Props) {
                 </div>
                 <div className="list-actions">
                   <button
+                    className="row-btn"
                     title="編輯名稱和網址"
+                    aria-label="編輯"
                     onClick={() => setEditing({ kind: tab, index, url: item.url, name: item.name, error: null })}
                   >
-                    編輯
+                    <PencilIcon />
                   </button>
-                  <button title="刪除" onClick={() => props.onDelete(tab, index)}>
-                    刪除
+                  <button className="row-btn" title="刪除" aria-label="刪除" onClick={() => props.onDelete(tab, index)}>
+                    <TrashIcon />
                   </button>
                 </div>
               </li>
@@ -281,7 +307,7 @@ export function ListPanel(props: Props) {
             <div>確定要清除全部{GROUP_IN_TEXT[group]}的歷史紀錄？</div>
             <div className="list-form-buttons">
               <button
-                className="danger"
+                className="set-button danger"
                 onClick={() => {
                   props.onClearHistory(group)
                   setConfirmClear(false)
@@ -289,7 +315,9 @@ export function ListPanel(props: Props) {
               >
                 清除
               </button>
-              <button onClick={() => setConfirmClear(false)}>取消</button>
+              <button className="set-button" onClick={() => setConfirmClear(false)}>
+                取消
+              </button>
             </div>
           </div>
         </div>

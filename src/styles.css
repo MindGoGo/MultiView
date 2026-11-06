@@ -641,12 +641,14 @@ button.link {
   top: 40px;
   right: 0;
   bottom: 0;
-  width: 320px;
+  width: 340px;
   z-index: 90;
   display: flex;
   flex-direction: column;
-  background: rgba(16, 16, 16, 0.96);
-  border-left: 1px solid #333;
+  background: rgba(28, 28, 31, 0.97);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
   user-select: none;
 }
 
@@ -730,15 +732,16 @@ button.link {
 }
 
 .channel-toggle {
-  padding: 0 6px;
   flex: none;
+  width: 22px;
+  height: 22px;
 }
 
 .channel-new {
   display: inline-block;
   margin-left: 6px;
-  padding: 0 6px;
-  border-radius: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
   font-size: 11px;
   background: var(--accent);
   color: #fff;
@@ -746,42 +749,45 @@ button.link {
 
 .channel-live {
   margin-left: 6px;
-  padding: 0 6px;
+  padding: 0 7px;
   font-size: 11px;
-  color: #ff4e45;
-  border: 1px solid #ff4e45;
-  border-radius: 8px;
-  background: transparent;
+  color: #ff6b63;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 78, 69, 0.16);
 }
 
 .channel-videos {
-  margin: 0;
-  padding: 0 0 4px 24px;
+  margin: 0 0 4px 22px;
+  padding: 0 0 0 8px;
   list-style: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .channel-video .list-name {
   font-size: 12px;
 }
 
-/* 清單的兩邊：YouTube、其他網站（R58） */
-.list-groups {
+/* ---- 清單面板（R105）：和設定視窗一致的分段按鈕、圓角列 ---- */
+.list-top,
+.list-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px 0;
+  gap: 6px;
+  padding: 10px 10px 0;
 }
 
-.list-groups button {
-  font-weight: 600;
+.list-bar {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.list-head {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 6px;
-  border-bottom: 1px solid #333;
+.list-choice {
+  flex: 1;
+}
+
+.list-choice .choice-btn {
+  flex: 1;
 }
 
 .list-head-spacer {
@@ -792,28 +798,32 @@ button.link {
 .list-item.editing {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
+  gap: 8px;
+  padding: 10px;
 }
 
 .list-form {
-  border-bottom: 1px solid #333;
+  margin: 8px 8px 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .list-form .url-input,
 .list-item.editing .url-input {
   width: 100%;
+  border-radius: 7px;
 }
 
 .list-form-buttons {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 
 .list-items {
   flex: 1;
   margin: 0;
-  padding: 0;
+  padding: 6px;
   list-style: none;
   overflow-y: auto;
 }
@@ -821,20 +831,31 @@ button.link {
 .list-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px;
-  border-bottom: 1px solid #222;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
   cursor: grab;
   touch-action: none;
+  transition: background 0.12s;
 }
 
 .list-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.list-item.editing {
+  background: rgba(255, 255, 255, 0.05);
+  cursor: default;
 }
 
 .list-text {
   flex: 1;
   min-width: 0;
+}
+
+.list-name {
+  font-size: 13.5px;
+  color: #f2f2f2;
 }
 
 .list-name,
@@ -846,18 +867,69 @@ button.link {
 
 .list-url,
 .list-time {
-  font-size: 11px;
-  color: var(--muted-text);
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: #8e8e94;
+}
+
+/* 每一列的圖示按鈕浮在右側，只在滑過那一列（或鍵盤移到按鈕上）時出現，名稱可以用滿整行 */
+.list-item {
+  position: relative;
 }
 
 .list-actions {
+  position: absolute;
+  top: 50%;
+  right: 6px;
   display: flex;
-  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(46, 46, 50, 0.96);
+  box-shadow: -8px 0 12px rgba(28, 28, 31, 0.9);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 0.12s;
+}
+
+.list-item:hover > .list-actions,
+.list-item:focus-within > .list-actions,
+.list-actions:has(.active) {
+  opacity: 1;
+}
+
+.row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  color: #b8b8bc;
+}
+
+.row-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.row-btn.active,
+.row-btn.active:hover:not(:disabled) {
+  color: #f5c06a;
+}
+
+.row-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .list-empty {
-  padding: 16px 8px;
-  color: var(--muted-text);
+  padding: 18px 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #8e8e94;
 }
 
 .list-confirm {
@@ -866,16 +938,43 @@ button.link {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   background: rgba(0, 0, 0, 0.6);
 }
 
 .list-confirm-box {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 6px;
-  background: #1c1c1c;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: #1c1c1f;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.set-button.primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+
+.set-button.primary:hover:not(:disabled) {
+  background: #5a9cff;
+}
+
+.set-button.danger,
+.set-button.danger:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--danger);
+  color: #fff;
+}
+
+.set-button.small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
 }
 
 button.danger {
@@ -1357,4 +1456,33 @@ button.danger {
   .tb-text span {
     display: none;
   }
+}
+
+/* ---- 深色細捲軸（R105 共用規則）：設定視窗、清單、訂閱清單 ---- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16) padding-box;
+}
+
+:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: rgba(255, 255, 255, 0.36);
+}
+
+::-webkit-scrollbar-button {
+  display: none;
 }

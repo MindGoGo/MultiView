@@ -2,6 +2,7 @@
 import { useEffect, useReducer, useState } from 'react'
 import type { ListItem } from '../lib/lists'
 import { countNew, formatAgo, type Channel, type FeedVideo } from '../lib/youtubeFeed'
+import { ChevronIcon, ImportIcon, PlusIcon, RefreshIcon, StarIcon, UnsubscribeIcon } from './icons'
 
 interface Props {
   channels: Channel[]
@@ -112,20 +113,28 @@ export function SubscriptionList(props: Props) {
 
   return (
     <div className="subscriptions">
-      <div className="list-head">
-        <button title="貼上頻道網址、@帳號或影片網址" onClick={() => setAdding({ url: '', error: null, busy: false })}>
-          ＋ 加入頻道
+      <div className="list-bar">
+        <button className="set-button small" title="貼上頻道網址、@帳號或影片網址" onClick={() => setAdding({ url: '', error: null, busy: false })}>
+          <PlusIcon />
+          加入頻道
         </button>
         <div className="list-head-spacer" />
-        <button title="匯入 Google Takeout 匯出的 YouTube 訂閱清單（subscriptions.csv）" onClick={props.onImport}>
-          匯入…
+        <button
+          className="tb-btn"
+          title="匯入 Google Takeout 匯出的 YouTube 訂閱清單（subscriptions.csv）"
+          aria-label="匯入訂閱清單"
+          onClick={props.onImport}
+        >
+          <ImportIcon />
         </button>
         <button
+          className="tb-btn"
           title="重新讀取每個頻道的最新影片"
+          aria-label="重新整理"
           disabled={anyLoading || channels.length === 0}
           onClick={() => load(channels.map((c) => c.id), true)}
         >
-          重新整理
+          <RefreshIcon />
         </button>
       </div>
 
@@ -146,7 +155,7 @@ export function SubscriptionList(props: Props) {
           />
           {adding.error && <div className="url-error">{adding.error}</div>}
           <div className="list-form-buttons">
-            <button disabled={adding.busy} onClick={() => void submit()}>
+            <button className="set-button primary" disabled={adding.busy} onClick={() => void submit()}>
               {adding.busy ? '加入中…' : '加入'}
             </button>
             <button className="link" onClick={() => setAdding(null)}>
@@ -159,9 +168,9 @@ export function SubscriptionList(props: Props) {
       <ul className="list-items">
         {channels.length === 0 && (
           <li className="list-empty">
-            還沒有訂閱的頻道，按「＋ 加入頻道」貼上頻道網址。
+            還沒有訂閱的頻道，按「加入頻道」貼上頻道網址。
             <br />
-            要匯入現有的 YouTube 訂閱：到 Google Takeout（takeout.google.com）只勾選「YouTube 和 YouTube Music」，在選項中只保留「訂閱內容」，匯出後解壓縮，按「匯入…」選擇裡面的 subscriptions.csv。
+            要匯入現有的 YouTube 訂閱：到 Google Takeout（takeout.google.com）只勾選「YouTube 和 YouTube Music」，在選項中只保留「訂閱內容」，匯出後解壓縮，按上方的匯入圖示選擇裡面的 subscriptions.csv。
           </li>
         )}
         {sorted.map((ch) => {
@@ -179,8 +188,13 @@ export function SubscriptionList(props: Props) {
                 title="點一下放進空格，或拖到要放的格子"
                 {...props.pick(`channel:${ch.id}`, channelItem)}
               >
-                <button className="channel-toggle" title={open ? '收合' : '顯示最新影片'} onClick={() => toggle(ch.id)}>
-                  {open ? '▾' : '▸'}
+                <button
+                  className="row-btn channel-toggle"
+                  title={open ? '收合' : '顯示最新影片'}
+                  aria-label={open ? '收合' : '顯示最新影片'}
+                  onClick={() => toggle(ch.id)}
+                >
+                  <ChevronIcon open={open} />
                 </button>
                 <div className="list-text">
                   <div className="list-name">
@@ -202,8 +216,8 @@ export function SubscriptionList(props: Props) {
                   </div>
                 </div>
                 <div className="list-actions">
-                  <button title="取消訂閱" onClick={() => props.onRemove(ch.id)}>
-                    移除
+                  <button className="row-btn" title="取消訂閱" aria-label="取消訂閱" onClick={() => props.onRemove(ch.id)}>
+                    <UnsubscribeIcon />
                   </button>
                 </div>
               </div>
@@ -227,11 +241,13 @@ export function SubscriptionList(props: Props) {
                         </div>
                         <div className="list-actions">
                           <button
-                            className={fav ? 'active' : ''}
+                            className={`row-btn ${fav ? 'active' : ''}`}
                             title={fav ? '從最愛移除' : '加入最愛'}
+                            aria-label={fav ? '從最愛移除' : '加入最愛'}
+                            aria-pressed={fav}
                             onClick={() => props.onToggleFavorite(url, v.title)}
                           >
-                            {fav ? '★' : '☆'}
+                            <StarIcon filled={fav} />
                           </button>
                         </div>
                       </li>

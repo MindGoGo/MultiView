@@ -148,3 +148,66 @@ export const InfoIcon = () => (
     <path d="M8 7.2v4M8 4.8v.2" />
   </Icon>
 )
+
+/** 清單的圖示（R105） */
+export const PlusIcon = () => (
+  <Icon>
+    <path d="M8 3v10M3 8h10" />
+  </Icon>
+)
+
+export const PencilIcon = () => (
+  <Icon>
+    <path d="M10.5 2.8l2.7 2.7-7.6 7.6H2.9v-2.7z" />
+    <path d="M9 4.3l2.7 2.7" />
+  </Icon>
+)
+
+export const TrashIcon = () => (
+  <Icon>
+    <path d="M2.8 4.3h10.4M6.3 4.3V2.8h3.4v1.5M4 4.3l.7 8.9h6.6l.7-8.9M6.6 6.8v4M9.4 6.8v4" />
+  </Icon>
+)
+
+export const RefreshIcon = () => (
+  <Icon>
+    <path d="M13.2 6.5A5.3 5.3 0 1 0 13 10" />
+    <path d="M13.4 2.8v3.8H9.6" />
+  </Icon>
+)
+
+export const ImportIcon = () => (
+  <Icon>
+    <path d="M8 2v7.5M4.8 6.6L8 9.8l3.2-3.2M2.5 11.5v2h11v-2" />
+  </Icon>
+)
+
+export const ChevronIcon = ({ open }: { open: boolean }) => (
+  <Icon size={14}>
+    <path d={open ? 'M4 6l4 4 4-4' : 'M6 4l4 4-4 4'} />
+  </Icon>
+)
+
+export const StarIcon = ({ filled }: { filled: boolean }) => (
+  <Icon>
+    <path
+      d="M8 1.9l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.7l-3.8 2 .7-4.3-3.1-3 4.3-.6z"
+      fill={filled ? 'currentColor' : 'none'}
+    />
+  </Icon>
+)
+
+export const UnsubscribeIcon = () => (
+  <Icon>
+    <circle cx="8" cy="8" r="6" />
+    <path d="M5.2 8h5.6" />
+  </Icon>
+)
+
+/** YouTube 的紅色標誌樣式（R107）：紅色圓角長方形＋白色播放三角形，顏色固定不跟著文字 */
+export const YouTubeLogo = ({ size = 18 }: { size?: number }) => (
+  <svg className="icon" width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="0.8" y="3" width="14.4" height="10" rx="3" fill="#ff0033" />
+    <path d="M6.6 5.7v4.6L10.6 8z" fill="#fff" />
+  </svg>
+)
