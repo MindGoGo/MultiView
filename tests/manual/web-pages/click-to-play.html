@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>click-to-play</title>
+<style>
+  body { margin: 0; background: #223; color: #fff; font: 14px sans-serif; }
+  #player { position: relative; width: 480px; height: 270px; margin: 20px; background: #000; }
+  .vjs-big-play-button { position: absolute; left: 200px; top: 105px; width: 80px; height: 60px; background: #c33; cursor: pointer; }
+</style>
+<header>要先按播放鈕才產生影片（R113）</header>
+<div id="player"><div class="vjs-big-play-button"></div></div>
+<script>
+  // 和 video.js 一樣：按下開始鈕才建立影片並播放
+  document.querySelector('.vjs-big-play-button').addEventListener('click', (e) => {
+    e.currentTarget.remove()
+    const v = document.createElement('video')
+    v.src = '/bunny-10s.mp4'
+    v.muted = true
+    v.loop = true
+    v.style.width = '100%'
+    v.style.height = '100%'
+    document.getElementById('player').appendChild(v)
+    v.play()
+  })
+</script>
