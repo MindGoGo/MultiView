@@ -15,6 +15,8 @@ import { PopupMenu, type PopupItem } from './PopupMenu'
 import { SliderPopup } from './SliderPopup'
 import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } from '../lib/brightness'
 import type { YtMode } from '../players/YouTubeSource'
+import { LoadingCritter, useLoadingVisible } from './LoadingCritter'
+import { loadingKind } from '../lib/loading'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
 interface Props {
@@ -197,6 +199,8 @@ export function Cell(props: Props) {
 
   const showInput = !source || editing
   const failed = source !== null && status === 'error' && !editing
+  // 讀取動畫（R99）
+  const loading = useLoadingVisible(source ? loadingKind({ status, ytMode: props.ytMode, isWeb, showInput }) : null)
   /** 找到影片了（暫停、播放中、播完），還沒有進度條時也可以按播放（R54）；載入中不算 */
   const videoFound = status === 'paused' || status === 'playing' || status === 'ended'
 
@@ -283,7 +287,7 @@ export function Cell(props: Props) {
         </div>
       )}
 
-      {props.ytMode === 'resolving' && !showInput && <div className="cell-resolving">解析中…</div>}
+      {loading && <LoadingCritter kind={loading} />}
 
       {failed && (
         <div className="cell-center cell-message">
