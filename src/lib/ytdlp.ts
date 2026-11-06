@@ -19,6 +19,10 @@ export function normalizeMethods(raw: unknown): YouTubeMethods {
   }
 }
 
+/** 其他網站的播放方式（R102）：網頁或 yt-dlp */
+export type WebMethod = 'web' | 'ytdlp'
+export const normalizeWebMethod = (raw: unknown): WebMethod => (raw === 'ytdlp' ? 'ytdlp' : 'web')
+
 /** 兩組都是內嵌播放器時不執行 yt-dlp（R88） */
 export const needsResolve = (m: YouTubeMethods) => m.live === 'ytdlp' || m.vod === 'ytdlp'
 
@@ -30,6 +34,8 @@ export interface YtStream {
   title: string | null
   /** 網址的有效期限（毫秒時間） */
   expiresAt: number
+  /** 網站要求的請求標頭（其他網站，R103）：只有 Referer、User-Agent */
+  headers?: Record<string, string>
 }
 
 /**
@@ -58,33 +64,69 @@ interface RawFormat {
   manifest_url?: unknown
   vcodec?: unknown
   acodec?: unknown
+  height?: unknown
+  ext?: unknown
+  http_headers?: unknown
 }
+
+/** 播放器（Chromium）能播的容器；avi、mkv、flv 等不能（R103，archive.org 實測選到 avi） */
+const PLAYABLE_EXT = ['mp4', 'm4v', 'webm', 'mov']
+const playableExt = (f: RawFormat) => f.ext === undefined || f.ext === null || PLAYABLE_EXT.includes(String(f.ext).toLowerCase())
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
 
+/** 串流需要帶的請求標頭：只留 Referer、User-Agent（不帶 Cookie，R103 第 8 節） */
+function headersOf(f: RawFormat, info: Record<string, unknown>): Record<string, string> | undefined {
+  const raw = (typeof f.http_headers === 'object' && f.http_headers) || (typeof info.http_headers === 'object' && info.http_headers)
+  if (!raw) return undefined
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>))
+    if (typeof v === 'string' && /^(referer|user-agent)$/i.test(k)) out[k] = v
+  return Object.keys(out).length ? out : undefined
+}
+
+/** 一個網頁有多部影片（yt-dlp 回傳清單）時用第一部有格式的（R103） */
+function firstVideo(info: Record<string, unknown>): Record<string, unknown> | null {
+  if (info._type !== 'playlist') return info
+  const entries = Array.isArray(info.entries) ? (info.entries as unknown[]) : []
+  const e = entries.find((x) => typeof x === 'object' && x !== null && Array.isArray((x as Record<string, unknown>).formats))
+  return (e as Record<string, unknown> | undefined) ?? null
+}
+
 /**
- * 從 yt-dlp -J 的結果選出要播的串流（R89）：
- * - 直播：HLS 的主清單（影像、聲音分開的軌道都在主清單裡，hls.js 會自己組合，也能切換畫質）
- * - 一般影片：也是 HLS 的主清單（2026-11-06 實測一般影片也有，144p–2160p）；
- *   沒有主清單時用影音合一的 360p mp4（format 18），再沒有時用其他影音合一的 https 格式
- * 沒有可以播的格式時回傳 null。
+ * 從 yt-dlp -J 的結果選出要播的串流（R89、R103）：
+ * - HLS：優先有主清單（manifest_url）的格式（影像、聲音分開的軌道都在主清單裡，hls.js 會自己組合，也能切換畫質）；
+ *   其他網站沒有主清單時用 HLS 格式本身的網址（有影像的）
+ * - 沒有 HLS：影音合一、播放器能播的容器（mp4、webm…）的 http(s) 格式，YouTube 用 360p（format 18），其他網站用畫質最高的。
+ *   其他網站常常不標示編碼，只排除明確標示「沒有影像」或「沒有聲音」的格式
+ * - 直播只用 HLS；還沒開始的直播、沒有可以播的格式回傳 null
  */
 export function pickStream(info: unknown, now: number): YtStream | null {
   if (typeof info !== 'object' || info === null) return null
-  const j = info as Record<string, unknown>
+  const j = firstVideo(info as Record<string, unknown>)
+  if (!j) return null
   const formats = (Array.isArray(j.formats) ? j.formats : []) as RawFormat[]
   const isLive = j.is_live === true || j.live_status === 'is_live'
   // 直播的 title 後面會加上日期時間，fulltitle 是原本的名稱
   const title = str(j.fulltitle) ?? str(j.title)
-  const hls = formats.find((f) => str(f.manifest_url) && String(f.protocol ?? '').startsWith('m3u8'))
-  const make = (kind: YtStream['kind'], url: string): YtStream => ({ kind, url, isLive, title, expiresAt: expiryOf(url, now) })
-  if (isLive) return hls ? make('hls', hls.manifest_url as string) : null
+  const isHls = (f: RawFormat) => String(f.protocol ?? '').startsWith('m3u8')
+  const hls =
+    formats.find((f) => isHls(f) && str(f.manifest_url)) ??
+    formats.filter((f) => isHls(f) && str(f.url) && f.vcodec !== 'none').at(-1)
+  const make = (kind: YtStream['kind'], f: RawFormat, url: string): YtStream => {
+    const headers = headersOf(f, j)
+    return { kind, url, isLive, title, expiresAt: expiryOf(url, now), ...(headers ? { headers } : {}) }
+  }
+  const hlsStream = hls ? make('hls', hls, (str(hls.manifest_url) ?? str(hls.url))!) : null
+  if (isLive) return hlsStream
   if (j.live_status === 'is_upcoming') return null
-  if (hls) return make('hls', hls.manifest_url as string)
-  const muxed = (f: RawFormat) =>
-    f.protocol === 'https' && str(f.url) && f.vcodec !== 'none' && f.acodec !== 'none' && f.vcodec != null && f.acodec != null
-  const mp4 = formats.find((f) => f.format_id === '18' && muxed(f)) ?? formats.find(muxed)
-  return mp4 ? make('mp4', mp4.url as string) : null
+  if (hlsStream) return hlsStream
+  const muxed = formats.filter(
+    (f) => /^https?$/.test(String(f.protocol ?? '')) && str(f.url) && f.vcodec !== 'none' && f.acodec !== 'none' && playableExt(f)
+  )
+  const height = (f: RawFormat) => (typeof f.height === 'number' ? f.height : 0)
+  const best = muxed.find((f) => f.format_id === '18') ?? [...muxed].sort((a, b) => height(b) - height(a))[0]
+  return best ? make('mp4', best, best.url as string) : null
 }
 
 /** 看起來是 yt-dlp 太舊、無法解析 YouTube 頁面的錯誤（R92） */

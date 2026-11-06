@@ -16,12 +16,13 @@ export function normalizeVolume(v: unknown): number {
 }
 
 /**
- * 可放大音量的來源（R98 第 3 節）：yt-dlp 播放、m3u8 網址。
+ * 可放大音量的來源（R98 第 3 節）：yt-dlp 播放（YouTube、其他網站）、m3u8 網址。
  * 內嵌播放器、網頁、一般的 mp4 網址拿不到聲音資料，最高 100%。
  */
 export function canBoost(source: Pick<Source, 'parsed'>, ytMode: YtMode | undefined): boolean {
   if (source.parsed.kind === 'hls') return true
-  return source.parsed.kind === 'youtube' && (ytMode === 'ytdlp-hls' || ytMode === 'ytdlp-mp4')
+  // yt-dlp 播放的 YouTube（R89）與其他網站（R103）
+  return (source.parsed.kind === 'youtube' || source.parsed.kind === 'web') && (ytMode === 'ytdlp-hls' || ytMode === 'ytdlp-mp4')
 }
 
 /** 實際使用的音量：不能放大時最多 100（保存的值不變） */

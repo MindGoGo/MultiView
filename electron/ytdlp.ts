@@ -134,7 +134,16 @@ async function prepare(): Promise<void> {
 
 const ready = app.whenReady().then(prepare)
 
-async function run(videoId: string): Promise<ResolveResult> {
+/** 解析的對象：YouTube 影片代碼（R89）或其他網站的網址（R103）；也是快取的鍵 */
+const youtubeKey = (videoId: string) => `yt:${videoId}`
+const webKey = (url: string) => `web:${url}`
+const targetUrl = (key: string) =>
+  key.startsWith('yt:') ? `https://www.youtube.com/watch?v=${key.slice(3)}` : key.slice(4)
+
+/** 其他網站的串流要帶的請求標頭，依串流所在的網站（R103） */
+const streamHeaders = new Map<string, Record<string, string>>()
+
+async function run(key: string): Promise<ResolveResult> {
   if (!status.version) return { ok: false, reason: 'missing' }
   const r = await exec(
     [
@@ -145,7 +154,7 @@ async function run(videoId: string): Promise<ResolveResult> {
       '--ignore-config',
       '--js-runtimes',
       `node:${process.execPath}`,
-      `https://www.youtube.com/watch?v=${videoId}`
+      targetUrl(key)
     ],
     RESOLVE_TIMEOUT_MS
   )
@@ -158,7 +167,15 @@ async function run(videoId: string): Promise<ResolveResult> {
     stream = null
   }
   if (!stream) return { ok: false, reason: 'failed' }
-  if (stream.kind === 'mp4') await waitUntilServed(stream.url)
+  if (stream.headers) {
+    try {
+      streamHeaders.set(new URL(stream.url).host, stream.headers)
+    } catch {
+      // 網址不合法時不記
+    }
+  }
+  // YouTube 的 mp4 與其他網站的串流（Dailymotion 實測一樣）剛解析出來的前幾秒會被拒
+  if (stream.kind === 'mp4' || key.startsWith('web:')) await waitUntilServed(stream.url, stream.headers)
   return { ok: true, stream }
 }
 
@@ -166,14 +183,14 @@ const SERVE_WAIT_TRIES = 10
 const SERVE_WAIT_INTERVAL_MS = 1000
 
 /**
- * 剛解析出來的一般影片網址，前幾秒 YouTube 會回 403（2026-11-06 實測約 3 秒），
+ * 剛解析出來的網址，前幾秒網站會回 403（2026-11-06 實測 YouTube 的一般影片約 3 秒、Dailymotion 也會），
  * 播放器會因此失敗、重新解析又拿到新的網址。先試讀第一個位元組，可以讀了才交給畫面；
  * 10 秒內都不行就照樣交出去，由播放器的重試處理。
  */
-async function waitUntilServed(url: string) {
+async function waitUntilServed(url: string, headers?: Record<string, string>) {
   for (let i = 0; i < SERVE_WAIT_TRIES; i++) {
     try {
-      const res = await net.fetch(url, { headers: { Range: 'bytes=0-0' } })
+      const res = await net.fetch(url, { headers: { ...headers, Range: 'bytes=0-0' } })
       await res.body?.cancel()
       if (res.ok) return
     } catch {
@@ -226,7 +243,9 @@ async function checkLatest(): Promise<void> {
 }
 
 export const ytdlp = {
-  resolve: (videoId: string, refresh: boolean) => resolver.resolve(videoId, { refresh }),
+  resolve: (videoId: string, refresh: boolean) => resolver.resolve(youtubeKey(videoId), { refresh }),
+  /** 其他網站（R103）：只接受 http、https 的網址 */
+  resolveUrl: (url: string, refresh: boolean) => resolver.resolve(webKey(url), { refresh }),
   update: () => resolver.update(),
   getStatus: (): YtDlpStatus => ({ ...status }),
   checkLatest,
@@ -246,24 +265,41 @@ export const ytdlp = {
 }
 
 /**
- * 串流的跨網站存取許可（R89、第 8 節）：程式畫面用 hls.js 讀 googlevideo.com 的清單與片段，
- * 對方沒有回傳 Access-Control-Allow-Origin。只補給程式畫面發出的請求（Origin 是畫面的網址），
- * 內嵌播放器（Origin 是 YouTube）的請求不動。
+ * 串流的跨網站存取許可（R89、R103、第 8 節）：程式畫面用 hls.js 讀串流的清單與片段，
+ * 很多網站（包括 googlevideo.com）沒有回傳 Access-Control-Allow-Origin。
+ * 只補給程式畫面發出的請求（Origin 是畫面的網址）；內嵌播放器（Origin 是 YouTube）、網頁來源的請求不動。
+ * 其他網站要求的 Referer、User-Agent 也只補給這些請求（R103）。
  */
 export function installStreamCors(ses: Session, appOrigin: string) {
-  const filter = { urls: ['*://*.googlevideo.com/*'] }
+  const filter = { urls: ['http://*/*', 'https://*/*'] }
   const fromApp = new Set<number>()
   ses.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
-    const origin = Object.entries(details.requestHeaders).find(([k]) => k.toLowerCase() === 'origin')?.[1]
-    if (origin === appOrigin) fromApp.add(details.id)
-    callback({ requestHeaders: details.requestHeaders })
+    const headers = details.requestHeaders
+    const origin = Object.entries(headers).find(([k]) => k.toLowerCase() === 'origin')?.[1]
+    // 轉址後的同一個請求 Origin 會變成 "null"，仍然算程式畫面發出的
+    if ((origin !== appOrigin && !fromApp.has(details.id)) || details.url.startsWith(appOrigin))
+      return callback({ requestHeaders: headers })
+    fromApp.add(details.id)
+    let extra: Record<string, string> | undefined
+    try {
+      extra = streamHeaders.get(new URL(details.url).host)
+    } catch {
+      extra = undefined
+    }
+    // 不帶程式畫面的網址當 Referer：Dailymotion 看到 http://127.0.0.1 會回 403（2026-11-06 實測）；
+    // 網站要求的 Referer 由 yt-dlp 提供
+    const own = Object.fromEntries(Object.entries(headers).filter(([k]) => k.toLowerCase() !== 'referer'))
+    callback({ requestHeaders: extra ? { ...own, ...extra } : own })
   })
   ses.webRequest.onHeadersReceived(filter, (details, callback) => {
-    if (!fromApp.delete(details.id)) return callback({})
+    if (!fromApp.has(details.id)) return callback({})
+    // 轉址的回應之後還會有下一個回應，先留著
+    if (details.statusCode < 300 || details.statusCode >= 400) fromApp.delete(details.id)
     const headers = Object.fromEntries(
       Object.entries(details.responseHeaders ?? {}).filter(([k]) => k.toLowerCase() !== 'access-control-allow-origin')
     )
-    headers['Access-Control-Allow-Origin'] = [appOrigin]
+    // 這些請求不帶登入資訊（hls.js、跨網站模式的 <video>），轉址後 Origin 是 "null"，所以用 *
+    headers['Access-Control-Allow-Origin'] = ['*']
     callback({ responseHeaders: headers })
   })
   ses.webRequest.onErrorOccurred(filter, (details) => fromApp.delete(details.id))

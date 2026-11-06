@@ -129,6 +129,13 @@ export const YouTubeIcon = () => (
   </Icon>
 )
 
+export const GlobeIcon = () => (
+  <Icon>
+    <circle cx="8" cy="8" r="6.2" />
+    <path d="M1.8 8h12.4M8 1.8c1.8 1.7 2.7 3.8 2.7 6.2S9.8 12.5 8 14.2C6.2 12.5 5.3 10.4 5.3 8S6.2 3.5 8 1.8z" />
+  </Icon>
+)
+
 export const DownloadToolIcon = () => (
   <Icon>
     <path d="M8 2v7.5M4.8 6.6L8 9.8l3.2-3.2M2.5 11.5v2h11v-2" />

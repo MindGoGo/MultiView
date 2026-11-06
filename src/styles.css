@@ -230,6 +230,8 @@ button.active {
 
 .player-box {
   background: #000;
+  /* 讀取動畫依格子大小縮放（R104） */
+  container-type: size;
 }
 
 .player {
@@ -941,6 +943,8 @@ button.danger {
 /* ---- 讀取動畫（R99）：格子中央彈跳的小生物，不擋按鈕、不攔截點擊 ---- */
 .critter {
   position: absolute;
+  /* 網頁的 webview 由程式加在後面，要蓋在它上面（R104） */
+  z-index: 2;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);

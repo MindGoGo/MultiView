@@ -62,6 +62,7 @@ import { isCompanionTab, stripYouTubeSuffix, type CompanionAction, type Companio
 
 const TOAST_MS = 3000
 const YT_FALLBACK_TOAST = 'yt-dlp 無法播放，已改用內嵌播放器'
+const WEB_FALLBACK_TOAST = 'yt-dlp 無法播放這個網站，已改用網頁播放'
 /** 觀看進度多久讀一次（R55） */
 const POSITION_SAVE_MS = 5000
 /** 多久確認一次小視窗連結的格子目前的影片（R78） */
@@ -119,6 +120,12 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const [youtubeMethods, setYoutubeMethods] = useState(initial.youtubeMethods)
   /** YouTube 格子目前的播放方式，依來源 id（R89） */
   const [ytModes, setYtModes] = useState<Record<number, YtMode>>({})
+  /** 其他網站的播放方式（R102） */
+  const [webMethod, setWebMethod] = useState(initial.webMethod)
+  /** 按了「改用網頁」的來源 id：只在這次執行期間有效（R103） */
+  const [forcedWeb, setForcedWeb] = useState<ReadonlySet<number>>(() => new Set())
+  const ytModesRef = useRef(ytModes)
+  ytModesRef.current = ytModes
   const onYtMode = useCallback(
     (id: number, mode: YtMode) => setYtModes((prev) => (prev[id] === mode ? prev : { ...prev, [id]: mode })),
     []
@@ -176,8 +183,10 @@ export default function App({ initial }: { initial: ViewSettings }) {
   }
 
   // 退回內嵌播放器的提示：提示還在顯示時不重複、不延長（R90）
-  const onYtFallback = useCallback(() => {
-    if (toastRef.current !== YT_FALLBACK_TOAST) showToast(YT_FALLBACK_TOAST)
+  // 退回網頁播放的提示（R103），規則同上
+  const onYtFallback = useCallback((kind: 'youtube' | 'web') => {
+    const message = kind === 'web' ? WEB_FALLBACK_TOAST : YT_FALLBACK_TOAST
+    if (toastRef.current !== message) showToast(message)
   }, [])
 
   // 觀看進度（R55）：來源 id → 要保存的位置。每 5 秒讀一次，改變超過 1 秒才更新（才會寫檔）
@@ -206,6 +215,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     brightness: masterBrightness,
     autoYoutubeWeb,
     youtubeMethods,
+    webMethod,
     listTab,
     slots: slots.map((s) =>
       s
@@ -241,7 +251,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
     window.multiview.saveView(viewOf(positions))
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, positions, listTab])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab])
 
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
@@ -275,7 +285,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
     }
     // 網頁來源以「網頁載入完成」為準，其他來源以開始播放或暫停為準
     const s = slotsRef.current.find((x) => x?.id === id)
-    if (s && s.parsed.kind !== 'web' && (status === 'playing' || status === 'paused' || status === 'ended')) onLoaded(id)
+    // 其他網站用 yt-dlp 播放時沒有網頁，也以開始播放或暫停為準（R103）
+    const native = s && (s.parsed.kind !== 'web' || ytModesRef.current[id]?.startsWith('ytdlp'))
+    if (native && (status === 'playing' || status === 'paused' || status === 'ended')) onLoaded(id)
     setStatuses((prev) => (prev[id] === status ? prev : { ...prev, [id]: status }))
     if (failure) setFailures((prev) => (prev[id] === failure ? prev : { ...prev, [id]: failure }))
   }, [])
@@ -854,6 +866,12 @@ export default function App({ initial }: { initial: ViewSettings }) {
   return (
     <div className="app">
       <Grid
+        webMethod={webMethod}
+        forcedWeb={forcedWeb}
+        onUseWebPage={(index) => {
+          const s = slots[index]
+          if (s) setForcedWeb((prev) => new Set([...prev, s.id]))
+        }}
         youtubeMethods={youtubeMethods}
         ytModes={ytModes}
         onYtMode={onYtMode}
@@ -937,6 +955,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
           onAutoYoutubeWeb={setAutoYoutubeWeb}
           youtubeMethods={youtubeMethods}
           onYoutubeMethods={setYoutubeMethods}
+          webMethod={webMethod}
+          onWebMethod={setWebMethod}
           onToast={showToast}
         />
       )}

@@ -358,6 +358,7 @@ ipcMain.handle('settings:getView', () => ({
   brightness: settings.brightness,
   autoYoutubeWeb: settings.autoYoutubeWeb,
   youtubeMethods: settings.youtubeMethods,
+  webMethod: settings.webMethod,
   listTab: settings.listTab
 }))
 ipcMain.on('settings:saveView', (_, view: unknown) => {
@@ -404,6 +405,12 @@ ipcMain.handle('app:version', () => app.getVersion())
 // yt-dlp 播放（R89–R93）：失敗時回傳原因，不把例外丟回畫面
 ipcMain.handle('ytdlp:resolve', (_, videoId: unknown, refresh: unknown) =>
   isVideoId(videoId) ? ytdlp.resolve(videoId, refresh === true) : { ok: false, reason: 'failed' }
+)
+// 其他網站（R103）：只接受 http、https 的網址，交給 yt-dlp 前不經過命令列殼層
+ipcMain.handle('ytdlp:resolveUrl', (_, url: unknown, refresh: unknown) =>
+  typeof url === 'string' && url.length < 4096 && /^https?:///i.test(url)
+    ? ytdlp.resolveUrl(url, refresh === true)
+    : { ok: false, reason: 'failed' }
 )
 ipcMain.handle('ytdlp:update', () => ytdlp.update())
 ipcMain.handle('ytdlp:status', () => ytdlp.getStatus())

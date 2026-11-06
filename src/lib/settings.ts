@@ -5,7 +5,7 @@ import { SLOT_COUNT, type Quality } from './slots'
 import { normalizeQuality } from './quality'
 import { BRIGHTNESS_DEFAULT, normalizeBrightness } from './brightness'
 import { DEFAULT_COMPANION, normalizeCompanion, type CompanionWindowState } from './companion'
-import { DEFAULT_METHODS, normalizeMethods, type YouTubeMethods } from './ytdlp'
+import { DEFAULT_METHODS, normalizeMethods, normalizeWebMethod, type WebMethod, type YouTubeMethods } from './ytdlp'
 import { normalizeVolume } from './volume'
 
 export interface WindowState {
@@ -51,6 +51,8 @@ export interface ViewSettings {
   autoYoutubeWeb: boolean
   /** YouTube 直播、一般影片的播放方式（R88）；舊的設定檔沒有這個欄位時都是內嵌播放器 */
   youtubeMethods: YouTubeMethods
+  /** 其他網站的播放方式（R102）；舊的設定檔沒有這個欄位時是網頁 */
+  webMethod: WebMethod
   /** 清單面板上次的那一邊和分頁（R58）；舊的設定檔視為 YouTube 的最愛 */
   listTab: { group: 'youtube' | 'other'; tab: 'subscriptions' | 'favorites' | 'history' }
 }
@@ -75,6 +77,7 @@ export function defaultSettings(): Settings {
     brightness: BRIGHTNESS_DEFAULT,
     autoYoutubeWeb: false,
     youtubeMethods: { ...DEFAULT_METHODS },
+    webMethod: 'web',
     listTab: DEFAULT_LIST_TAB
   }
 }
@@ -154,6 +157,7 @@ export function normalizeView(raw: unknown): ViewSettings {
     brightness: normalizeBrightness(obj.brightness),
     autoYoutubeWeb: obj.autoYoutubeWeb === true,
     youtubeMethods: normalizeMethods(obj.youtubeMethods),
+    webMethod: normalizeWebMethod(obj.webMethod),
     listTab: normalizeListTab(obj.listTab)
   }
 }

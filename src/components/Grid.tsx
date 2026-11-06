@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { isYouTubeSite } from '../lib/source'
 import { cellRects, dividers, type Axis, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
-import { isVisible, type Slots } from '../lib/slots'
+import { isVisible, type Slots, type Source } from '../lib/slots'
 import type { AudioMenu, NavState, PlayerHandle, PlayStatus } from '../players/types'
 import type { Failure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
@@ -9,7 +9,8 @@ import type { CaptionTrack } from '../lib/captions'
 import type { Quality } from '../lib/quality'
 import { brightnessFilter } from '../lib/brightness'
 import { YouTubeSource, type YtMode } from '../players/YouTubeSource'
-import type { YouTubeMethods } from '../lib/ytdlp'
+import type { WebMethod, YouTubeMethods } from '../lib/ytdlp'
+import { WebSource } from '../players/WebSource'
 import { canBoost, effectiveVolume } from '../lib/volume'
 import { VideoPlayer } from '../players/VideoPlayer'
 import { WebPlayer } from '../players/WebPlayer'
@@ -104,11 +105,19 @@ interface Props {
   /** YouTube 格子目前的播放方式，依來源 id（R89） */
   ytModes: Record<number, YtMode>
   onYtMode(id: number, mode: YtMode): void
-  /** 有格子從 yt-dlp 退回內嵌播放器（R90） */
-  onYtFallback(): void
+  /** 有格子從 yt-dlp 退回內嵌播放器（R90）或網頁（R103） */
+  onYtFallback(kind: 'youtube' | 'web'): void
+  /** 其他網站的播放方式（R102） */
+  webMethod: WebMethod
+  /** 按了「改用網頁」的來源 id（R103） */
+  forcedWeb: ReadonlySet<number>
+  onUseWebPage(index: number): void
 }
 
 const FULL: FracRect = { x: 0, y: 0, w: 1, h: 1 }
+
+/** 其他網站（R102 共用定義）：網頁來源，而且不是 YouTube 網站頁面、YouTube 網頁播放 */
+export const isOtherSite = (s: Source) => !isYouTubeSite(s.url) && !s.youtubeWeb && !s.youtubePage
 
 /** 隱藏的網頁來源不能用 display: none，<webview> 會因此重新載入，改成看不見（R4 AC3） */
 const HIDDEN_WEB_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0, width: '100%', height: '100%' }
@@ -171,7 +180,23 @@ export function Grid(props: Props) {
                 audioLang={source.audioLang ?? null}
                 methods={props.youtubeMethods}
                 onMode={(mode) => props.onYtMode(source.id, mode)}
-                onFallback={props.onYtFallback}
+                onFallback={() => props.onYtFallback('youtube')}
+                {...common}
+              />
+            ) : source.parsed.kind === 'web' && isOtherSite(source) ? (
+              <WebSource
+                url={source.parsed.url}
+                adblock={source.adblock}
+                mode={props.webModes[source.id] ?? 'video'}
+                onModeChange={(mode) => props.onWebMode(source.id, mode)}
+                onNavState={(s) => props.onNavState(source.id, s)}
+                parked={parked}
+                method={props.webMethod}
+                forceWeb={props.forcedWeb.has(source.id)}
+                quality={source.quality}
+                audioLang={source.audioLang ?? null}
+                onMode={(mode) => props.onYtMode(source.id, mode)}
+                onFallback={() => props.onYtFallback('web')}
                 {...common}
               />
             ) : source.parsed.kind === 'web' ? (
@@ -229,6 +254,7 @@ export function Grid(props: Props) {
             webMode={source ? (props.webModes[source.id] ?? 'video') : 'video'}
             onToggleWebMode={props.onToggleWebMode}
             onToggleAdblock={props.onToggleAdblock}
+            onUseWebPage={props.onUseWebPage}
             isSolo={solo === index}
             favorite={source ? props.isFavorite(source.url) : false}
             onToggleFavorite={props.onToggleFavorite}

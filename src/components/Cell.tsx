@@ -27,6 +27,8 @@ interface Props {
   failure: Failure | undefined
   /** YouTube 格子目前的播放方式（R89）；其他來源為 undefined */
   ytMode: YtMode | undefined
+  /** 其他網站改用網頁播放（R103） */
+  onUseWebPage(index: number): void
   /** 送出網址；回傳錯誤訊息，成功時回傳 null */
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
@@ -155,10 +157,12 @@ export function Cell(props: Props) {
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cellRef = useRef<HTMLDivElement>(null)
   useEffect(() => () => clearTimeout(idleTimer.current), [])
-  const isWeb = source?.parsed.kind === 'web'
-  const pageMode = isWeb && props.webMode === 'page'
-  /** 用 yt-dlp 播放的 YouTube：沒有可以直接操作的 YouTube 介面、不支援字幕（R89） */
+  /** 用 yt-dlp 播放：沒有可以直接操作的 YouTube 介面或網頁、不支援字幕（R89、R103） */
   const ytdlp = props.ytMode === 'ytdlp-hls' || props.ytMode === 'ytdlp-mp4'
+  /** 其他網站用 yt-dlp 播放（或解析中）時沒有網頁，操作區和影片來源相同（R103） */
+  const webByYtdlp = source?.parsed.kind === 'web' && (ytdlp || props.ytMode === 'resolving')
+  const isWeb = source?.parsed.kind === 'web' && !webByYtdlp
+  const pageMode = isWeb && props.webMode === 'page'
   /** 有兩條以上的聲音軌才有語音選單（R95） */
   const audio = props.ytMode === 'ytdlp-hls' ? props.getAudioTracks(index) : null
   const hasAudioMenu = !!audio && audio.options.length >= 2
@@ -464,7 +468,12 @@ export function Cell(props: Props) {
               <Label full="語音" icon="🗣" />
             </button>
           )}
-          {(source.parsed.kind === 'youtube' || source.parsed.kind === 'hls') && (
+          {webByYtdlp && (
+            <button title="改用網頁播放這個網站（這次有效）" onClick={() => props.onUseWebPage(index)}>
+              <Label full="改用網頁" icon="🌐" />
+            </button>
+          )}
+          {(source.parsed.kind === 'youtube' || source.parsed.kind === 'hls' || (webByYtdlp && ytdlp)) && (
             <button
               className={source.quality !== 'auto' && props.ytMode !== 'ytdlp-mp4' ? 'active' : ''}
               title={

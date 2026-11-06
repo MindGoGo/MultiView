@@ -72,6 +72,8 @@ const api = {
   /** 用 yt-dlp 解析 YouTube（R89）；refresh 為 true 時不用快取 */
   ytdlpResolve: (videoId: string, refresh = false): Promise<ResolveResult> =>
     ipcRenderer.invoke('ytdlp:resolve', videoId, refresh),
+  /** 用 yt-dlp 解析其他網站的網址（R103） */
+  ytdlpResolveUrl: (url: string, refresh = false): Promise<ResolveResult> => ipcRenderer.invoke('ytdlp:resolveUrl', url, refresh),
   /** 更新 yt-dlp（R93）；和自動更新同時發生時共用同一次 */
   ytdlpUpdate: (): Promise<{ result: UpdateOutcome; version: string | null }> => ipcRenderer.invoke('ytdlp:update'),
   /** 設定選單的 yt-dlp 狀態（R93） */

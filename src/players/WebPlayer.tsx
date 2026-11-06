@@ -7,6 +7,7 @@ import { isHttpFailure, isLoadFailure, LOAD_TIMEOUT_MS, type WebFailure } from '
 import { videoModeScale } from '../lib/webVideo'
 import { intentFromReport, shouldWaitForVideo } from '../lib/webPlayback'
 import { WEB_PARTITION, type WebMode, type WebReport, type WebState } from './webTypes'
+import { LoadingCritter, useLoadingVisible } from '../components/LoadingCritter'
 
 interface Props extends PlayerProps {
   url: string
@@ -46,6 +47,8 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<WebviewTag | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  /** 網頁載入中、還沒找到影片（R104 讀取動畫） */
+  const [pending, setPending] = useState(true)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const latest = useRef({ mode, onModeChange, onStatus, onLoaded, onNavState, onYouTubeVideo })
   latest.current = { mode, onModeChange, onStatus, onLoaded, onNavState, onYouTubeVideo }
@@ -121,6 +124,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     viewRef.current = view
     page.current = { loaded: false, found: false, attached: false, failed: false }
     progressRef.current = null
+    setPending(true)
     let lastStatus: PlayStatus | null = null
     const report = (s: PlayStatus) => {
       if (page.current.failed) return
@@ -135,6 +139,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
       if (page.current.failed) return
       clearTimeout(loadTimer)
       page.current.failed = true
+      setPending(false)
       checkNoVideoRef.current()
       if (failure === 'drm') updateStateRef.current({ intent: 'pause' })
       else if (page.current.attached) view.stop()
@@ -210,6 +215,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
       clearTimeout(loadTimer)
       if (!page.current.loaded && !page.current.failed) latest.current.onLoaded?.()
       page.current.loaded = true
+      setPending(false)
       checkNoVideoRef.current()
     }
     const onIpc = (e: Electron.IpcMessageEvent) => {
@@ -235,6 +241,7 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
         else if (r.drm) fail('drm')
         if (page.current.failed) return
         page.current.found = r.found
+        if (r.found) setPending(false)
         progressRef.current = r.progress
         const t = pendingStart.current
         if (t && r.progress) {
@@ -357,9 +364,12 @@ export const WebPlayer = forwardRef<PlayerHandle, Props>(function WebPlayer(
     }
   }))
 
+  // 讀取動畫（R104）：只在影片模式；整頁模式、背景的來源頁面不顯示
+  const loading = useLoadingVisible(mode === 'video' && !parked && pending ? 'loading' : null)
   return (
     <div className="player web-host" ref={hostRef}>
       {notice && <div className="web-notice">{notice}</div>}
+      {loading && <LoadingCritter kind={loading} />}
     </div>
   )
 })
