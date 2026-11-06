@@ -121,11 +121,12 @@ describe('聲音（R7）', () => {
     expect(audible(toggleMute(slots, 0))).toEqual([])
   })
 
-  it('AC4：只改變這一格的音量，並限制在 0–100 的整數', () => {
+  it('AC4：只改變這一格的音量，並限制在 0–200 的整數（R98 由 0–100 放寬）', () => {
     const slots = slotsWith({ 0: { volume: 100 }, 1: { volume: 100 } })
     const next = setVolume(slots, 1, 42.4)
     expect([next[0]!.volume, next[1]!.volume]).toEqual([100, 42])
-    expect(setVolume(slots, 0, 150)[0]!.volume).toBe(100)
+    expect(setVolume(slots, 0, 150)[0]!.volume).toBe(150)
+    expect(setVolume(slots, 0, 250)[0]!.volume).toBe(200)
     expect(setVolume(slots, 0, -5)[0]!.volume).toBe(0)
   })
 

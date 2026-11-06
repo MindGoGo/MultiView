@@ -15,6 +15,7 @@ import { PopupMenu, type PopupItem } from './PopupMenu'
 import { SliderPopup } from './SliderPopup'
 import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } from '../lib/brightness'
 import type { YtMode } from '../players/YouTubeSource'
+import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
 interface Props {
   index: number
@@ -159,6 +160,9 @@ export function Cell(props: Props) {
   /** 有兩條以上的聲音軌才有語音選單（R95） */
   const audio = props.ytMode === 'ytdlp-hls' ? props.getAudioTracks(index) : null
   const hasAudioMenu = !!audio && audio.options.length >= 2
+  /** 音量：可放大的來源 0–200，其他 0–100，顯示實際使用的音量（R98） */
+  const boostable = !!source && canBoost(source, props.ytMode)
+  const volume = source ? effectiveVolume(source.volume, boostable) : VOLUME_DEFAULT
 
   const onMouseMove = () => {
     setHover(true)
@@ -388,11 +392,11 @@ export function Cell(props: Props) {
           </button>
           {/* 音量改成按鈕＋彈出滑桿，操作區更精簡（R42） */}
           <button
-            title={`音量 ${source.volume}`}
+            title={`音量 ${volume}`}
             onPointerDown={(e) => menu?.kind === 'volume' && e.stopPropagation()}
             onClick={(e) => toggleMenu('volume', e)}
           >
-            <Label full={`🔉 ${source.volume}`} icon="🔉" />
+            <Label full={`🔉 ${volume}`} icon="🔉" />
           </button>
           {((source.parsed.kind === 'youtube' && !ytdlp) || (isWeb && !pageMode)) && (
             <button
@@ -508,12 +512,13 @@ export function Cell(props: Props) {
               placement="above"
               title="音量"
               min={0}
-              max={100}
+              max={volumeMax(boostable)}
+              boostFrom={boostable ? VOLUME_NORMAL_MAX : undefined}
               step={1}
-              value={source.volume}
+              value={volume}
               format={(v) => String(v)}
               onChange={(v) => props.onVolume(index, v)}
-              onReset={() => props.onVolume(index, 100)}
+              onReset={() => props.onVolume(index, VOLUME_DEFAULT)}
               onClose={() => setMenu(null)}
             />
           )}

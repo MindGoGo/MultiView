@@ -6,6 +6,7 @@ import { normalizeQuality } from './quality'
 import { BRIGHTNESS_DEFAULT, normalizeBrightness } from './brightness'
 import { DEFAULT_COMPANION, normalizeCompanion, type CompanionWindowState } from './companion'
 import { DEFAULT_METHODS, normalizeMethods, type YouTubeMethods } from './ytdlp'
+import { normalizeVolume } from './volume'
 
 export interface WindowState {
   x?: number
@@ -120,7 +121,8 @@ function normalizeRatios(raw: unknown): Partial<Record<LayoutId, Ratios>> {
 
 function normalizeSource(raw: unknown): SavedSource | null {
   if (!isObject(raw) || typeof raw.url !== 'string' || !parseSource(raw.url)) return null
-  const volume = isFiniteNumber(raw.volume) ? Math.round(Math.min(Math.max(raw.volume, 0), 100)) : 100
+  // 可放大音量的來源最高 200（R98）
+  const volume = normalizeVolume(raw.volume)
   return {
     url: raw.url,
     muted: raw.muted === true,

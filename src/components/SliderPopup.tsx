@@ -1,6 +1,6 @@
 // 滑桿選單（R40 亮度、R41 總亮度、R42 音量）：滑桿＋目前數值＋「重設」。
 // 拖曳時立即生效；按 Esc 或點選單外面關閉。格子裡出現在按鈕上方，工具列出現在按鈕下方。
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 
 interface Props {
   anchor: DOMRect
@@ -9,6 +9,8 @@ interface Props {
   min: number
   max: number
   step: number
+  /** 超過這個值的那一段用不同顏色標示（R98：音量超過 100%） */
+  boostFrom?: number
   value: number
   format(value: number): string
   onChange(value: number): void
@@ -60,6 +62,8 @@ export function SliderPopup(props: Props) {
       </div>
       <input
         type="range"
+        className={props.boostFrom !== undefined && props.value > props.boostFrom ? 'boosted' : ''}
+        style={sliderFill(props)}
         min={props.min}
         max={props.max}
         step={props.step}
@@ -71,4 +75,13 @@ export function SliderPopup(props: Props) {
       </button>
     </div>
   )
+}
+
+/** 滑桿的填色位置：目前值與放大起點（百分比） */
+function sliderFill(p: Props): CSSProperties {
+  const pct = (v: number) => `${((v - p.min) / (p.max - p.min)) * 100}%`
+  return {
+    '--fill': pct(p.value),
+    '--boost': p.boostFrom !== undefined ? pct(p.boostFrom) : '100%'
+  } as CSSProperties
 }

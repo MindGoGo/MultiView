@@ -54,7 +54,8 @@ describe('parseSettings（R10）', () => {
     expect(settings.layout).toBe('2x2')
     expect(settings.ratios).toEqual({ '2x2': { cols: [0.6, 0.4], rows: [0.5, 0.5] } })
     expect(settings.slots[0]).toBeNull() // 不支援的網址
-    expect(settings.slots[1]).toEqual({ url: YT, muted: false, volume: 100, adblock: true, quality: 'auto', captions: null, audioLang: null, brightness: 100, youtubeWeb: false, position: null, backUrl: null, pageAdblock: true })
+    // 音量上限 200（R98）
+    expect(settings.slots[1]).toEqual({ url: YT, muted: false, volume: 200, adblock: true, quality: 'auto', captions: null, audioLang: null, brightness: 100, youtubeWeb: false, position: null, backUrl: null, pageAdblock: true })
     expect(settings.slots[2]).toBeNull()
     expect(settings.slots).toHaveLength(9)
   })

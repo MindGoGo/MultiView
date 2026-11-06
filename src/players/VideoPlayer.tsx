@@ -6,6 +6,7 @@ import { progressFromMedia, rangesOf } from '../lib/progress'
 import type { Quality } from '../lib/slots'
 import { capLevelFor, hlsHeights, pickHlsLevel } from '../lib/quality'
 import { audioOptions, currentOption, pickAudioTrack } from '../lib/audioTracks'
+import { volumeParts } from '../lib/volume'
 
 interface Props extends PlayerProps {
   kind: 'hls' | 'mp4'
@@ -23,6 +24,13 @@ export interface Renew {
   /** 重新解析（不用快取）；失敗時回傳 null */
   refresh(): Promise<{ url: string; expiresAt: number } | null>
 }
+
+/**
+ * 預先緩衝的長度（R100）：hls.js 預設會依資料量緩衝到 10 分鐘，高畫質時超過容量，
+ * 清掉部分緩衝後可能留下空洞（停住再跳過一段）；多格播放時也佔用大量記憶體與網路。
+ * 往後最多 60 秒；往前保留 30 秒，倒轉 5 秒（R51）不用重新下載。
+ */
+export const HLS_BUFFER = { maxBufferLength: 60, maxMaxBufferLength: 60, backBufferLength: 30 }
 
 /** 網址到期前這麼久按播放，就先重新解析（R89） */
 const RENEW_BEFORE_MS = 60_000
@@ -67,7 +75,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       const url = urlRef.current
       if (kind === 'hls' && Hls.isSupported()) {
         hls?.destroy()
-        hls = new Hls()
+        hls = new Hls(HLS_BUFFER)
         hlsRef.current = hls
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) fail()
@@ -79,6 +87,9 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
         hls.attachMedia(video)
       } else {
         const resumeAt = video.currentTime
+        // yt-dlp 的 mp4（googlevideo.com，主程序補了跨網站存取許可）要以跨網站模式載入，
+        // 音量超過 100% 時才拿得到聲音資料（R98）
+        if (renewRef.current) video.crossOrigin = 'anonymous'
         video.src = url
         if (resumeAt > 0) {
           video.addEventListener('loadedmetadata', () => (video.currentTime = resumeAt), {
@@ -225,9 +236,21 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
     videoRef.current!.muted = muted
   }, [muted])
 
+  // 音量（R98）：100% 以下只用播放器的音量；超過時才建立聲音處理（放大＋防爆音），之後一直沿用
+  const boostRef = useRef<{ ctx: AudioContext; gain: GainNode; limiter: DynamicsCompressorNode } | null>(null)
   useEffect(() => {
-    videoRef.current!.volume = volume / 100
+    const { element, gain } = volumeParts(volume)
+    videoRef.current!.volume = element
+    if (gain > 1 && !boostRef.current) boostRef.current = createBoost(videoRef.current!)
+    const b = boostRef.current
+    if (!b) return
+    b.gain.gain.value = gain
+    // 100% 以下不壓縮，聲音和沒有放大時相同
+    b.limiter.threshold.value = gain > 1 ? -6 : 0
+    b.limiter.ratio.value = gain > 1 ? 12 : 1
+    if (b.ctx.state === 'suspended') void b.ctx.resume()
   }, [volume])
+  useEffect(() => () => void boostRef.current?.ctx.close(), [])
 
   useEffect(() => {
     if (!active) {
@@ -277,3 +300,16 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
   // mp4 播完停在最後一個畫面，不重播（R2 AC3）
   return <video className="player" ref={videoRef} playsInline muted={muted} />
 })
+
+/** 放大音量的聲音處理：播放器 → 放大 → 防爆音 → 喇叭（R98） */
+function createBoost(video: HTMLVideoElement) {
+  const ctx = new AudioContext()
+  const source = ctx.createMediaElementSource(video)
+  const gain = ctx.createGain()
+  const limiter = ctx.createDynamicsCompressor()
+  limiter.knee.value = 6
+  limiter.attack.value = 0.003
+  limiter.release.value = 0.25
+  source.connect(gain).connect(limiter).connect(ctx.destination)
+  return { ctx, gain, limiter }
+}

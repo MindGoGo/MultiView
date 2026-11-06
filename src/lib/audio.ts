@@ -1,6 +1,7 @@
 // 聲音規則（R7、R8）
 import type { LayoutId } from './layout'
 import { isVisible, type Slots, type Source } from './slots'
+import { normalizeVolume } from './volume'
 
 export const isAudible = (s: Source) => !s.muted && s.volume > 0
 
@@ -23,8 +24,9 @@ export function toggleMute(slots: Slots, index: number): Slots {
   return mapSources(slots, (s, i) => (i === index ? { ...s, muted: !s.muted } : s))
 }
 
+/** 音量 0–200（R98）；這一格能不能放大由畫面決定滑桿的範圍 */
 export function setVolume(slots: Slots, index: number, volume: number): Slots {
-  const v = Math.round(Math.min(Math.max(volume, 0), 100))
+  const v = normalizeVolume(volume)
   return mapSources(slots, (s, i) => (i === index ? { ...s, volume: v } : s))
 }
 

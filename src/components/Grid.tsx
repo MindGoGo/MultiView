@@ -10,6 +10,7 @@ import type { Quality } from '../lib/quality'
 import { brightnessFilter } from '../lib/brightness'
 import { YouTubeSource, type YtMode } from '../players/YouTubeSource'
 import type { YouTubeMethods } from '../lib/ytdlp'
+import { canBoost, effectiveVolume } from '../lib/volume'
 import { VideoPlayer } from '../players/VideoPlayer'
 import { WebPlayer } from '../players/WebPlayer'
 import type { WebMode } from '../players/webTypes'
@@ -135,7 +136,8 @@ export function Grid(props: Props) {
         const common = {
           ref: (h: PlayerHandle | null) => props.registerPlayer(source.id, h),
           muted: source.muted || parked,
-          volume: source.volume,
+          // 不能放大音量的來源最多 100%，保存的值不變（R98）
+          volume: effectiveVolume(source.volume, canBoost(source, props.ytModes[source.id])),
           autoplay: source.autoplay,
           active: visible,
           startAt: source.resume,

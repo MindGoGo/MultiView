@@ -6,6 +6,9 @@
   --muted-text: #9a9a9a;
   --accent: #3d8bfd;
   --danger: #e5484d;
+  /** 音量超過 100% 的顏色（R98） */
+  --boost-color: #f5a524;
+  --track: #3a3a3a;
   color-scheme: dark;
 }
 
@@ -431,9 +434,34 @@ button.link {
   color: var(--accent);
 }
 
+/* 滑桿：填色到目前的值；超過放大起點的那一段用暖色（R98 音量超過 100%） */
 .slider-popup input[type='range'] {
   width: 100%;
-  accent-color: var(--accent);
+  height: 4px;
+  margin: 8px 0;
+  appearance: none;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 min(var(--fill), var(--boost)),
+    var(--boost-color) min(var(--fill), var(--boost)) var(--fill),
+    var(--track) var(--fill) 100%
+  );
+  cursor: pointer;
+}
+
+.slider-popup input[type='range']::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  appearance: none;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.35);
+}
+
+.slider-popup input[type='range'].boosted::-webkit-slider-thumb {
+  background: var(--boost-color);
 }
 
 .slider-popup-reset {
