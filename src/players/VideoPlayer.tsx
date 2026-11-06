@@ -163,15 +163,19 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
    * - 特定畫質：不限制，固定使用不高於選擇的最高畫質
    * - 自動：上限依格子大小，在上限內依網路速度自動選擇。
    *   不用 hls.js 的 capLevelToPlayerSize：1.7.3 在播放中把它打開不會生效
+   * immediate：使用者剛選了特定畫質，清掉已緩衝的片段立刻換（R32 AC1：15 秒內）；
+   * 否則等已緩衝的片段播完才換。一般影片會緩衝 30 秒以上，不立刻換會等很久
    */
-  const applyQuality = () => {
+  const applyQuality = (immediate = false) => {
     const hls = hlsRef.current
     const video = videoRef.current
     if (!hls || !video || hls.levels.length === 0) return
     const q = qualityRef.current
     if (q !== 'auto') {
       hls.autoLevelCapping = -1
-      hls.nextLevel = pickHlsLevel(hls.levels, q)
+      const level = pickHlsLevel(hls.levels, q)
+      if (immediate) hls.currentLevel = level
+      else hls.nextLevel = level
     } else {
       const dpr = window.devicePixelRatio || 1
       hls.autoLevelCapping = capLevelFor(hls.levels, video.clientWidth * dpr, video.clientHeight * dpr)
@@ -180,7 +184,15 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
   }
   const applyQualityRef = useRef(applyQuality)
   applyQualityRef.current = applyQuality
-  useEffect(applyQuality, [quality])
+  // 載入時由 MANIFEST_PARSED 套用；之後是使用者改了畫質
+  const appliedOnce = useRef(false)
+  useEffect(() => {
+    if (!appliedOnce.current) {
+      appliedOnce.current = true
+      return applyQuality()
+    }
+    applyQuality(true)
+  }, [quality])
   // 格子大小改變時重新計算自動的上限
   useEffect(() => {
     if (kind !== 'hls') return
