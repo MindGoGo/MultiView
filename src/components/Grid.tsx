@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { isYouTubeSite } from '../lib/source'
 import { cellRects, dividers, type Axis, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
 import { isVisible, type Slots } from '../lib/slots'
-import type { NavState, PlayerHandle, PlayStatus } from '../players/types'
+import type { AudioMenu, NavState, PlayerHandle, PlayStatus } from '../players/types'
 import type { Failure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import type { CaptionTrack } from '../lib/captions'
@@ -91,6 +91,9 @@ interface Props {
   onQuality(index: number, quality: Quality): void
   getQualityOptions(index: number): number[]
   onCaptions(index: number, key: string | null): void
+  /** 語音的選擇（R95） */
+  onAudioLang(index: number, lang: string | null): void
+  getAudioTracks(index: number): AudioMenu | null
   onBrightness(index: number, brightness: number): void
   /** 總亮度，和各格亮度相乘（R41） */
   masterBrightness: number
@@ -163,6 +166,7 @@ export function Grid(props: Props) {
                 videoId={source.parsed.videoId}
                 quality={source.quality}
                 captions={source.captions}
+                audioLang={source.audioLang ?? null}
                 methods={props.youtubeMethods}
                 onMode={(mode) => props.onYtMode(source.id, mode)}
                 onFallback={props.onYtFallback}
@@ -229,6 +233,8 @@ export function Grid(props: Props) {
             onQuality={props.onQuality}
             getQualityOptions={props.getQualityOptions}
             onCaptions={props.onCaptions}
+            onAudioLang={props.onAudioLang}
+            getAudioTracks={props.getAudioTracks}
             onBrightness={props.onBrightness}
             getCaptionTracks={props.getCaptionTracks}
             onToggleSolo={props.onToggleSolo}

@@ -31,6 +31,8 @@ export interface SavedSource {
   youtubeWeb: boolean
   /** 觀看進度（秒，R55）；舊的設定檔沒有這個欄位時從頭開始 */
   position: number | null
+  /** yt-dlp 播放時記住的語音語言（R95）；舊的設定檔沒有時為自動 */
+  audioLang: string | null
   /** 從 YouTube 網站開啟時的來源頁面（R63）；舊的設定檔沒有時沒有「回到」 */
   backUrl: string | null
   /** YouTube 網頁模式的廣告阻擋（R70）；舊的設定檔沒有時視為開啟 */
@@ -126,6 +128,7 @@ function normalizeSource(raw: unknown): SavedSource | null {
     adblock: raw.adblock !== false,
     quality: normalizeQuality(raw.quality),
     captions: typeof raw.captions === 'string' && raw.captions ? raw.captions : null,
+    audioLang: typeof raw.audioLang === 'string' && raw.audioLang ? raw.audioLang : null,
     brightness: normalizeBrightness(raw.brightness),
     youtubeWeb: raw.youtubeWeb === true,
     position: isFiniteNumber(raw.position) && raw.position > 0 ? raw.position : null,

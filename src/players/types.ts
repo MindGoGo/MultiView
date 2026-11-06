@@ -1,6 +1,13 @@
 import type { Failure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import type { CaptionTrack } from '../lib/captions'
+import type { AudioOption } from '../lib/audioTracks'
+
+/** 聲音軌選單（R95）：不同的聲音軌，與播放器目前用的聲音軌位置 */
+export interface AudioMenu {
+  options: AudioOption[]
+  current: number
+}
 
 export type PlayStatus = 'loading' | 'playing' | 'paused' | 'ended' | 'error'
 
@@ -19,6 +26,8 @@ export interface PlayerHandle {
   getQualityOptions?(): number[]
   /** YouTube 這部影片的字幕軌；還不知道時回傳 null（R31） */
   getCaptionTracks?(): CaptionTrack[] | null
+  /** yt-dlp 播放的聲音軌；還不知道或不是 HLS 時回傳 null（R95） */
+  getAudioTracks?(): AudioMenu | null
   /** 網頁來源目前的網址（R66：YouTube 網頁模式下網頁上目前的影片） */
   getUrl?(): string | null
   /** 網頁來源的上一頁／下一頁（R28） */

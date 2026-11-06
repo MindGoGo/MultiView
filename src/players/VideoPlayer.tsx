@@ -5,6 +5,7 @@ import { MAX_RETRIES, RETRY_DELAY_MS, type PlayerHandle, type PlayerProps } from
 import { progressFromMedia, rangesOf } from '../lib/progress'
 import type { Quality } from '../lib/slots'
 import { capLevelFor, hlsHeights, pickHlsLevel } from '../lib/quality'
+import { audioOptions, currentOption, pickAudioTrack } from '../lib/audioTracks'
 
 interface Props extends PlayerProps {
   kind: 'hls' | 'mp4'
@@ -13,6 +14,8 @@ interface Props extends PlayerProps {
   quality: Quality
   /** yt-dlp 解析的串流（R89）：網址會過期，重試和過期後播放時先重新取得網址 */
   renew?: Renew
+  /** 記住的語音語言；null 為自動（R95） */
+  audioLang?: string | null
 }
 
 export interface Renew {
@@ -25,7 +28,7 @@ export interface Renew {
 const RENEW_BEFORE_MS = 60_000
 
 export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
-  { kind, url, quality, muted, volume, autoplay, active, startAt, onStatus, renew },
+  { kind, url, quality, muted, volume, autoplay, active, startAt, onStatus, renew, audioLang = null },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -71,6 +74,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
         })
         hls.on(Hls.Events.FRAG_LOADED, () => (retries = 0))
         hls.on(Hls.Events.MANIFEST_PARSED, () => applyQuality())
+        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => applyAudioRef.current())
         hls.loadSource(url)
         hls.attachMedia(video)
       } else {
@@ -184,6 +188,22 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
   }
   const applyQualityRef = useRef(applyQuality)
   applyQualityRef.current = applyQuality
+  /**
+   * 聲音軌（R95）：主清單沒有標預設的聲音軌時 hls.js 會用第一條（可能是 AI 配音），
+   * 依記住的語言 → 系統語言 → 原本的聲音選擇
+   */
+  const audioLangRef = useRef(audioLang)
+  audioLangRef.current = audioLang
+  const applyAudio = () => {
+    const hls = hlsRef.current
+    if (!hls || hls.audioTracks.length < 2) return
+    const i = pickAudioTrack(hls.audioTracks, audioLangRef.current, navigator.language)
+    if (i >= 0 && hls.audioTrack !== i) hls.audioTrack = i
+  }
+  const applyAudioRef = useRef(applyAudio)
+  applyAudioRef.current = applyAudio
+  useEffect(applyAudio, [audioLang])
+
   // 載入時由 MANIFEST_PARSED 套用；之後是使用者改了畫質
   const appliedOnce = useRef(false)
   useEffect(() => {
@@ -228,6 +248,12 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       videoRef.current!.pause()
     },
     getQualityOptions: () => (hlsRef.current ? hlsHeights(hlsRef.current.levels) : []),
+    getAudioTracks: () => {
+      const hls = hlsRef.current
+      if (!hls || hls.audioTracks.length === 0) return null
+      const options = audioOptions(hls.audioTracks)
+      return { options, current: currentOption(hls.audioTracks, options, hls.audioTrack) }
+    },
     // mp4 / m3u8 沒有標題，由清單依網址取檔名（R22 共用定義）
     getTitle: () => null,
     getProgress: () => {

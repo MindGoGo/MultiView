@@ -21,6 +21,8 @@ export interface Source {
   quality: Quality
   /** 字幕的選擇，只用於 YouTube；null 為關閉（R31）。跟著來源移動和保存 */
   captions: string | null
+  /** yt-dlp 播放時記住的語音語言；null 或沒有時為自動（R95）。跟著來源移動和保存 */
+  audioLang?: string | null
   /** 亮度 20–150（%）（R40）；跟著來源移動和保存 */
   brightness: number
   /** 改用 YouTube 網頁播放（R48）；跟著來源移動和保存 */

@@ -14,6 +14,8 @@ interface Props extends PlayerProps {
   videoId: string
   quality: Quality
   captions: string | null
+  /** yt-dlp 播放時記住的語音語言（R95） */
+  audioLang: string | null
   methods: YouTubeMethods
   onMode(mode: YtMode): void
   /** 這一格退回內嵌播放器（R90） */
@@ -30,7 +32,7 @@ const modeOf = (plan: Plan): YtMode =>
   plan.kind === 'ytdlp' ? (plan.stream.kind === 'hls' ? 'ytdlp-hls' : 'ytdlp-mp4') : plan.kind
 
 export const YouTubeSource = forwardRef<PlayerHandle, Props>(function YouTubeSource(props, ref) {
-  const { videoId, quality, captions, methods, onStatus, onMode, onFallback, startAt, autoplay, ...rest } = props
+  const { videoId, quality, captions, audioLang, methods, onStatus, onMode, onFallback, startAt, autoplay, ...rest } = props
   const [plan, setPlan] = useState<Plan>(() =>
     needsResolve(methods) ? { kind: 'resolving' } : { kind: 'embed', fallback: false, live: null }
   )
@@ -143,6 +145,7 @@ export const YouTubeSource = forwardRef<PlayerHandle, Props>(function YouTubeSou
     getTitle: () => (planRef.current.kind === 'ytdlp' ? planRef.current.stream.title : (childRef.current?.getTitle() ?? null)),
     getQualityOptions: () => childRef.current?.getQualityOptions?.() ?? [],
     // yt-dlp 播放不支援字幕（R89）
+    getAudioTracks: () => (planRef.current.kind === 'ytdlp' ? (childRef.current?.getAudioTracks?.() ?? null) : null),
     getCaptionTracks: () => (planRef.current.kind === 'ytdlp' ? null : (childRef.current?.getCaptionTracks?.() ?? null))
   }))
 
@@ -151,7 +154,7 @@ export const YouTubeSource = forwardRef<PlayerHandle, Props>(function YouTubeSou
   if (plan.kind === 'resolving') return <div className="player" />
   const common = { ...rest, startAt: start.startAt, autoplay: playingRef.current, onStatus: childStatus, ref: childRef }
   return plan.kind === 'ytdlp' ? (
-    <VideoPlayer key={key} kind={plan.stream.kind} url={plan.stream.url} quality={quality} renew={renew} {...common} />
+    <VideoPlayer key={key} kind={plan.stream.kind} url={plan.stream.url} quality={quality} renew={renew} audioLang={audioLang} {...common} />
   ) : (
     <YouTubePlayer key={key} videoId={videoId} quality={quality} captions={captions} {...common} />
   )

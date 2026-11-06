@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { isYouTubeSite } from '../lib/source'
 import type { Source } from '../lib/slots'
 import { isAudible } from '../lib/audio'
-import type { PlayStatus } from '../players/types'
+import type { AudioMenu, PlayStatus } from '../players/types'
 import type { WebMode } from '../players/webTypes'
 import type { NavState } from '../players/types'
 import { WEB_FAILURE_TEXT, YOUTUBE_FAILURE_TEXT, type Failure, type WebFailure, type YouTubeFailure } from '../lib/webErrors'
@@ -70,12 +70,15 @@ interface Props {
   onQuality(index: number, quality: Quality): void
   getQualityOptions(index: number): number[]
   onCaptions(index: number, key: string | null): void
+  /** 語音的選擇：null 為自動（R95） */
+  onAudioLang(index: number, lang: string | null): void
+  getAudioTracks(index: number): AudioMenu | null
   onBrightness(index: number, brightness: number): void
   getCaptionTracks(index: number): CaptionTrack[] | null
 }
 
 /** 格子裡的選單：字幕、畫質（R31、R32）；亮度、音量的滑桿選單（R40、R42） */
-type MenuKind = 'captions' | 'quality' | 'brightness' | 'volume' | 'youtube'
+type MenuKind = 'captions' | 'audio' | 'quality' | 'brightness' | 'volume' | 'youtube'
 
 /** 畫質選單：自動＋可用畫質（由高到低）；還不知道可用畫質時列出目前的選擇（R32） */
 function qualityItems(options: number[], selected: Quality): PopupItem[] {
@@ -95,6 +98,14 @@ function captionItems(tracks: CaptionTrack[] | null, selected: string | null): P
   else if (tracks.length === 0) items.push({ key: 'none', label: '這部影片沒有字幕', disabled: true })
   else for (const t of tracks) items.push({ key: t.key, label: t.label, checked: t.key === selected })
   return items
+}
+
+/** 語音選單（R95）：自動＋每條聲音軌；選「自動」時只有「自動」打勾 */
+function audioItems(menu: AudioMenu, selected: string | null): PopupItem[] {
+  return [
+    { key: 'auto', label: '自動', checked: !selected },
+    ...menu.options.map((o) => ({ key: String(o.index), label: o.label, checked: !!selected && o.index === menu.current }))
+  ]
 }
 
 /** 格子窄的時候只顯示圖示，完整名稱放在 title（R14 AC7） */
@@ -145,6 +156,9 @@ export function Cell(props: Props) {
   const pageMode = isWeb && props.webMode === 'page'
   /** 用 yt-dlp 播放的 YouTube：沒有可以直接操作的 YouTube 介面、不支援字幕（R89） */
   const ytdlp = props.ytMode === 'ytdlp-hls' || props.ytMode === 'ytdlp-mp4'
+  /** 有兩條以上的聲音軌才有語音選單（R95） */
+  const audio = props.ytMode === 'ytdlp-hls' ? props.getAudioTracks(index) : null
+  const hasAudioMenu = !!audio && audio.options.length >= 2
 
   const onMouseMove = () => {
     setHover(true)
@@ -432,6 +446,16 @@ export function Cell(props: Props) {
               CC
             </button>
           )}
+          {hasAudioMenu && (
+            <button
+              className={source.audioLang ? 'active' : ''}
+              title="語音"
+              onPointerDown={(e) => menu?.kind === 'audio' && e.stopPropagation()}
+              onClick={(e) => toggleMenu('audio', e)}
+            >
+              <Label full="語音" icon="🗣" />
+            </button>
+          )}
           {(source.parsed.kind === 'youtube' || source.parsed.kind === 'hls') && (
             <button
               className={source.quality !== 'auto' && props.ytMode !== 'ytdlp-mp4' ? 'active' : ''}
@@ -530,6 +554,17 @@ export function Cell(props: Props) {
               anchor={menu.anchor}
               items={qualityItems(props.getQualityOptions(index), source.quality)}
               onSelect={(key) => props.onQuality(index, key === 'auto' ? 'auto' : Number(key))}
+              onClose={() => setMenu(null)}
+            />
+          )}
+          {menu?.kind === 'audio' && audio && (
+            <PopupMenu
+              anchor={menu.anchor}
+              items={audioItems(audio, source.audioLang ?? null)}
+              onSelect={(key) => {
+                const o = audio.options.find((x) => String(x.index) === key)
+                props.onAudioLang(index, key === 'auto' || !o ? null : o.lang || null)
+              }}
               onClose={() => setMenu(null)}
             />
           )}

@@ -88,6 +88,7 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
         adblock: s.adblock,
         quality: s.quality,
         captions: s.captions,
+        audioLang: s.audioLang,
         brightness: s.brightness,
         youtubeWeb: s.youtubeWeb,
         resume: s.position,
@@ -209,6 +210,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
             adblock: s.adblock,
             quality: s.quality,
             captions: s.captions,
+            audioLang: s.audioLang ?? null,
             brightness: s.brightness,
             youtubeWeb: s.youtubeWeb,
             position: s.id in pos ? pos[s.id] : s.resume,
@@ -292,6 +294,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         quality: existing ? existing.quality : 'auto',
         // 更換網址時保留字幕的選擇，新影片有同一種語言就自動開啟（R31）
         captions: existing ? existing.captions : null,
+        // 更換網址時保留語音的語言，新影片有這種語言就用（R95）
+        audioLang: existing ? existing.audioLang : null,
         // 更換網址時保留亮度（R40）
         brightness: existing ? existing.brightness : BRIGHTNESS_DEFAULT,
         // 新的網址先用一般的判斷（R48 AC6）
@@ -392,6 +396,11 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (s) setSlots(setSlot(slots, index, { ...s, brightness }))
   }
 
+  // 語音（R95）：null 為自動；不換 id，不重新載入
+  const onAudioLang = (index: number, lang: string | null) => {
+    const s = slots[index]
+    if (s) setSlots(setSlot(slots, index, { ...s, audioLang: lang }))
+  }
   // 字幕（R31）：不換 id，不重新載入
   const onCaptions = (index: number, key: string | null) => {
     const s = slots[index]
@@ -400,6 +409,10 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const getCaptionTracks = (index: number) => {
     const s = slots[index]
     return (s && players.current.get(s.id)?.getCaptionTracks?.()) ?? null
+  }
+  const getAudioTracks = (index: number) => {
+    const s = slots[index]
+    return (s && players.current.get(s.id)?.getAudioTracks?.()) ?? null
   }
 
   // ---- 清單操作（R21–R23） ----
@@ -880,6 +893,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onQuality={onQuality}
         getQualityOptions={getQualityOptions}
         onCaptions={onCaptions}
+        onAudioLang={onAudioLang}
+        getAudioTracks={getAudioTracks}
         onBrightness={onBrightness}
         masterBrightness={masterBrightness}
         getCaptionTracks={getCaptionTracks}
