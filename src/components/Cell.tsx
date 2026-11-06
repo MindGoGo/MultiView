@@ -14,6 +14,7 @@ import { qualityLabel, type Quality } from '../lib/quality'
 import { PopupMenu, type PopupItem } from './PopupMenu'
 import { SliderPopup } from './SliderPopup'
 import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } from '../lib/brightness'
+import type { YtMode } from '../players/YouTubeSource'
 
 interface Props {
   index: number
@@ -21,6 +22,8 @@ interface Props {
   source: Source | null
   status: PlayStatus | undefined
   failure: Failure | undefined
+  /** YouTube 格子目前的播放方式（R89）；其他來源為 undefined */
+  ytMode: YtMode | undefined
   /** 送出網址；回傳錯誤訊息，成功時回傳 null */
   onSubmitUrl(index: number, text: string): string | null
   onRemove(index: number): void
@@ -140,6 +143,8 @@ export function Cell(props: Props) {
   useEffect(() => () => clearTimeout(idleTimer.current), [])
   const isWeb = source?.parsed.kind === 'web'
   const pageMode = isWeb && props.webMode === 'page'
+  /** 用 yt-dlp 播放的 YouTube：沒有可以直接操作的 YouTube 介面、不支援字幕（R89） */
+  const ytdlp = props.ytMode === 'ytdlp-live' || props.ytMode === 'ytdlp-vod'
 
   const onMouseMove = () => {
     setHover(true)
@@ -260,6 +265,8 @@ export function Cell(props: Props) {
         </div>
       )}
 
+      {props.ytMode === 'resolving' && !showInput && <div className="cell-resolving">解析中…</div>}
+
       {failed && (
         <div className="cell-center cell-message">
           {source.parsed.kind === 'youtube' ? (
@@ -373,7 +380,7 @@ export function Cell(props: Props) {
           >
             <Label full={`🔉 ${source.volume}`} icon="🔉" />
           </button>
-          {(source.parsed.kind === 'youtube' || (isWeb && !pageMode)) && (
+          {((source.parsed.kind === 'youtube' && !ytdlp) || (isWeb && !pageMode)) && (
             <button
               className={props.direct ? 'active' : ''}
               title={
@@ -416,8 +423,9 @@ export function Cell(props: Props) {
           )}
           {source.parsed.kind === 'youtube' && (
             <button
-              className={source.captions ? 'active' : ''}
-              title="字幕"
+              className={source.captions && !ytdlp ? 'active' : ''}
+              title={ytdlp ? 'yt-dlp 播放方式不支援字幕' : '字幕'}
+              disabled={ytdlp}
               onPointerDown={(e) => menu?.kind === 'captions' && e.stopPropagation()}
               onClick={(e) => toggleMenu('captions', e)}
             >
@@ -426,8 +434,13 @@ export function Cell(props: Props) {
           )}
           {(source.parsed.kind === 'youtube' || source.parsed.kind === 'hls') && (
             <button
-              className={source.quality !== 'auto' ? 'active' : ''}
-              title={`畫質：${qualityLabel(source.quality)}（按一下選擇畫質）`}
+              className={source.quality !== 'auto' && props.ytMode !== 'ytdlp-vod' ? 'active' : ''}
+              title={
+                props.ytMode === 'ytdlp-vod'
+                  ? 'yt-dlp 播放一般影片固定 360p'
+                  : `畫質：${qualityLabel(source.quality)}（按一下選擇畫質）`
+              }
+              disabled={props.ytMode === 'ytdlp-vod'}
               onPointerDown={(e) => menu?.kind === 'quality' && e.stopPropagation()}
               onClick={(e) => toggleMenu('quality', e)}
             >

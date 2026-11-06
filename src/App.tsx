@@ -33,6 +33,7 @@ import type { WebMode } from './players/webTypes'
 import type { Failure } from './lib/webErrors'
 import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
+import type { YtMode } from './players/YouTubeSource'
 import { canonicalYouTubeUrl, classifyLink, youtubePageUrl } from './lib/links'
 import { skipTarget, resumePosition } from './lib/progress'
 import {
@@ -59,6 +60,7 @@ import { CellPicker, type PickerCell } from './components/CellPicker'
 import { isCompanionTab, stripYouTubeSuffix, type CompanionAction, type CompanionLink, type CompanionVideo } from './lib/companion'
 
 const TOAST_MS = 3000
+const YT_FALLBACK_TOAST = 'yt-dlp 無法播放，已改用內嵌播放器'
 /** 觀看進度多久讀一次（R55） */
 const POSITION_SAVE_MS = 5000
 /** 多久確認一次小視窗連結的格子目前的影片（R78） */
@@ -111,6 +113,14 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const [autoYoutubeWeb, setAutoYoutubeWeb] = useState(initial.autoYoutubeWeb)
   const autoYoutubeWebRef = useRef(autoYoutubeWeb)
   autoYoutubeWebRef.current = autoYoutubeWeb
+  /** YouTube 直播、一般影片的播放方式（R88） */
+  const [youtubeMethods, setYoutubeMethods] = useState(initial.youtubeMethods)
+  /** YouTube 格子目前的播放方式，依來源 id（R89） */
+  const [ytModes, setYtModes] = useState<Record<number, YtMode>>({})
+  const onYtMode = useCallback(
+    (id: number, mode: YtMode) => setYtModes((prev) => (prev[id] === mode ? prev : { ...prev, [id]: mode })),
+    []
+  )
   /** 工具列的總亮度選單開著時，工具列不自動隱藏（R41 AC4） */
   const [toolbarPopup, setToolbarPopup] = useState(false)
   const ratios = ratiosMap[layout] ?? defaultRatios(layout)
@@ -149,11 +159,19 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const recorded = useRef(new Set<number>())
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
+  const toastRef = useRef(toast)
+  toastRef.current = toast
   const showToast = (message: string) => {
+    toastRef.current = message
     setToast(message)
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
   }
+
+  // 退回內嵌播放器的提示：提示還在顯示時不重複、不延長（R90）
+  const onYtFallback = useCallback(() => {
+    if (toastRef.current !== YT_FALLBACK_TOAST) showToast(YT_FALLBACK_TOAST)
+  }, [])
 
   // 觀看進度（R55）：來源 id → 要保存的位置。每 5 秒讀一次，改變超過 1 秒才更新（才會寫檔）
   const [positions, setPositions] = useState<Record<number, number | null>>({})
@@ -180,6 +198,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     ratios: ratiosMap,
     brightness: masterBrightness,
     autoYoutubeWeb,
+    youtubeMethods,
     listTab,
     slots: slots.map((s) =>
       s
@@ -214,7 +233,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
     window.multiview.saveView(viewOf(positions))
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, positions, listTab])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, positions, listTab])
 
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
@@ -815,6 +834,10 @@ export default function App({ initial }: { initial: ViewSettings }) {
   return (
     <div className="app">
       <Grid
+        youtubeMethods={youtubeMethods}
+        ytModes={ytModes}
+        onYtMode={onYtMode}
+        onYtFallback={onYtFallback}
         layout={layout}
         ratios={ratios}
         slots={slots}
@@ -884,6 +907,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onPopupChange={setToolbarPopup}
         autoYoutubeWeb={autoYoutubeWeb}
         onAutoYoutubeWeb={setAutoYoutubeWeb}
+        youtubeMethods={youtubeMethods}
+        onYoutubeMethods={setYoutubeMethods}
+        onToast={showToast}
         onOpenCompanion={() => window.multiview.openCompanion(null)}
       />
       {picking && (

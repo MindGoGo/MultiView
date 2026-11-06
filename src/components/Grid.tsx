@@ -8,7 +8,8 @@ import type { Progress } from '../lib/progress'
 import type { CaptionTrack } from '../lib/captions'
 import type { Quality } from '../lib/quality'
 import { brightnessFilter } from '../lib/brightness'
-import { YouTubePlayer } from '../players/YouTubePlayer'
+import { YouTubeSource, type YtMode } from '../players/YouTubeSource'
+import type { YouTubeMethods } from '../lib/ytdlp'
 import { VideoPlayer } from '../players/VideoPlayer'
 import { WebPlayer } from '../players/WebPlayer'
 import type { WebMode } from '../players/webTypes'
@@ -94,6 +95,13 @@ interface Props {
   /** 總亮度，和各格亮度相乘（R41） */
   masterBrightness: number
   getCaptionTracks(index: number): CaptionTrack[] | null
+  /** YouTube 的播放方式（R88） */
+  youtubeMethods: YouTubeMethods
+  /** YouTube 格子目前的播放方式，依來源 id（R89） */
+  ytModes: Record<number, YtMode>
+  onYtMode(id: number, mode: YtMode): void
+  /** 有格子從 yt-dlp 退回內嵌播放器（R90） */
+  onYtFallback(): void
 }
 
 const FULL: FracRect = { x: 0, y: 0, w: 1, h: 1 }
@@ -151,10 +159,13 @@ export function Grid(props: Props) {
             }}
           >
             {source.parsed.kind === 'youtube' ? (
-              <YouTubePlayer
+              <YouTubeSource
                 videoId={source.parsed.videoId}
                 quality={source.quality}
                 captions={source.captions}
+                methods={props.youtubeMethods}
+                onMode={(mode) => props.onYtMode(source.id, mode)}
+                onFallback={props.onYtFallback}
                 {...common}
               />
             ) : source.parsed.kind === 'web' ? (
@@ -187,6 +198,7 @@ export function Grid(props: Props) {
             source={source}
             status={source ? statuses[source.id] : undefined}
             failure={source ? props.failures[source.id] : undefined}
+            ytMode={source ? props.ytModes[source.id] : undefined}
             onSubmitUrl={props.onSubmitUrl}
             onRemove={props.onRemove}
             onRetry={props.onRetry}

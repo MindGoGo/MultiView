@@ -11,10 +11,21 @@ interface Props extends PlayerProps {
   url: string
   /** m3u8 的畫質：選擇特定畫質時固定使用，「自動」依格子大小和網路速度（R24、R32）；mp4 不使用 */
   quality: Quality
+  /** yt-dlp 解析的串流（R89）：網址會過期，重試和過期後播放時先重新取得網址 */
+  renew?: Renew
 }
 
+export interface Renew {
+  expiresAt: number
+  /** 重新解析（不用快取）；失敗時回傳 null */
+  refresh(): Promise<{ url: string; expiresAt: number } | null>
+}
+
+/** 網址到期前這麼久按播放，就先重新解析（R89） */
+const RENEW_BEFORE_MS = 60_000
+
 export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
-  { kind, url, quality, muted, volume, autoplay, active, startAt, onStatus },
+  { kind, url, quality, muted, volume, autoplay, active, startAt, onStatus, renew },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -27,6 +38,13 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
   onStatusRef.current = onStatus
   /** 上次的觀看進度（R55）；第一次讀到影片資訊時跳過去，直播不跳 */
   const startAtRef = useRef(startAt)
+  const renewRef = useRef(renew)
+  renewRef.current = renew
+  /** 目前的網址與有效期限；重新解析後換掉，不重新建立播放器 */
+  const urlRef = useRef(url)
+  const expiresRef = useRef(renew?.expiresAt ?? Infinity)
+  /** 重新取得網址後載入，維持播放位置（R89） */
+  const reloadRef = useRef<() => void>(() => undefined)
 
   useEffect(() => {
     const video = videoRef.current!
@@ -40,7 +58,10 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       if (wantPlay.current) void video.play().catch(() => undefined)
     }
 
+    urlRef.current = url
+    expiresRef.current = renewRef.current?.expiresAt ?? Infinity
     const load = () => {
+      const url = urlRef.current
       if (kind === 'hls' && Hls.isSupported()) {
         hls?.destroy()
         hls = new Hls()
@@ -75,8 +96,22 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
       retries++
       report('loading')
       clearTimeout(retryTimer)
-      retryTimer = setTimeout(load, RETRY_DELAY_MS)
+      retryTimer = setTimeout(reload, RETRY_DELAY_MS)
     }
+
+    /** yt-dlp 的串流先重新解析（網址可能過期了，R89）；重新解析失敗也算一次重試 */
+    const reload = async () => {
+      const r = renewRef.current
+      if (r) {
+        const next = await r.refresh()
+        if (disposed) return
+        if (!next) return fail()
+        urlRef.current = next.url
+        expiresRef.current = next.expiresAt
+      }
+      load()
+    }
+    reloadRef.current = () => void reload()
 
     const onPlaying = () => {
       retries = 0
@@ -172,6 +207,8 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
   useImperativeHandle(ref, () => ({
     play: () => {
       wantPlay.current = true
+      // 暫停到網址快過期才按播放：先重新解析再播放，一般影片從原本的時間點繼續（R89）
+      if (renewRef.current && Date.now() > expiresRef.current - RENEW_BEFORE_MS) return reloadRef.current()
       void videoRef.current!.play().catch(() => undefined)
     },
     pause: () => {

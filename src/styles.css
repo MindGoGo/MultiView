@@ -798,3 +798,16 @@ button.danger {
   z-index: 1;
   pointer-events: none;
 }
+
+/* yt-dlp 解析中（R89）：半透明，不擋操作按鈕 */
+.cell-resolving {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 6px 14px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--muted-text);
+  pointer-events: none;
+}

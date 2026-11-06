@@ -7,6 +7,8 @@ export interface PopupItem {
   label: string
   checked?: boolean
   disabled?: boolean
+  /** 選了之後選單不關閉（R93：更新 yt-dlp 後在選單裡看狀態） */
+  keepOpen?: boolean
 }
 
 interface Props {
@@ -63,7 +65,7 @@ export function PopupMenu({ anchor, placement = 'above', items, onSelect, onClos
           disabled={i.disabled}
           onClick={() => {
             onSelect(i.key)
-            onClose()
+            if (!i.keepOpen) onClose()
           }}
         >
           <span className="popup-check">{i.checked ? '✓' : ''}</span>
