@@ -2,7 +2,7 @@
 
 - 功能代號：`ytdlp-badge-and-site-fixes`
 - Jira：無
-- 狀態：已確認、已複查
+- 狀態：已確認、已複查、已實作
 - 最後更新：2026-11-07
 - 前置規格：[other-sites-ytdlp-and-panels](other-sites-ytdlp-and-panels.md)（R102–R108）。本規格的需求編號從 R109 開始。
 
@@ -65,6 +65,7 @@
 - 描述：
   - 程式畫面發出的串流請求（R89、R103）：
     - 不帶 Origin（Twitch、影片網站 A 看到程式畫面的網址會拒絕或給替代影片）。仍然依原本的 Origin 判斷是不是程式畫面發出的請求，再拿掉。
+    - 不帶 Sec-Fetch-*（實作時發現：拿掉 Origin、帶網頁網址當 Referer 後，影片網站 A 仍因 `Sec-Fetch-Site: cross-site` 給替代影片；curl 實測加上這個標頭就會轉到 `na.mp4`）。
     - 其他網站（R103）的串流：Referer 是原本的網頁網址（和瀏覽器在那個網頁播放時相同；yt-dlp 有提供 Referer 時用 yt-dlp 的）。YouTube 的串流不帶 Referer（維持 0.8.0）。
     - 補上的請求標頭（User-Agent、Referer）套用到串流所在網站的同一個網域（例如 `usher.ttvnw.net` 與 `aps12.playlist.ttvnw.net` 都是 `ttvnw.net`），不只是同一個主機。
 - 驗收條件：
@@ -128,3 +129,4 @@
 |---|---|---|
 | 2026-11-07 | 初版 | 依 2026-11-07 使用者回報、調查結果與選擇 |
 | 2026-11-07 | 小標示的點擊行為、退回的加註條件；複查紀錄；Twitch 網頁播放的問題這次不處理 | 使用者確認、第 2 步複查 |
+| 2026-11-07 | R110 補充不帶 Sec-Fetch-*；狀態改為已實作 | 實作時發現 |
