@@ -18,6 +18,7 @@ import type { YtMode } from '../players/YouTubeSource'
 import { LoadingCritter, useLoadingVisible } from './LoadingCritter'
 import { loadingKind } from '../lib/loading'
 import { playbackBadge } from '../lib/playbackBadge'
+import { controlsView, HANDLE_COLLAPSE_MS } from '../lib/pointerZones'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
 interface Props {
@@ -205,7 +206,26 @@ export function Cell(props: Props) {
   const showInput = !source || editing
   const failed = source !== null && status === 'error' && !editing
   /** 操作區顯示中；播放方式的小標示也一起顯示（R109） */
-  const controlsShown = hover || props.moving || seeking || previewing || !!menu
+  const busy = props.moving || seeking || previewing || !!menu
+  const controlsShown = hover || busy
+  // 整頁模式平常只有小把手，滑鼠移上去才展開操作列（R117）
+  const [expanded, setExpanded] = useState(false)
+  const collapseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const expand = () => {
+    clearTimeout(collapseTimer.current)
+    setExpanded(true)
+  }
+  const collapseSoon = () => {
+    clearTimeout(collapseTimer.current)
+    collapseTimer.current = setTimeout(() => setExpanded(false), HANDLE_COLLAPSE_MS)
+  }
+  useEffect(() => {
+    if (pageMode && hover) return
+    clearTimeout(collapseTimer.current)
+    setExpanded(false)
+  }, [pageMode, hover])
+  useEffect(() => () => clearTimeout(collapseTimer.current), [])
+  const view = controlsView({ pageMode, shown: controlsShown, expanded, busy })
   const badge = source ? playbackBadge(source, props.ytMode) : null
   // 讀取動畫（R99）
   const loading = useLoadingVisible(source ? loadingKind({ status, ytMode: props.ytMode, isWeb, showInput }) : null)
@@ -251,6 +271,7 @@ export function Cell(props: Props) {
       ref={cellRef}
       style={style}
       data-index={index}
+      data-page={pageMode ? '' : undefined}
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
       onClick={(e) => {
@@ -259,14 +280,14 @@ export function Cell(props: Props) {
       }}
     >
       {/* 左上角：有聲音（R7）與播放方式的小標示（R109，和操作區同時出現） */}
-      {source && !showInput && (isAudible(source) || (badge && controlsShown)) && (
+      {source && !showInput && (isAudible(source) || (badge && view === 'bar')) && (
         <div className="cell-corner">
           {isAudible(source) && (
             <div className="audio-indicator" title="有聲音">
               🔊
             </div>
           )}
-          {badge && controlsShown && (
+          {badge && view === 'bar' && (
             <div className={`play-badge ${badge.tone}`} title={badge.tip} onClick={(e) => e.stopPropagation()}>
               <span className="lbl-full">{badge.text}</span>
               <span className="lbl-icon">{badge.short}</span>
@@ -346,10 +367,17 @@ export function Cell(props: Props) {
           {isPlayingStatus(status) ? '❚❚' : '▶'}
         </button>
       )}
+      {source && !editing && view === 'handle' && (
+        <button className="cell-handle" title="顯示操作按鈕" aria-label="顯示操作按鈕" onMouseEnter={expand} onClick={expand}>
+          ⋯
+        </button>
+      )}
       {source && !editing && (
         <div
-          className={`cell-controls ${controlsShown ? 'show' : ''}`}
+          className={`cell-controls ${view === 'bar' ? 'show' : ''}`}
           onMouseMove={onMouseMove}
+          onMouseEnter={() => pageMode && expand()}
+          onMouseLeave={() => pageMode && collapseSoon()}
         >
           {!failed && (
             <ProgressBar

@@ -1,7 +1,7 @@
 // 依游標位置決定工具列是否顯示，以及何時結束「直接操作播放器」（R3）
 import { useEffect, useRef, useState } from 'react'
+import { EDGE_DWELL_MS, toolbarZone } from '../lib/pointerZones'
 
-const TOOLBAR_ZONE_PX = 40
 const TOOLBAR_HIDE_MS = 1000
 
 function insideCell(index: number, x: number, y: number): boolean {
@@ -11,6 +11,14 @@ function insideCell(index: number, x: number, y: number): boolean {
   return x >= r.left && x < r.right && y >= r.top && y < r.bottom
 }
 
+/** 游標下方是整頁模式的格子（R116）；格子不接收滑鼠，所以用位置判斷 */
+function overPageCell(x: number, y: number): boolean {
+  return [...document.querySelectorAll('.cell[data-page]')].some((el) => {
+    const r = el.getBoundingClientRect()
+    return x >= r.left && x < r.right && y >= r.top && y < r.bottom
+  })
+}
+
 /** keepWatching：有網頁來源在整頁模式時，格子要靠游標位置顯示操作按鈕（R14） */
 export function usePointerZones(keepWatching = false) {
   const [toolbarVisible, setToolbarVisible] = useState(false)
@@ -18,13 +26,29 @@ export function usePointerZones(keepWatching = false) {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const directRef = useRef(direct)
   directRef.current = direct
+  const visibleRef = useRef(toolbarVisible)
+  visibleRef.current = toolbarVisible
+  /** 等滑鼠在視窗上緣停留（R116） */
+  const dwellTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const update = (x: number, y: number, inside: boolean) => {
-      if (inside && y < TOOLBAR_ZONE_PX) {
+      const show = () => {
         if (hideTimer.current) clearTimeout(hideTimer.current)
         hideTimer.current = null
         setToolbarVisible(true)
+      }
+      const zone = toolbarZone({ y, inside, visible: visibleRef.current, overPage: inside && overPageCell(x, y) })
+      if (zone !== 'dwell' && dwellTimer.current) {
+        clearTimeout(dwellTimer.current)
+        dwellTimer.current = null
+      }
+      if (zone === 'show') show()
+      else if (zone === 'dwell') {
+        dwellTimer.current ??= setTimeout(() => {
+          dwellTimer.current = null
+          show()
+        }, EDGE_DWELL_MS)
       } else if (!hideTimer.current) {
         hideTimer.current = setTimeout(() => {
           hideTimer.current = null
@@ -49,6 +73,7 @@ export function usePointerZones(keepWatching = false) {
       window.removeEventListener('mousemove', onMove)
       document.documentElement.removeEventListener('mouseleave', onLeave)
       offCursor()
+      if (dwellTimer.current) clearTimeout(dwellTimer.current)
     }
   }, [])
 

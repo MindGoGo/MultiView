@@ -89,6 +89,10 @@ button.active {
   min-width: 0;
   align-self: stretch;
   overflow: hidden;
+}
+
+/* 拖曳區即使透明也會攔下滑鼠，工具列顯示時才作用（R116） */
+.toolbar.show .toolbar-drag {
   -webkit-app-region: drag;
 }
 
@@ -354,6 +358,25 @@ button.link {
 }
 
 .cell.direct .cell-controls.show {
+  pointer-events: auto;
+}
+
+/* 整頁模式的小把手（R117） */
+.cell-handle {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 3;
+  width: 32px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--panel);
+  line-height: 18px;
+}
+
+.cell.direct .cell-handle {
   pointer-events: auto;
 }
 
