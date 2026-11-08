@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>page-top-bar</title>
+<style>
+  body { margin: 0; background: #234; color: #fff; font: 14px sans-serif; }
+  #bar { display: flex; justify-content: center; align-items: center; height: 44px; background: #345; }
+  #bottom { position: fixed; left: 0; right: 0; bottom: 0; height: 44px; background: #453; text-align: center; line-height: 44px; }
+</style>
+<div id="bar"><input placeholder="網頁頂端的搜尋欄（R116）" size="40" /></div>
+<p>沒有影片的網頁，用來確認整頁模式時工具列與操作列不擋網頁（R116、R117）。</p>
+<div id="bottom">網頁底部的按鈕區（R117）</div>
+<script>
+  window.__last = null
+  addEventListener('mousemove', (e) => (window.__last = { x: e.clientX, y: e.clientY, at: Date.now() }))
+</script>
