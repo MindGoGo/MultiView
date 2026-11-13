@@ -1,1 +1,1 @@
-技術驗證：App 內附 Python 與 yt-dlp。工具列的槌子按鈕打開 yt-dlp 測試畫面，依序按「版本」「JS 測試」「解析」，再把記錄複製回報。
+修正：Python 的標準函式庫沒有放進 App（0.0.6 的「Failed to import encodings module」）。測試方式相同：工具列的槌子按鈕，依序按「版本」「JS 測試」「解析」，再把記錄複製回報。
