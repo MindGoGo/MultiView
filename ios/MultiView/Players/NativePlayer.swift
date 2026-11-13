@@ -1,4 +1,5 @@
 import AVFoundation
+import AVKit
 import MultiViewCore
 import UIKit
 
@@ -13,6 +14,9 @@ final class NativePlayer: NSObject, CellPlayer {
     var badge: String? { nil }
 
     private let player = AVPlayer()
+    private let layerView: PlayerLayerView
+    private var pictureInPicture: AVPictureInPictureController?
+    private var automaticPictureInPicture = false
     private let item: AVPlayerItem
     private var timeObserver: Any?
     private var observations: [NSKeyValueObservation] = []
@@ -27,6 +31,7 @@ final class NativePlayer: NSObject, CellPlayer {
         layerView.backgroundColor = .black
         layerView.playerLayer.videoGravity = .resizeAspect
         view = layerView
+        self.layerView = layerView
         item = AVPlayerItem(url: url)
         pendingResume = source.resume
         super.init()
@@ -35,6 +40,8 @@ final class NativePlayer: NSObject, CellPlayer {
         player.replaceCurrentItem(with: item)
         player.isMuted = source.muted
         player.volume = Float(Volume.fraction(source.volume))
+        // AirPlay 只送聲音，畫面留在裝置上（R132）
+        player.allowsExternalPlayback = false
         observe()
         if source.autoplay {
             player.play()
@@ -70,7 +77,53 @@ final class NativePlayer: NSObject, CellPlayer {
         }
     }
 
+    // MARK: 子母畫面與背景播放（R132）
+
+    var supportsPictureInPicture: Bool {
+        AVPictureInPictureController.isPictureInPictureSupported()
+    }
+
+    private func preparePictureInPicture() -> AVPictureInPictureController? {
+        if pictureInPicture == nil, supportsPictureInPicture {
+            pictureInPicture = AVPictureInPictureController(playerLayer: layerView.playerLayer)
+        }
+        return pictureInPicture
+    }
+
+    func startPictureInPicture() {
+        preparePictureInPicture()?.startPictureInPicture()
+    }
+
+    func setAutomaticPictureInPicture(_ enabled: Bool) {
+        automaticPictureInPicture = enabled
+        if enabled {
+            preparePictureInPicture()?.canStartPictureInPictureAutomaticallyFromInline = true
+        } else {
+            pictureInPicture?.canStartPictureInPictureAutomaticallyFromInline = false
+        }
+    }
+
+    func didEnterBackground(keepAudio: Bool) {
+        // 子母畫面會自己繼續播
+        if pictureInPicture?.isPictureInPictureActive == true { return }
+        if keepAudio {
+            if automaticPictureInPicture, pictureInPicture != nil { return }
+            // 影片在背景會被系統暫停；把畫面從播放器拿掉，聲音才會繼續
+            layerView.playerLayer.player = nil
+        } else {
+            player.pause()
+        }
+    }
+
+    func willEnterForeground() {
+        if layerView.playerLayer.player == nil {
+            layerView.playerLayer.player = player
+        }
+    }
+
     func shutdown() {
+        pictureInPicture?.stopPictureInPicture()
+        pictureInPicture = nil
         player.pause()
         if let timeObserver {
             player.removeTimeObserver(timeObserver)

@@ -28,6 +28,7 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
     /// 目前的觀看位置（退回內嵌時從這裡繼續）。
     private var lastPosition: Double?
     private var title: String?
+    private var automaticPictureInPicture = false
     /// 播放中斷後已經重新解析幾次；開始播放後歸零。
     private var retries = 0
     /// 最近一次回報的狀態是不是播放中（重新解析後維持原本的播放或暫停）。
@@ -75,6 +76,25 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
 
     func seek(to seconds: Double) {
         inner?.seek(to: seconds)
+    }
+
+    var supportsPictureInPicture: Bool { inner?.supportsPictureInPicture ?? false }
+
+    func startPictureInPicture() {
+        inner?.startPictureInPicture()
+    }
+
+    func setAutomaticPictureInPicture(_ enabled: Bool) {
+        automaticPictureInPicture = enabled
+        inner?.setAutomaticPictureInPicture(enabled)
+    }
+
+    func didEnterBackground(keepAudio: Bool) {
+        inner?.didEnterBackground(keepAudio: keepAudio)
+    }
+
+    func willEnterForeground() {
+        inner?.willEnterForeground()
     }
 
     func shutdown() {
@@ -167,6 +187,8 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
         content.frame = view.bounds
         content.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(content)
+
+        player.setAutomaticPictureInPicture(automaticPictureInPicture)
 
         player.onUpdate = { [weak self, weak player] update in
             guard let self, let player, self.inner === player else { return }

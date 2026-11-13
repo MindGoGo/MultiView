@@ -34,4 +34,22 @@ protocol CellPlayer: AnyObject {
     func seek(to seconds: Double)
     /// 移除來源時釋放資源。
     func shutdown()
+
+    /// 能不能用子母畫面（只有原生播放器，R132）。
+    var supportsPictureInPicture: Bool { get }
+    func startPictureInPicture()
+    /// 回到主畫面時自動用子母畫面繼續播（只開在唯一有聲音的那一格，R132）。
+    func setAutomaticPictureInPicture(_ enabled: Bool)
+    /// App 切到背景。keepAudio：這一格有聲音而且正在播放，繼續播聲音；否則暫停。
+    func didEnterBackground(keepAudio: Bool)
+    func willEnterForeground()
+}
+
+extension CellPlayer {
+    var supportsPictureInPicture: Bool { false }
+    func startPictureInPicture() {}
+    func setAutomaticPictureInPicture(_ enabled: Bool) {}
+    /// 網頁播放的格子在背景一律暫停（iOS 會暫停背景的網頁）。
+    func didEnterBackground(keepAudio: Bool) { pause() }
+    func willEnterForeground() {}
 }

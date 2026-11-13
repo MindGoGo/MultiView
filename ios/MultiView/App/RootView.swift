@@ -36,8 +36,14 @@ struct RootView: View {
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
         .onChange(of: scenePhase) { _, phase in
-            // iOS 沒有「關閉程式」的時機：離開前景時立刻保存（R134）
-            if phase != .active {
+            switch phase {
+            case .background:
+                // 回到主畫面或鎖定螢幕：有聲音的原生播放器繼續播，其他暫停（R132）
+                model.didEnterBackground()
+            case .active:
+                model.willEnterForeground()
+            default:
+                // iOS 沒有「關閉程式」的時機：離開前景時立刻保存（R134）
                 model.saveNow()
             }
         }

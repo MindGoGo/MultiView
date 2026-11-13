@@ -27,19 +27,32 @@ struct GridView: View {
             let stacked = ScreenRules.isStacked(width: size.width, height: size.height)
             let ratios = model.ratios(for: layout)
             let safeArea = geometry.safeAreaInsets
+            let solo = model.solo
 
             ZStack(alignment: .topLeading) {
                 Color(white: 0.16)
 
-                ForEach(cells(layout: layout, ratios: ratios, stacked: stacked)) { cell in
+                ForEach(cells(layout: layout, ratios: ratios, stacked: stacked, solo: solo)) { cell in
                     let frame = Self.frame(of: cell.rect, in: size)
                     cellView(cell, insets: Self.insets(of: cell.rect, safeArea: safeArea), touchesTop: cell.rect.y <= Self.edgeTolerance)
+                        // 拖曳換位中：被拖的格子半透明，手指所在的格子顯示外框（R125）
+                        .opacity(model.swapFrom == cell.index ? 0.45 : 1)
+                        .overlay {
+                            if model.swapFrom != nil, model.swapOver == cell.index, model.swapFrom != cell.index {
+                                Rectangle()
+                                    .strokeBorder(Color.accentColor, lineWidth: 4)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                         .frame(width: frame.width, height: frame.height)
                         .position(x: frame.midX, y: frame.midY)
                 }
 
-                ForEach(Array(LayoutMath.dividers(layout, ratios, stacked: stacked).enumerated()), id: \.offset) { _, divider in
-                    DividerHandle(layout: layout, divider: divider, size: size)
+                // 單格全螢幕時不顯示分隔線（R20）
+                if solo == nil {
+                    ForEach(Array(LayoutMath.dividers(layout, ratios, stacked: stacked).enumerated()), id: \.offset) { _, divider in
+                        DividerHandle(layout: layout, divider: divider, size: size)
+                    }
                 }
 
                 if !model.toolbarVisible, showsToolbarHandle(layout: layout) {
@@ -51,11 +64,18 @@ struct GridView: View {
             .onChange(of: isLarge, initial: true) { _, value in
                 model.setScreen(isLarge: value)
             }
+            .onChange(of: size, initial: true) { _, value in
+                model.setGrid(size: value, stacked: stacked)
+            }
         }
     }
 
-    private func cells(layout: LayoutID, ratios: Ratios, stacked: Bool) -> [Cell] {
-        LayoutMath.cellRects(layout, ratios, stacked: stacked).enumerated().map { index, rect in
+    private func cells(layout: LayoutID, ratios: Ratios, stacked: Bool, solo: Int?) -> [Cell] {
+        // 單格全螢幕：只有放大的那一格，占滿畫面。識別方式不變，所以不會重新載入（R20）
+        if let solo, solo < model.slots.count, let source = model.slots[solo] {
+            return [Cell(id: "source-\(source.id)", index: solo, rect: FracRect(x: 0, y: 0, w: 1, h: 1), source: source)]
+        }
+        return LayoutMath.cellRects(layout, ratios, stacked: stacked).enumerated().map { index, rect in
             let source = index < model.slots.count ? model.slots[index] : nil
             let id = source.map { "source-\($0.id)" } ?? "empty-\(index)"
             return Cell(id: id, index: index, rect: rect, source: source)

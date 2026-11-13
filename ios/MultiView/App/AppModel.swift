@@ -1,4 +1,5 @@
 import AVFoundation
+import MediaPlayer
 import MultiViewCore
 import Observation
 import UIKit
@@ -28,6 +29,11 @@ final class AppModel {
     private(set) var errors: [Int: String] = [:]
     /// 正在顯示操作列的格位（R127）。
     private(set) var activeCell: Int?
+    /// 單格全螢幕時放大的格位（R20、R129）；不保存。
+    private(set) var solo: Int?
+    /// 拖曳換位中：被拖的格位，以及手指目前所在的格位（R125）。
+    private(set) var swapFrom: Int?
+    private(set) var swapOver: Int?
     private(set) var toolbarVisible = false
     /// 畫面上方的提示文字，幾秒後自動消失。
     private(set) var toast: String?
@@ -53,6 +59,16 @@ final class AppModel {
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     /// 滑桿等彈出視窗開著時，操作列與工具列不自動隱藏。
     @ObservationIgnored private var controlsHeld = false
+    /// 進入單格全螢幕時因此暫停的來源；離開時恢復播放。
+    @ObservationIgnored private var soloPaused: Set<Int> = []
+    /// 切到背景、或被其他 App 的聲音打斷時因此暫停的來源；回來時恢復播放。
+    @ObservationIgnored private var backgroundPaused: Set<Int> = []
+    @ObservationIgnored private var interruptionPaused: Set<Int> = []
+    @ObservationIgnored private var inBackground = false
+    /// 格子區域的大小與 `2` 版型是不是上下排列，由畫面回報（拖曳換位時用來找手指在哪一格）。
+    @ObservationIgnored private var gridSize: CGSize = .zero
+    @ObservationIgnored private var gridStacked = false
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     /// 操作列與工具列在手指離開後多久隱藏（R127）。
     private static let controlsTimeout: Duration = .seconds(3)
@@ -76,6 +92,8 @@ final class AppModel {
         slots = SettingsBridge.restoreSlots(settings.slots)
 
         configureAudioSession()
+        observeAudioSession()
+        configureRemoteCommands()
         startYtDlpAutoUpdate()
     }
 
@@ -125,6 +143,8 @@ final class AppModel {
     }
 
     func setLayout(_ layout: LayoutID) {
+        // 單格全螢幕時按版型：先回到分割畫面，再切換版型（R20 AC6）
+        exitSolo()
         guard self.layout != layout else { return }
         self.layout = layout
         pauseHiddenSources()
@@ -166,7 +186,93 @@ final class AppModel {
     }
 
     func isVisible(_ index: Int) -> Bool {
-        SlotRules.isVisible(index, layout: displayedLayout)
+        SlotRules.isVisible(index, layout: displayedLayout, solo: solo)
+    }
+
+    // MARK: 單格全螢幕（R20、R129）
+
+    /// 這一格占滿畫面，其他顯示中、正在播放的來源暫停。
+    func enterSolo(_ index: Int) {
+        guard solo == nil, slots.indices.contains(index), slots[index] != nil, isVisible(index) else { return }
+        soloPaused = []
+        for (position, source) in slots.enumerated() {
+            guard let source, position != index, isVisible(position), statuses[source.id] == .playing else { continue }
+            soloPaused.insert(source.id)
+            players[source.id]?.pause()
+        }
+        solo = index
+        cancelSwap()
+        showControls(for: index)
+        updatePictureInPicture()
+    }
+
+    /// 回到分割畫面；只有進入時正在播放的其他來源恢復播放。
+    func exitSolo() {
+        guard solo != nil else { return }
+        solo = nil
+        for id in soloPaused {
+            players[id]?.play()
+        }
+        soloPaused = []
+        keepControlsVisible()
+        updatePictureInPicture()
+    }
+
+    func toggleSolo(_ index: Int) {
+        if solo == nil {
+            enterSolo(index)
+        } else {
+            exitSolo()
+        }
+    }
+
+    // MARK: 拖曳換位（R125）
+
+    /// 可不可以換位：`1` 版型、小螢幕的暫時版型、單格全螢幕時不行。
+    var canSwap: Bool {
+        solo == nil && displayedLayout == layout && layout != .one
+    }
+
+    func setGrid(size: CGSize, stacked: Bool) {
+        gridSize = size
+        gridStacked = stacked
+    }
+
+    func beginSwap(from index: Int) {
+        guard canSwap, slots.indices.contains(index), slots[index] != nil else { return }
+        swapFrom = index
+        swapOver = index
+        holdControls(true)
+    }
+
+    /// location：手指在格子區域裡的位置。
+    func updateSwap(location: CGPoint) {
+        guard swapFrom != nil, gridSize.width > 0, gridSize.height > 0 else { return }
+        let x = location.x / gridSize.width
+        let y = location.y / gridSize.height
+        let rects = LayoutMath.cellRects(displayedLayout, ratios(for: displayedLayout), stacked: gridStacked)
+        let over = rects.firstIndex { x >= $0.x && x < $0.x + $0.w && y >= $0.y && y < $0.y + $0.h }
+        if swapOver != over {
+            swapOver = over
+        }
+    }
+
+    /// 放開：和手指所在的格子互換。放開在原本的格子或格子以外不發生變化（R6 AC3）。
+    func endSwap() {
+        defer { cancelSwap() }
+        guard let from = swapFrom, let over = swapOver, from != over else { return }
+        slots = SlotRules.swap(slots, from, over)
+        if activeCell == from {
+            activeCell = over
+        }
+        scheduleSave()
+    }
+
+    func cancelSwap() {
+        guard swapFrom != nil else { return }
+        swapFrom = nil
+        swapOver = nil
+        holdControls(false)
     }
 
     // MARK: 來源
@@ -196,6 +302,10 @@ final class AppModel {
 
     func removeSource(at index: Int) {
         guard slots.indices.contains(index), let source = slots[index] else { return }
+        // 單格全螢幕時移除：回到分割畫面（R20 AC7）
+        if solo == index {
+            exitSolo()
+        }
         releasePlayer(source.id)
         slots = SlotRules.set(slots, index, nil)
         if activeCell == index {
@@ -255,6 +365,7 @@ final class AppModel {
         if statuses[id] != update.status {
             statuses[id] = update.status
             updateIdleTimer()
+            updatePictureInPicture()
         }
         if progress[id] != update.progress {
             progress[id] = update.progress
@@ -428,6 +539,7 @@ final class AppModel {
             player.setMuted(source.muted)
             player.setVolume(source.volume)
         }
+        updatePictureInPicture()
     }
 
     // MARK: 亮度（R130）
@@ -462,12 +574,12 @@ final class AppModel {
 
     /// 工具列的全部播放／暫停：只要有任何一格在播放就全部暫停，否則全部播放（R8、R9）。
     var toggleAllAction: PlaybackRules.ToggleAction {
-        PlaybackRules.toggleAllAction(slots, layout: displayedLayout, statuses: statuses)
+        PlaybackRules.toggleAllAction(slots, layout: displayedLayout, statuses: statuses, solo: solo)
     }
 
     func toggleAll() {
         let action = toggleAllAction
-        for index in PlaybackRules.controllableIndices(slots, layout: displayedLayout, statuses: statuses) {
+        for index in PlaybackRules.controllableIndices(slots, layout: displayedLayout, statuses: statuses, solo: solo) {
             guard let source = slots[index], let player = players[source.id] else { continue }
             if action == .play {
                 player.play()
@@ -482,6 +594,185 @@ final class AppModel {
         guard slots.indices.contains(index), let source = slots[index], let current = progress[source.id] else { return }
         players[source.id]?.seek(to: ProgressRules.seekTarget(current, fraction: fraction))
         keepControlsVisible()
+    }
+
+    /// 快轉（正數）或倒轉（負數）。直播和沒有進度條的格子不作用，回傳 false（R51、R129）。
+    @discardableResult
+    func skip(_ index: Int, seconds: Double) -> Bool {
+        guard slots.indices.contains(index), let source = slots[index], let current = progress[source.id],
+              let target = ProgressRules.skipTarget(current, seconds: seconds)
+        else { return false }
+        players[source.id]?.seek(to: target)
+        return true
+    }
+
+    // MARK: 背景播放、子母畫面、被其他聲音打斷（R128、R132）
+
+    /// 顯示中、有聲音、正在播放的來源。
+    private func audiblePlayingSources() -> [CellSource] {
+        slots.enumerated().compactMap { index, source in
+            guard let source, isVisible(index), source.isAudible, statuses[source.id] == .playing else { return nil }
+            return source
+        }
+    }
+
+    /// 只有一格有聲音、而且是原生播放器在播放時，回到主畫面自動用子母畫面繼續播這一格。
+    private func updatePictureInPicture() {
+        let audible = audiblePlayingSources()
+        let candidate = audible.count == 1 ? audible[0].id : nil
+        for (id, player) in players {
+            player.setAutomaticPictureInPicture(id == candidate && !player.usesWebAudio)
+        }
+        updateNowPlaying(audible)
+    }
+
+    func startPictureInPicture(_ index: Int) {
+        guard slots.indices.contains(index), let source = slots[index] else { return }
+        players[source.id]?.startPictureInPicture()
+    }
+
+    func supportsPictureInPicture(_ source: CellSource) -> Bool {
+        players[source.id]?.supportsPictureInPicture ?? false
+    }
+
+    /// 回到主畫面或鎖定螢幕：原生播放器中有聲音、正在播放的格子繼續播聲音，其他暫停。
+    func didEnterBackground() {
+        guard !inBackground else { return }
+        inBackground = true
+        saveNow()
+        backgroundPaused = []
+        for source in slots.compactMap({ $0 }) {
+            guard let player = players[source.id] else { continue }
+            let playing = statuses[source.id] == .playing
+            let keepAudio = playing && source.isAudible && !player.usesWebAudio
+            if playing, !keepAudio {
+                backgroundPaused.insert(source.id)
+            }
+            player.didEnterBackground(keepAudio: keepAudio)
+        }
+    }
+
+    /// 回到 App：因為切到背景而暫停的格子恢復播放。
+    func willEnterForeground() {
+        guard inBackground else { return }
+        inBackground = false
+        for player in players.values {
+            player.willEnterForeground()
+        }
+        for id in backgroundPaused {
+            players[id]?.play()
+        }
+        backgroundPaused = []
+    }
+
+    private func observeAudioSession() {
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            let info = notification.userInfo
+            let type = (info?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap { AVAudioSession.InterruptionType(rawValue: $0) }
+            let options = (info?[AVAudioSessionInterruptionOptionKey] as? UInt).map { AVAudioSession.InterruptionOptions(rawValue: $0) }
+            Task { @MainActor [weak self] in
+                self?.handleInterruption(type: type, shouldResume: options?.contains(.shouldResume) ?? false)
+            }
+        })
+        observers.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            let reason = raw.flatMap { AVAudioSession.RouteChangeReason(rawValue: $0) }
+            Task { @MainActor [weak self] in
+                // 拔掉耳機時全部暫停（R128）
+                if reason == .oldDeviceUnavailable {
+                    self?.pauseAll()
+                }
+            }
+        })
+    }
+
+    /// 其他 App 開始播放聲音（例如來電）時全部暫停；結束後系統表示可以恢復時，恢復原本在播的格子（R128）。
+    private func handleInterruption(type: AVAudioSession.InterruptionType?, shouldResume: Bool) {
+        switch type {
+        case .began:
+            interruptionPaused = Set(statuses.filter { $0.value == .playing }.keys)
+            pauseAll()
+        case .ended:
+            if shouldResume {
+                try? AVAudioSession.sharedInstance().setActive(true)
+                for id in interruptionPaused {
+                    players[id]?.play()
+                }
+            }
+            interruptionPaused = []
+        default:
+            break
+        }
+    }
+
+    private func pauseAll() {
+        for player in players.values {
+            player.pause()
+        }
+    }
+
+    // MARK: 鎖定畫面與控制中心（R132）
+
+    private func configureRemoteCommands() {
+        let commands = MPRemoteCommandCenter.shared()
+        commands.playCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in self?.remotePlay() }
+            return .success
+        }
+        commands.pauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in self?.remotePause() }
+            return .success
+        }
+        commands.togglePlayPauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.statuses.values.contains(.playing) {
+                    self.remotePause()
+                } else {
+                    self.remotePlay()
+                }
+            }
+            return .success
+        }
+    }
+
+    /// 鎖定畫面按暫停：記下正在播放的格子，按播放時恢復它們。
+    @ObservationIgnored private var remotePaused: Set<Int> = []
+
+    private func remotePause() {
+        remotePaused = Set(statuses.filter { $0.value == .playing }.keys)
+        pauseAll()
+    }
+
+    private func remotePlay() {
+        let targets = remotePaused.isEmpty ? Set(audibleSourceIDs()) : remotePaused
+        for id in targets {
+            players[id]?.play()
+        }
+        remotePaused = []
+    }
+
+    private func audibleSourceIDs() -> [Int] {
+        slots.enumerated().compactMap { index, source in
+            guard let source, isVisible(index), source.isAudible else { return nil }
+            return source.id
+        }
+    }
+
+    /// 只有一格有聲音時，鎖定畫面和控制中心顯示那一格的名稱。
+    private func updateNowPlaying(_ audible: [CellSource]) {
+        guard audible.count == 1, let source = audible.first else {
+            if audible.isEmpty, !statuses.values.contains(.playing) { return }
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = [MPMediaItemPropertyTitle: "MultiView"]
+            return
+        }
+        let title = titles[source.id] ?? ListRules.defaultName(url: source.url)
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = [MPMediaItemPropertyTitle: title]
     }
 
     /// 不在目前版型裡的來源暫停（R4 AC3、R124）。回到版型裡時維持暫停。

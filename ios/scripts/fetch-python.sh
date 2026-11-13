@@ -7,9 +7,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PYTHON_SERIES="3.13"
-# 固定版本；留空時用這個系列最新的版本（並印出來，方便之後固定）
-SUPPORT_TAG="${PYTHON_SUPPORT_TAG:-}"
-SUPPORT_SHA256="${PYTHON_SUPPORT_SHA256:-}"
+# 固定版本並檢查雜湊值。要換版本時：把這兩個環境變數設成空字串執行一次，
+# 會改用這個系列最新的版本並印出雜湊值，再把印出來的值填回這裡
+SUPPORT_TAG="${PYTHON_SUPPORT_TAG-3.13-b18}"
+SUPPORT_SHA256="${PYTHON_SUPPORT_SHA256-d06acf2a9c7964a8689566353a0e707402eff822037de5e29ba0e16040f7047d}"
 YTDLP_VERSION="2026.10.26"
 EJS_VERSION="0.8.0"
 CERTIFI_VERSION="2026.10.23"

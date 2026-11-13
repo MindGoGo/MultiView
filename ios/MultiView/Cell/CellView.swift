@@ -11,8 +11,15 @@ struct CellView: View {
     /// 這一格在畫面最上面一列：喇叭按鈕要往下移，避開工具列。
     var touchesTop = false
 
+    /// 雙擊快轉、倒轉時，畫面中間短暫顯示的文字（R129）。
+    @State private var skipHint: String?
+    @State private var skipHintTask: Task<Void, Never>?
+
     /// 工具列的高度（按鈕 44pt 加上下留白）。
     private static let toolbarHeight: CGFloat = 56
+    /// 兩指張開、捏合超過這個比例才進入、離開單格全螢幕（R129）。
+    private static let enterSoloScale: CGFloat = 1.25
+    private static let exitSoloScale: CGFloat = 0.8
 
     var body: some View {
         let player = model.player(for: source)
@@ -28,15 +35,20 @@ struct CellView: View {
                 .allowsHitTesting(false)
 
             if !player.isInteractive {
-                // 點擊攔截層：點一下只聽這一格，並顯示操作列與工具列（R127、R128）
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        model.tapCell(index)
-                    }
+                touchLayer
             }
 
             statusOverlay(status: status, interactive: player.isInteractive)
+
+            if let skipHint {
+                Text(skipHint)
+                    .font(.headline)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.55), in: Capsule())
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
         }
         .overlay(alignment: .topLeading) {
             if model.toolbarVisible {
@@ -93,7 +105,61 @@ struct CellView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: active)
+        .animation(.easeOut(duration: 0.15), value: skipHint)
         .clipped()
+    }
+
+    /// 點擊攔截層：點一下只聽這一格並顯示操作列與工具列（R127、R128）；
+    /// 雙擊左邊、右邊 1/3 倒轉、快轉 10 秒；兩指張開、捏合進出單格全螢幕（R129）。
+    private var touchLayer: some View {
+        GeometryReader { geometry in
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { location in
+                    doubleTap(at: location.x, width: geometry.size.width)
+                }
+                .onTapGesture {
+                    model.tapCell(index)
+                }
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .onEnded { value in
+                            if model.solo == nil, value.magnification > Self.enterSoloScale {
+                                model.enterSolo(index)
+                            } else if model.solo == index, value.magnification < Self.exitSoloScale {
+                                model.exitSolo()
+                            }
+                        }
+                )
+        }
+    }
+
+    private func doubleTap(at x: CGFloat, width: CGFloat) {
+        guard width > 0 else { return }
+        let third = x / width
+        let seconds: Double
+        if third < 1.0 / 3 {
+            seconds = -ProgressRules.doubleTapSkipSeconds
+        } else if third > 2.0 / 3 {
+            seconds = ProgressRules.doubleTapSkipSeconds
+        } else {
+            // 中間 1/3 等於點一下
+            model.tapCell(index)
+            return
+        }
+        // 直播和沒有進度條的格子不作用
+        guard model.skip(index, seconds: seconds) else { return }
+        showSkipHint(seconds > 0 ? "+\(Int(seconds)) 秒" : "−\(Int(-seconds)) 秒")
+    }
+
+    private func showSkipHint(_ text: String) {
+        skipHint = text
+        skipHintTask?.cancel()
+        skipHintTask = Task {
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            skipHint = nil
+        }
     }
 
     @ViewBuilder

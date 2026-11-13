@@ -1,3 +1,4 @@
+import AVKit
 import MultiViewCore
 import SwiftUI
 
@@ -83,6 +84,11 @@ struct ToolbarView: View {
                 }
             }
 
+            // AirPlay：把聲音送到 AirPlay 喇叭或 Apple TV（R132）
+            AirPlayButton()
+                .frame(width: 44, height: 44)
+                .accessibilityLabel("AirPlay")
+
             // YouTube 的播放方式（R88、R135）
             Menu {
                 Section("YouTube 直播") {
@@ -140,4 +146,17 @@ struct ToolbarView: View {
             model.holdControls(false)
         }
     }
+}
+
+/// 系統的 AirPlay 選擇按鈕。
+private struct AirPlayButton: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView()
+        view.tintColor = .white
+        view.activeTintColor = .tintColor
+        view.prioritizesVideoDevices = false
+        return view
+    }
+
+    func updateUIView(_ view: AVRoutePickerView, context: Context) {}
 }

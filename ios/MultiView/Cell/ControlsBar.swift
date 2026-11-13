@@ -30,6 +30,9 @@ struct ControlsBar: View {
                     if supportsVolume { volumeButton }
                     brightnessButton
                     Spacer(minLength: 8)
+                    if model.canSwap { moveHandle }
+                    soloButton
+                    if model.supportsPictureInPicture(source) { pictureInPictureButton }
                     editButton
                     removeButton
                 }
@@ -37,6 +40,8 @@ struct ControlsBar: View {
                     playButton
                     muteButton
                     Spacer(minLength: 0)
+                    if model.canSwap { moveHandle }
+                    soloButton
                     moreMenu
                 }
             }
@@ -112,6 +117,56 @@ struct ControlsBar: View {
         }
     }
 
+    /// 「移動」：長按後拖到另一格放開，兩格互換（R125）。
+    private var moveHandle: some View {
+        Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+            .font(.body)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .foregroundStyle(model.swapFrom == index ? Color.accentColor : Color.primary)
+            .accessibilityLabel("移動（長按後拖到另一格）")
+            .gesture(
+                LongPressGesture(minimumDuration: 0.3)
+                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(GridView.coordinateSpace)))
+                    .onChanged { value in
+                        guard case .second(true, let drag) = value else { return }
+                        if model.swapFrom == nil {
+                            model.beginSwap(from: index)
+                        }
+                        if let drag {
+                            model.updateSwap(location: drag.location)
+                        }
+                    }
+                    .onEnded { value in
+                        if case .second(true, let drag?) = value {
+                            model.updateSwap(location: drag.location)
+                            model.endSwap()
+                        } else {
+                            model.cancelSwap()
+                        }
+                    }
+            )
+    }
+
+    /// 單格全螢幕（R20、R129）。
+    private var soloButton: some View {
+        let isSolo = model.solo == index
+        return BarButton(
+            icon: isSolo ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+            label: isSolo ? "離開全螢幕" : "全螢幕",
+            highlighted: isSolo
+        ) {
+            model.toggleSolo(index)
+        }
+    }
+
+    /// 子母畫面（只有原生播放器，R132）。
+    private var pictureInPictureButton: some View {
+        BarButton(icon: "pip.enter", label: "子母畫面") {
+            model.startPictureInPicture(index)
+        }
+    }
+
     private var editButton: some View {
         BarButton(icon: "link", label: "更換網址") {
             beginEdit()
@@ -130,6 +185,9 @@ struct ControlsBar: View {
                 Button("音量", systemImage: "slider.horizontal.3") { showsVolume = true }
             }
             Button("亮度", systemImage: "sun.max.fill") { showsBrightness = true }
+            if model.supportsPictureInPicture(source) {
+                Button("子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) }
+            }
             Button("更換網址", systemImage: "link") { beginEdit() }
             Button("移除", systemImage: "xmark", role: .destructive) { model.removeSource(at: index) }
         } label: {
