@@ -27,16 +27,9 @@ struct EmptyCellView: View {
                     .multilineTextAlignment(.center)
 
                 HStack(spacing: 8) {
-                    TextField("https://", text: $text)
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.go)
-                        .focused($focused)
-                        .onSubmit {
-                            submit(text)
-                        }
+                    URLField(text: $text, focused: $focused) {
+                        submit(text)
+                    }
 
                     // 系統的「貼上」按鈕：按下時不會再跳出允許貼上的詢問
                     PasteButton(payloadType: String.self) { strings in

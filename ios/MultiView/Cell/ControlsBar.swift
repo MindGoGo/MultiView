@@ -13,7 +13,6 @@ struct ControlsBar: View {
     @State private var showsVolume = false
     @State private var showsBrightness = false
     @State private var showsEdit = false
-    @State private var editText = ""
 
     var body: some View {
         VStack(spacing: 4) {
@@ -48,17 +47,10 @@ struct ControlsBar: View {
         .padding(.trailing, insets.trailing)
         .padding(.bottom, insets.bottom)
         .background(.ultraThinMaterial)
-        .alert("更換網址", isPresented: $showsEdit) {
-            TextField("https://", text: $editText)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Button("確定") {
-                if let message = model.setSource(editText, at: index) {
-                    model.showToast(message)
-                }
-            }
-            Button("取消", role: .cancel) {}
+        .sheet(isPresented: $showsEdit) {
+            EditURLSheet(index: index, url: source.url)
+                .presentationDetents([.height(230)])
+                .presentationDragIndicator(.visible)
         }
         .onChange(of: showsVolume || showsBrightness || showsEdit) { _, open in
             // 彈出視窗開著時，操作列不自動隱藏
@@ -165,7 +157,6 @@ struct ControlsBar: View {
     }
 
     private func beginEdit() {
-        editText = source.url
         showsEdit = true
     }
 }
