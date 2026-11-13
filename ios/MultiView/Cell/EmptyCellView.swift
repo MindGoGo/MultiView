@@ -5,6 +5,8 @@ import SwiftUI
 struct EmptyCellView: View {
     @Environment(AppModel.self) private var model
     let index: Int
+    /// 這一格貼著畫面邊緣時，輸入框要避開的範圍。
+    var insets = EdgeInsets()
 
     @State private var text = ""
     @State private var error: String?
@@ -56,6 +58,7 @@ struct EmptyCellView: View {
             }
             .frame(maxWidth: 420)
             .padding(12)
+            .padding(insets)
         }
     }
 

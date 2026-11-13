@@ -7,6 +7,8 @@ struct ControlsBar: View {
     let index: Int
     let source: CellSource
     let supportsVolume: Bool
+    /// 這一格貼著畫面邊緣時，按鈕要避開的範圍。
+    var insets = EdgeInsets()
 
     @State private var showsVolume = false
     @State private var showsBrightness = false
@@ -42,6 +44,9 @@ struct ControlsBar: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
+        .padding(.leading, insets.leading)
+        .padding(.trailing, insets.trailing)
+        .padding(.bottom, insets.bottom)
         .background(.ultraThinMaterial)
         .alert("更換網址", isPresented: $showsEdit) {
             TextField("https://", text: $editText)

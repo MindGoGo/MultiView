@@ -6,6 +6,8 @@ struct CellView: View {
     @Environment(AppModel.self) private var model
     let index: Int
     let source: CellSource
+    /// 這一格貼著畫面邊緣時要避開的範圍（瀏海、圓角、Home 指示條）。
+    var insets = EdgeInsets()
 
     var body: some View {
         let player = model.player(for: source)
@@ -39,16 +41,19 @@ struct CellView: View {
                     .padding(6)
                     .background(.black.opacity(0.45), in: Circle())
                     .padding(6)
+                    .padding(.top, insets.top)
+                    .padding(.leading, insets.leading)
                     .allowsHitTesting(false)
             }
         }
         .overlay(alignment: .bottom) {
             if active {
-                ControlsBar(index: index, source: source, supportsVolume: player.supportsVolume)
+                ControlsBar(index: index, source: source, supportsVolume: player.supportsVolume, insets: insets)
                     .transition(.opacity)
             } else if player.isInteractive {
                 // 整頁模式：點網頁就是操作網頁，用小把手叫出操作列（R127）
                 handle
+                    .padding(.bottom, insets.bottom)
             }
         }
         .animation(.easeOut(duration: 0.15), value: active)

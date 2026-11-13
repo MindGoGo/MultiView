@@ -6,17 +6,13 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
 
-    /// iPad 的格子畫到螢幕邊緣；iPhone 避開瀏海和圓角。
-    private var fillsScreen: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
-    }
-
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
 
+            // 格子畫到螢幕邊緣（滿版）；操作列等會自己避開瀏海、圓角和 Home 指示條
             GridView()
-                .ignoresSafeArea(fillsScreen ? .all : [])
+                .ignoresSafeArea()
 
             if model.toolbarVisible {
                 ToolbarView()
