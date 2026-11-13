@@ -5,13 +5,11 @@ name: iOS
 
 on:
   push:
+    branches: ['**']
     tags: ['ios-v*']
-    # repo 改成公開之前先不在推送分支時編譯（私人 repo 的 macOS 機器會扣免費額度）。
-    # 公開後把下面三行的註解拿掉：
-    # branches: ['**']
-    # paths:
-    #   - 'ios/**'
-    #   - '.github/workflows/ios.yml'
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
 
 concurrency:
   group: ios-${{ github.ref }}
