@@ -26,6 +26,11 @@ jobs:
       - name: 單元測試（MultiViewCore）
         run: swift test --package-path ios/MultiViewCore
 
+      - name: 下載 Python 與 yt-dlp
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ios/scripts/fetch-python.sh
+
       - name: 產生 Xcode 專案
         run: |
           brew install xcodegen
@@ -62,6 +67,9 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "IPA=MultiView-iOS-$VERSION.ipa" >> "$GITHUB_ENV"
+
+      - name: 下載 Python 與 yt-dlp
+        run: ios/scripts/fetch-python.sh
 
       - name: 產生 Xcode 專案
         run: |

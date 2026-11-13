@@ -5,6 +5,7 @@ import SwiftUI
 struct ToolbarView: View {
     @Environment(AppModel.self) private var model
     @State private var showsBrightness = false
+    @State private var showsYtDlp = false
 
     private var version: String? {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -58,6 +59,14 @@ struct ToolbarView: View {
                 }
             }
 
+            // 技術驗證用（R122），正式版會拿掉
+            BarButton(icon: "hammer.fill", label: "yt-dlp 測試") {
+                showsYtDlp = true
+            }
+            .sheet(isPresented: $showsYtDlp) {
+                YtDlpTestView(url: model.firstYouTubeURL ?? "")
+            }
+
             Button {
                 model.hideControls()
             } label: {
@@ -78,7 +87,7 @@ struct ToolbarView: View {
                 .padding(.trailing, 8)
                 .allowsHitTesting(false)
         }
-        .onChange(of: showsBrightness) { _, open in
+        .onChange(of: showsBrightness || showsYtDlp) { _, open in
             // 滑桿開著時，工具列不自動隱藏（R41 AC4）
             model.holdControls(open)
         }

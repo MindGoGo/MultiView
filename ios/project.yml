@@ -20,15 +20,27 @@ targets:
       - MultiView
     dependencies:
       - package: MultiViewCore
+      # iOS 版的 Python（yt-dlp 用，R122）。由 scripts/fetch-python.sh 下載到 Vendor/，不放進 repo
+      - framework: Vendor/Python.xcframework
+        embed: true
+        codeSign: false
+    postBuildScripts:
+      - name: 安裝 Python 與 yt-dlp
+        script: |
+          "$PROJECT_DIR/scripts/install-python.sh"
+        basedOnDependencyAnalysis: false
     scheme: {}
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: local.multiview.ios
         PRODUCT_NAME: MultiView
         # 發佈新版時改這裡，並推送 ios-v<版本號> 標籤（R143）
-        MARKETING_VERSION: 0.0.5
+        MARKETING_VERSION: 0.0.6
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
+        SWIFT_OBJC_BRIDGING_HEADER: MultiView/MultiView-Bridging-Header.h
+        # 建置步驟要把 Python 放進 App，不能用指令碼沙盒
+        ENABLE_USER_SCRIPT_SANDBOXING: "NO"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # 沒有 Mac、不在這裡簽章：IPA 由 SideStore 用使用者的 Apple ID 簽章

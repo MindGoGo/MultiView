@@ -11,4 +11,5 @@ vendor/
 ios/*.xcodeproj/
 ios/MultiView/Info.plist
 ios/build/
+ios/Vendor/
 ios/MultiViewCore/.build/
