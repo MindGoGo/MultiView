@@ -11,6 +11,15 @@ struct ToolbarView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     }
 
+    /// 選單裡顯示的 yt-dlp 版本（R136）。
+    private var ytdlpTitle: String {
+        var title = "yt-dlp " + (model.ytdlpVersion ?? "")
+        if let pending = model.ytdlpPendingVersion {
+            title += "（重新開啟 App 後使用 \(pending)）"
+        }
+        return title
+    }
+
     /// 一組（直播或一般影片）的播放方式選單。
     private func methodPicker(_ keyPath: WritableKeyPath<YouTubeMethods, PlayMethod>) -> some View {
         Picker("播放方式", selection: Binding(
@@ -81,6 +90,12 @@ struct ToolbarView: View {
                 }
                 Section("YouTube 一般影片") {
                     methodPicker(\.vod)
+                }
+                Section(ytdlpTitle) {
+                    Button(model.ytdlpUpdating ? "正在檢查更新…" : "檢查 yt-dlp 更新", systemImage: "arrow.down.circle") {
+                        model.checkYtDlpUpdate()
+                    }
+                    .disabled(model.ytdlpUpdating)
                 }
             } label: {
                 Image(systemName: "gearshape.fill")

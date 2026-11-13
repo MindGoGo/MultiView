@@ -31,6 +31,11 @@ final class AppModel {
     private(set) var toolbarVisible = false
     /// 畫面上方的提示文字，幾秒後自動消失。
     private(set) var toast: String?
+    /// 目前使用的 yt-dlp 版本；還不知道時為 nil（R136）。
+    private(set) var ytdlpVersion: String?
+    /// 已經下載、重新開啟 App 後生效的版本。
+    private(set) var ytdlpPendingVersion: String?
+    private(set) var ytdlpUpdating = false
 
     // MARK: 內部
 
@@ -71,6 +76,7 @@ final class AppModel {
         slots = SettingsBridge.restoreSlots(settings.slots)
 
         configureAudioSession()
+        startYtDlpAutoUpdate()
     }
 
     /// iOS 版預設用 yt-dlp 播放 YouTube（R135：實測拿得到 720p，而且原生播放器才能多格同時出聲）。
@@ -216,8 +222,9 @@ final class AppModel {
         switch source.parsed {
         case .youtube(let videoID):
             let player = YouTubeSourcePlayer(videoID: videoID, source: source, methods: youtubeMethods)
-            player.onFallback = { [weak self] in
+            player.onFallback = { [weak self] reason in
                 self?.showToast("yt-dlp 無法播放，已改用內嵌播放器")
+                self?.updateYtDlpAfterFailure(reason)
             }
             return player
         case .hls(let href), .mp4(let href):
@@ -305,6 +312,60 @@ final class AppModel {
     /// 這個來源現在是不是用網頁播放聲音。YouTube 用 yt-dlp 播放時是原生播放器，不算。
     private func usesWebAudio(_ source: CellSource) -> Bool {
         players[source.id]?.usesWebAudio ?? source.usesWebAudio
+    }
+
+    // MARK: yt-dlp 的版本與更新（R136）
+
+    /// 開啟 App 後在背景檢查更新（距離上次檢查超過 24 小時才檢查），不顯示訊息。
+    func startYtDlpAutoUpdate() {
+        Task { [weak self] in
+            // 先讓畫面和影片載入
+            try? await Task.sleep(for: .seconds(5))
+            await self?.refreshYtDlpVersion()
+            if let outcome = await YtDlpUpdater.shared.autoUpdateIfNeeded() {
+                self?.noteYtDlpUpdate(outcome)
+            }
+        }
+    }
+
+    /// 選單的「檢查更新」。
+    func checkYtDlpUpdate() {
+        guard !ytdlpUpdating else { return }
+        ytdlpUpdating = true
+        Task { [weak self] in
+            let outcome = await YtDlpUpdater.shared.update(allowConstrainedNetwork: true)
+            self?.ytdlpUpdating = false
+            self?.noteYtDlpUpdate(outcome)
+            self?.showToast(outcome.message)
+        }
+    }
+
+    /// 解析失敗、看起來是 yt-dlp 太舊：在背景更新，下次開啟 App 生效。
+    private func updateYtDlpAfterFailure(_ reason: String) {
+        Task { [weak self] in
+            if let outcome = await YtDlpUpdater.shared.updateAfterFailure(reason), case .updated = outcome {
+                self?.noteYtDlpUpdate(outcome)
+                self?.showToast(outcome.message)
+            }
+        }
+    }
+
+    private func noteYtDlpUpdate(_ outcome: YtDlpUpdater.Outcome) {
+        if case .updated(let version) = outcome {
+            ytdlpPendingVersion = version
+        }
+    }
+
+    private func refreshYtDlpVersion() async {
+        guard let text = try? await PythonRuntime.shared.call("versions"),
+              let info = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any]
+        else { return }
+        ytdlpVersion = info["yt_dlp"] as? String
+        // 有下載的新版、但 Python 沒有用到它：檔案壞了，刪掉之後重新下載
+        let usesUpdate = (info["yt_dlp_updated"] as? Bool) == true
+        if !usesUpdate, FileManager.default.fileExists(atPath: YtDlpUpdater.archiveURL.path) {
+            YtDlpUpdater.discardArchive()
+        }
     }
 
     /// 播放方式的小標示（R109），例如「yt-dlp」。

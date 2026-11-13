@@ -7,8 +7,8 @@ import UIKit
 final class YouTubeSourcePlayer: NSObject, CellPlayer {
     let view: UIView
     var onUpdate: ((PlayerUpdate) -> Void)?
-    /// 退回內嵌播放器時通知一次（顯示提示用）。
-    var onFallback: (() -> Void)?
+    /// 退回內嵌播放器時通知一次（顯示提示用）；參數是失敗的原因。
+    var onFallback: ((String) -> Void)?
 
     var supportsVolume: Bool { inner?.supportsVolume ?? false }
     let isInteractive = false
@@ -28,6 +28,13 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
     /// 目前的觀看位置（退回內嵌時從這裡繼續）。
     private var lastPosition: Double?
     private var title: String?
+    /// 播放中斷後已經重新解析幾次；開始播放後歸零。
+    private var retries = 0
+    /// 最近一次回報的狀態是不是播放中（重新解析後維持原本的播放或暫停）。
+    private var wasPlaying = false
+
+    /// 播放中斷時最多重新解析幾次（R90）。
+    private static let maxRetries = 3
 
     init(videoID: String, source: CellSource, methods: YouTubeMethods) {
         let container = UIView()
@@ -89,7 +96,8 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
                 let stream = try await YtDlpResolver.shared.resolve(url)
                 self?.resolved(stream)
             } catch {
-                self?.fallBack()
+                let reason = (error as? YtDlpRules.ResolveError)?.message ?? error.localizedDescription
+                self?.fallBack(reason)
             }
         }
     }
@@ -108,14 +116,26 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
     }
 
     /// yt-dlp 失敗：改用內嵌播放器，從原本的時間點繼續（R90）。
-    private func fallBack() {
+    private func fallBack(_ reason: String) {
         guard !closed else { return }
-        let wasUsingYtDlp = usingYtDlp || methods.needsResolve
         usingYtDlp = false
         Task { await YtDlpResolver.shared.forget(SourceParser.watchPageURL(videoID: videoID)) }
         useEmbed()
-        if wasUsingYtDlp {
-            onFallback?()
+        onFallback?(reason)
+    }
+
+    /// 播放中斷（例如串流網址過期）：重新解析，從原本的位置繼續。
+    private func retry() {
+        retries += 1
+        wantsPlaying = wantsPlaying ?? wasPlaying
+        inner?.shutdown()
+        inner = nil
+        view.subviews.forEach { $0.removeFromSuperview() }
+        onUpdate?(PlayerUpdate(status: .loading, progress: nil, title: title, errorMessage: nil))
+        let url = SourceParser.watchPageURL(videoID: videoID)
+        resolveTask = Task { [weak self] in
+            await YtDlpResolver.shared.forget(url)
+            self?.startResolving()
         }
     }
 
@@ -155,10 +175,21 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
     }
 
     private func forward(_ update: PlayerUpdate) {
-        // 用 yt-dlp 播放時播放器出錯（例如串流網址失效）：退回內嵌播放器
+        // 用 yt-dlp 播放時播放器出錯（例如串流網址過期）：重新解析，3 次都失敗才退回內嵌播放器（R90）
         if usingYtDlp, update.status == .error {
-            fallBack()
+            if retries < YouTubeSourcePlayer.maxRetries {
+                retry()
+            } else {
+                fallBack(update.errorMessage ?? "播放中斷")
+            }
             return
+        }
+        if update.status == .playing {
+            retries = 0
+            wasPlaying = true
+            wantsPlaying = nil
+        } else if update.status == .paused || update.status == .ended {
+            wasPlaying = false
         }
         if let progress = update.progress, !progress.live {
             lastPosition = progress.current

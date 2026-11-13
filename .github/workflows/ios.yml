@@ -46,19 +46,14 @@ jobs:
       - name: 檢查 App 裡的 Python
         run: |
           cd ios
-          echo "── Python-Apple-support 附的安裝腳本（對照用）──"
-          cat Vendor/Python.xcframework/build/utils.sh || true
-          echo "── 原生模組資料夾 ──"
-          ls Vendor/Python.xcframework/ios-arm64/lib-arm64/python3.13 | head -20
+          echo "── Python-Apple-support 的版本（固定版本用）──"
+          cat Vendor/python-support.txt
           APP=build/Build/Products/Debug-iphonesimulator/MultiView.app
           STDLIB="$(ls -d "$APP"/python/lib/python3.* | head -1)"
           echo "── App ──"
           ls "$STDLIB" | wc -l
-          ls "$STDLIB/lib-dynload" | head -8
           cat "$STDLIB"/lib-dynload/_ssl.*.fwork
           ls "$APP/Frameworks" | wc -l
-          ls "$APP/Frameworks/_ssl.framework"
-          cat "$APP/Frameworks/_ssl.framework/_ssl.origin"
           test -f "$STDLIB/encodings/__init__.py"
           du -sh "$APP" "$APP/python" "$APP/site-packages" "$APP/Frameworks"
 

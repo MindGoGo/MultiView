@@ -141,3 +141,61 @@ final class YtDlpTests: XCTestCase {
         XCTAssertEqual(error("not json"), "無法讀取 yt-dlp 的結果")
     }
 }
+
+/// yt-dlp 的版本比較與自動更新的判斷（R136）。
+final class YtDlpUpdateTests: XCTestCase {
+    func testParseVersion() {
+        XCTAssertEqual(YtDlpVersion.parse("2026.10.26"), "2026.10.26")
+        XCTAssertEqual(YtDlpVersion.parse(" 2026.1.5\n"), "2026.01.05")
+        XCTAssertEqual(YtDlpVersion.parse("stable@2026.10.26.123456 from yt-dlp/yt-dlp"), "2026.10.26.123456")
+        XCTAssertNil(YtDlpVersion.parse("1.2.3"))
+        XCTAssertNil(YtDlpVersion.parse("沒有版本"))
+        XCTAssertNil(YtDlpVersion.parse(""))
+    }
+
+    func testCompareVersion() {
+        XCTAssertGreaterThan(YtDlpVersion.compare("2026.11.01", "2026.10.26"), 0)
+        XCTAssertLessThan(YtDlpVersion.compare("2026.10.26", "2026.11.01"), 0)
+        XCTAssertEqual(YtDlpVersion.compare("2026.10.26", "2026.10.26"), 0)
+        XCTAssertGreaterThan(YtDlpVersion.compare("2026.10.26.1", "2026.10.26"), 0)
+        XCTAssertGreaterThan(YtDlpVersion.compare("2027.01.01", "2026.12.31"), 0)
+    }
+
+    func testUpdateRecord() {
+        XCTAssertEqual(YtDlpUpdateRecord.parse(nil), YtDlpUpdateRecord())
+        XCTAssertEqual(YtDlpUpdateRecord.parse("{ broken"), YtDlpUpdateRecord())
+        XCTAssertEqual(YtDlpUpdateRecord.parse("{\"lastCheck\":\"x\",\"appVersion\":3}"), YtDlpUpdateRecord())
+        let record = YtDlpUpdateRecord(lastCheck: 1_794_000_000_000, appVersion: "0.0.9")
+        XCTAssertEqual(YtDlpUpdateRecord.parse(record.encoded()), record)
+    }
+
+    func testShouldAutoUpdate() {
+        let now: Double = 1_794_000_000_000
+        let hour: Double = 60 * 60 * 1000
+        XCTAssertTrue(YtDlpUpdateRules.shouldAutoUpdate(YtDlpUpdateRecord(), now: now))
+        XCTAssertFalse(YtDlpUpdateRules.shouldAutoUpdate(YtDlpUpdateRecord(lastCheck: now - 23 * hour), now: now))
+        XCTAssertTrue(YtDlpUpdateRules.shouldAutoUpdate(YtDlpUpdateRecord(lastCheck: now - 24 * hour), now: now))
+        // 時間被往回調：上次檢查的時間在未來，當作要檢查
+        XCTAssertTrue(YtDlpUpdateRules.shouldAutoUpdate(YtDlpUpdateRecord(lastCheck: now + hour), now: now))
+    }
+
+    func testIsOutdatedError() {
+        XCTAssertTrue(YtDlpUpdateRules.isOutdatedError("ERROR: [youtube] abc: Unable to extract nsig function code"))
+        XCTAssertTrue(YtDlpUpdateRules.isOutdatedError("ERROR: [youtube] abc: Signature extraction failed: please report this issue"))
+        XCTAssertFalse(YtDlpUpdateRules.isOutdatedError("ERROR: [youtube] abc: Private video. Sign in if you've been granted access"))
+        XCTAssertFalse(YtDlpUpdateRules.isOutdatedError("ERROR: [youtube] abc: Video unavailable"))
+        XCTAssertFalse(YtDlpUpdateRules.isOutdatedError("ERROR: Unable to download API page: timed out; please report this issue"))
+        XCTAssertFalse(YtDlpUpdateRules.isOutdatedError("ERROR: Unsupported URL: https://example.com/"))
+        XCTAssertFalse(YtDlpUpdateRules.isOutdatedError("沒有可以播放的格式"))
+    }
+
+    func testChecksum() {
+        let hash = String(repeating: "ab12", count: 16)
+        let other = String(repeating: "0", count: 64)
+        let sums = "\(other)  yt-dlp.exe\n\(hash.uppercased())  yt-dlp\n\(other) *yt-dlp_macos\nbad  yt-dlp.tar.gz\n"
+        XCTAssertEqual(YtDlpUpdateRules.checksum(for: "yt-dlp", in: sums), hash)
+        XCTAssertEqual(YtDlpUpdateRules.checksum(for: "yt-dlp_macos", in: sums), other)
+        XCTAssertNil(YtDlpUpdateRules.checksum(for: "yt-dlp.tar.gz", in: sums))
+        XCTAssertNil(YtDlpUpdateRules.checksum(for: "missing", in: sums))
+    }
+}

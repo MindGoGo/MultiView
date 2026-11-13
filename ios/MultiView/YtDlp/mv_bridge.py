@@ -56,14 +56,52 @@ def _json(value) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+# App 下載的新版 yt-dlp（zip 檔）的路徑；沒有時是空字串（R136）
+_update_archive = ''
+# 新版載入失敗、已經改用內附的版本
+_update_broken = False
+
+
+def use_update_archive(path: str) -> str:
+    """App 啟動 Python 後呼叫：優先載入下載的新版 yt-dlp。要在第一次 import yt_dlp 之前呼叫。"""
+    global _update_archive
+    _update_archive = path
+    if path and path not in sys.path:
+        # 放在 App 自己的程式（sys.path[0]）後面、內附的 site-packages 前面
+        sys.path.insert(1, path)
+    return ''
+
+
+def _load_yt_dlp():
+    """載入 yt-dlp。下載的新版壞掉時，改用 App 內附的版本。"""
+    global _update_broken
+    try:
+        import yt_dlp
+        import yt_dlp.version
+        return yt_dlp
+    except Exception:  # noqa: BLE001
+        if not _update_archive or _update_archive not in sys.path:
+            raise
+        sys.path.remove(_update_archive)
+        for name in [name for name in sys.modules if name == 'yt_dlp' or name.startswith(('yt_dlp.', 'yt_dlp_ejs'))]:
+            del sys.modules[name]
+        _update_broken = True
+        import yt_dlp
+        import yt_dlp.version
+        return yt_dlp
+
+
 def versions(_argument: str = '') -> str:
     """Python、yt-dlp 和相關套件的版本。"""
     out = {'python': sys.version.split()[0], 'platform': sys.platform}
     try:
-        import yt_dlp.version
+        yt_dlp = _load_yt_dlp()
         out['yt_dlp'] = yt_dlp.version.__version__
+        # 用的是下載的新版，還是 App 內附的
+        out['yt_dlp_updated'] = bool(_update_archive) and (yt_dlp.__file__ or '').startswith(_update_archive)
     except Exception as error:  # noqa: BLE001
         out['yt_dlp_error'] = repr(error)
+    out['update_broken'] = _update_broken
     try:
         import yt_dlp_ejs
         out['yt_dlp_ejs'] = getattr(yt_dlp_ejs, 'version', '?')
@@ -150,7 +188,7 @@ def resolve(argument: str) -> str:
     try:
         request = json.loads(argument)
         logger.verbose = bool(request.get('verbose'))
-        import yt_dlp
+        yt_dlp = _load_yt_dlp()
         import mv_jsc  # noqa: F401  註冊用 JavaScriptCore 解題的外掛
 
         options = {
@@ -163,6 +201,8 @@ def resolve(argument: str) -> str:
             'skip_download': True,
             'socket_timeout': float(request.get('timeout') or 20),
             'color': 'never',
+            # 新版 yt-dlp 需要的解題程式和 App 內附的版本不同時，允許從 yt-dlp 的 GitHub 下載（yt-dlp 會檢查雜湊值）
+            'remote_components': ['ejs:github'],
         }
         if request.get('cache_dir'):
             options['cachedir'] = request['cache_dir']

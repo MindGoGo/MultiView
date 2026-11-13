@@ -158,3 +158,108 @@ public enum YtDlpRules {
         return (JSON.array(info["entries"]) ?? []).compactMap(JSON.object).first { JSON.array($0["formats"]) != nil }
     }
 }
+
+/// yt-dlp 的版本與自動更新的判斷（桌面版 R91–R93；iOS 版 R136）。
+public enum YtDlpVersion {
+    /// 日期格式的版本號（2026.10.26、2026.10.26.123456）：取出可比較的版本，不是時回傳 nil。
+    public static func parse(_ text: String) -> String? {
+        let parts = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: { !($0.isASCII && $0.isNumber) && $0 != "." })
+        for candidate in parts {
+            let numbers = candidate.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+            guard numbers.count >= 3, numbers.count <= 4, numbers.allSatisfy({ !$0.isEmpty }),
+                  numbers[0].count == 4, numbers[1].count <= 2, numbers[2].count <= 2
+            else { continue }
+            var out = [numbers[0], pad(numbers[1]), pad(numbers[2])]
+            if numbers.count == 4 { out.append(numbers[3]) }
+            return out.joined(separator: ".")
+        }
+        return nil
+    }
+
+    /// a 比 b 新回傳正數、一樣回傳 0、比較舊回傳負數。
+    public static func compare(_ a: String, _ b: String) -> Int {
+        let left = a.split(separator: ".").map { Int($0) ?? 0 }
+        let right = b.split(separator: ".").map { Int($0) ?? 0 }
+        for index in 0..<max(left.count, right.count) {
+            let difference = (index < left.count ? left[index] : 0) - (index < right.count ? right[index] : 0)
+            if difference != 0 { return difference }
+        }
+        return 0
+    }
+
+    private static func pad(_ text: String) -> String {
+        text.count < 2 ? "0" + text : text
+    }
+}
+
+/// 更新紀錄 update.json（R136）。
+public struct YtDlpUpdateRecord: Equatable, Sendable {
+    /// 上次自動更新檢查的時間（毫秒）；沒有時為 0。
+    public var lastCheck: Double
+    /// 上次開啟時的 App 版本；沒有時為空字串。
+    public var appVersion: String
+
+    public init(lastCheck: Double = 0, appVersion: String = "") {
+        self.lastCheck = lastCheck
+        self.appVersion = appVersion
+    }
+
+    /// 讀不到或格式錯誤時當作從來沒檢查過、App 版本不同。
+    public static func parse(_ text: String?) -> YtDlpUpdateRecord {
+        let object = text.flatMap { JSON.object(JSON.parse($0)) } ?? [:]
+        return YtDlpUpdateRecord(
+            lastCheck: JSON.number(object["lastCheck"]) ?? 0,
+            appVersion: JSON.string(object["appVersion"]) ?? ""
+        )
+    }
+
+    public func encoded() -> String {
+        JSON.encode(["lastCheck": lastCheck, "appVersion": appVersion] as [String: Any])
+    }
+}
+
+public enum YtDlpUpdateRules {
+    /// 開啟時的自動更新：距離上次檢查超過 24 小時（R92 時機 1）。
+    public static let autoUpdateInterval: Double = 24 * 60 * 60 * 1000
+    /// 因為解析失敗而觸發的更新，至少間隔這麼久（R92：10 分鐘內不重複）。
+    public static let failureUpdateInterval: Double = 10 * 60 * 1000
+
+    public static func shouldAutoUpdate(_ record: YtDlpUpdateRecord, now: Double) -> Bool {
+        now - record.lastCheck >= autoUpdateInterval || record.lastCheck > now
+    }
+
+    /// 看起來是 yt-dlp 太舊、無法解析 YouTube 頁面的錯誤（R92 時機 2）。
+    public static func isOutdatedError(_ message: String) -> Bool {
+        let text = message.lowercased()
+        if notOutdatedPatterns.contains(where: { text.contains($0) }) { return false }
+        return outdatedPatterns.contains(where: { text.contains($0) })
+    }
+
+    /// 從官方的 SHA2-256SUMS 找出某個檔案的雜湊值（小寫十六進位）。
+    public static func checksum(for fileName: String, in sums: String) -> String? {
+        for line in sums.split(whereSeparator: \.isNewline) {
+            let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+            guard fields.count == 2 else { continue }
+            // 檔名前面可能有表示二進位模式的 *
+            let name = fields[1].hasPrefix("*") ? fields[1].dropFirst() : fields[1]
+            if name == fileName, fields[0].count == 64, fields[0].allSatisfy(\.isHexDigit) {
+                return fields[0].lowercased()
+            }
+        }
+        return nil
+    }
+
+    private static let outdatedPatterns = [
+        "unable to extract", "nsig", "n challenge", "failed to extract any player response", "player response",
+        "signature extraction failed", "please report this issue", "confirm you are on the latest version"
+    ]
+
+    /// 確定不是 yt-dlp 的問題（影片本身、登入、網路），不需要更新。
+    private static let notOutdatedPatterns = [
+        "private video", "video unavailable", "has been removed", "not available", "sign in to confirm",
+        "members-only", "age-restricted", "age restricted", "confirm your age", "this live event will begin",
+        "premieres in", "getaddrinfo", "timed out", "unable to download", "unsupported url", "cloudflare",
+        "nodename nor servname", "network is unreachable", "offline"
+    ]
+}

@@ -83,6 +83,12 @@ final class PythonRuntime: @unchecked Sendable {
         ) {
             throw PythonError.failed("無法載入 mv_bridge：" + PythonRuntime.take(error))
         }
+
+        // 有下載的新版 yt-dlp 就優先載入（R136）
+        if let archive = YtDlpUpdater.archivePathForLaunch() {
+            var ok: Int32 = 0
+            free(mv_python_call("mv_bridge", "use_update_archive", archive, &ok))
+        }
     }
 
     private static func take(_ pointer: UnsafeMutablePointer<CChar>) -> String {

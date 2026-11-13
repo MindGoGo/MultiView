@@ -33,6 +33,7 @@ if [ ! -d Vendor/Python.xcframework ]; then
     echo "error: Python-Apple-support 的 SHA-256 不符（預期 $SUPPORT_SHA256）" >&2
     exit 1
   fi
+  printf 'tag=%s\nasset=%s\nsha256=%s\n' "$SUPPORT_TAG" "$ASSET" "$ACTUAL_SHA256" > Vendor/python-support.txt
   tar -xzf "Vendor/download/$ASSET" -C Vendor/support
   mv Vendor/support/Python.xcframework Vendor/Python.xcframework
   echo "── 內容 ──"
