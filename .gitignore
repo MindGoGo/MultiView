@@ -6,3 +6,9 @@ coverage/
 *.log
 .claude/
 vendor/
+
+# iOS：由 XcodeGen 產生的檔案、建置輸出
+ios/*.xcodeproj/
+ios/MultiView/Info.plist
+ios/build/
+ios/MultiViewCore/.build/
