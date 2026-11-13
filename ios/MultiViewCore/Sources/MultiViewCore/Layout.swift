@@ -87,16 +87,16 @@ public struct FracRect: Equatable, Sendable {
     }
 }
 
-public enum Axis: String, Sendable {
+public enum TrackAxis: String, Sendable {
     case cols, rows
 
-    var transposed: Axis { self == .cols ? .rows : .cols }
+    var transposed: TrackAxis { self == .cols ? .rows : .cols }
 }
 
 /// 一條分隔線：位於 axis 上第 index 條邊界（第 index 與 index+1 軌道之間）。
 public struct DividerDef: Equatable, Sendable {
     /// 這條分隔線調整的是哪一組比例（`Ratios.cols` 或 `Ratios.rows`）。
-    public var axis: Axis
+    public var axis: TrackAxis
     public var index: Int
     /// 分隔線的位置（0–1）。
     public var pos: Double
@@ -104,7 +104,7 @@ public struct DividerDef: Equatable, Sendable {
     public var from: Double
     public var to: Double
     /// 畫面上是直的（左右拖曳）還是橫的（上下拖曳）。通常和 axis 相同；`2` 版型上下排列時相反。
-    public var screenAxis: Axis
+    public var screenAxis: TrackAxis
 }
 
 public enum LayoutMath {
@@ -161,7 +161,7 @@ public enum LayoutMath {
 
     /// 一格在指定方向上的最小比例（R5 AC2）：max(160pt 或 90pt, 10%)。
     /// axis 是畫面上的方向；containerLength 是格子所在方向的可用長度。
-    public static func minFraction(_ axis: Axis, containerLength: Double) -> Double {
+    public static func minFraction(_ axis: TrackAxis, containerLength: Double) -> Double {
         let length = axis == .cols ? minCellWidth : minCellHeight
         return max(length / max(containerLength, 1), minCellFraction)
     }
