@@ -2,7 +2,7 @@
 
 - 功能代號：`ios-app`
 - Jira：無
-- 狀態：草稿（待使用者確認）
+- 狀態：已確認；步驟 1（R119）實作中
 - 最後更新：2026-11-13
 - 前置規格：桌面版的所有規格（R1–R118，最後一份是 [page-mode-overlays](page-mode-overlays.md)）。本規格的需求編號從 R119 開始（R119–R144）。
 - 使用者的裝置：iPad Pro（M1，128GB）為主要裝置，iPhone 14 Pro（256GB）。
@@ -72,12 +72,16 @@
   - GitHub Actions（`.github/workflows/ios.yml`）在 macOS 機器上執行：
     - 推送到任何分支、而且有改到 `ios/` 時：跑 MultiViewCore 的單元測試，並在 iPad 模擬器上編譯一次。
     - 推送 `ios-v*` 標籤時（例如 `ios-v0.1.0`）：產生沒有簽章的 `MultiView-iOS-<版本號>.ipa`，上傳到 GitHub Releases 的同名版本。
-  - repo 裡有 SideStore 用的「來源」檔 `ios/sidestore-source.json`，列出最新版本的版本號、IPA 下載網址、更新內容。發佈新版時由 Actions 自動更新。
+  - SideStore 用的「來源」檔 `sidestore-source.json` 列出最新版本的版本號、IPA 下載網址、更新內容。發佈新版時由 Actions 執行 `ios/scripts/make-source.py` 產生，上傳到固定的 GitHub Release `ios-source`（每次覆蓋），所以來源網址永遠是 `https://github.com/MindGoGo/MultiView/releases/download/ios-source/sidestore-source.json`。不放在 repo 的分支裡，避免 Actions 還要回頭推 commit。
+  - 更新內容寫在 `ios/release-notes.txt`，用在 GitHub Releases 的說明和 SideStore 顯示的更新內容。
+  - 標籤的版本號必須和 `ios/project.yml` 的版本號相同，不同時發佈失敗。
+  - iOS 版的 Release 不標成 GitHub 的「最新版本」，README 的桌面版下載不受影響。
+  - 來源檔和 IPA 要讓 SideStore 下載得到，repo 必須是公開的。
   - 在 SideStore 加入這個來源後，有新版時 SideStore 會提示更新；更新時保留 App 的資料（設定、清單、登入狀態）。
   - 安裝與更新步驟寫在 `doc/features/ios-app.md`，包括第一次在 Windows 電腦上準備 SideStore 的方式。
 - 驗收條件：
   - AC1：推送一個改到 `ios/` 的 commit → Actions 跑完單元測試與模擬器編譯，結果是成功。
-  - AC2：推送 `ios-v0.1.0` 標籤 → GitHub Releases 出現 `MultiView-iOS-0.1.0.ipa`，`ios/sidestore-source.json` 指向這個檔案。
+  - AC2：推送 `ios-v0.1.0` 標籤 → GitHub Releases 出現 `MultiView-iOS-0.1.0.ipa`，`ios-source` 版本裡的 `sidestore-source.json` 指向這個檔案。
   - AC3：在 iPad 的 SideStore 加入來源網址 → 看得到 MultiView，按安裝後可以開啟。
   - AC4：發佈 `ios-v0.1.1` 後 → SideStore 顯示有更新；更新後原本的格子、清單都還在。
   - AC5：IPA 沒有任何 App 延伸功能（解開 IPA，`PlugIns/` 資料夾不存在或是空的）。
@@ -439,8 +443,8 @@
   - `AdBlock/`：內容阻擋規則（R138）
   - `Panels/`：清單、訂閱、YouTube 小視窗、設定、匯入（R140–R144）
 - `ios/Resources/`：App 圖示（由桌面版的 `build/icon.png` 產生）、轉好的 EasyList 規則、內附的 yt-dlp、注入網頁的 JS（由 `electron/webPreload.ts` 整理出共用的部分）
-- `ios/scripts/`：下載 Python-Apple-support 與 yt-dlp、轉換 EasyList 規則的腳本
-- `ios/sidestore-source.json`：SideStore 來源（R119）
+- `ios/scripts/`：產生 App 圖示（`make-icon.py`）、下載 Python-Apple-support 與 yt-dlp、轉換 EasyList 規則的腳本
+- `ios/scripts/make-source.py`、`ios/release-notes.txt`：SideStore 來源與更新內容（R119）
 - `.github/workflows/ios.yml`：測試、編譯、發佈（R119）
 - `doc/features/ios-app.md`：安裝與使用說明
 - `tests/manual/ios-app.md`：手動驗收清單
@@ -471,7 +475,7 @@
 
 - [x] 裝置：iPad Pro M1（128GB）、iPhone 14 Pro（256GB）（2026-11-13）。兩台都能更新到最新的 iPadOS／iOS，最低支援版本維持 17。
 - [ ] Apple ID 用免費或付費（US$99/年）：目前以免費帳號加 SideStore 規劃；改付費帳號時，簽章可以用一年，第 8 節的限制大多不再適用。
-- [ ] repo 目前是私人，使用者會改成公開（2026-11-13），改了以後 macOS 的編譯時數不收費（第 8 節）。
+- [ ] repo 目前是私人，使用者會改成公開（2026-11-13），改了以後 macOS 的編譯時數不收費（第 8 節）。要編譯前先通知使用者；`.github/workflows/ios.yml` 等 repo 公開後才推送。
 - [x] 匯入桌面版的設定與清單：要做（2026-11-13），見 R144。
 - [ ] 音量超過 100%、亮度超過 100%：R120、R121 驗證後評估做法與成本。
 - [x] App 圖示：先沿用桌面版的 `build/icon.png`（2026-11-13）。
@@ -482,3 +486,4 @@
 |---|---|---|
 | 2026-11-13 | 初版草稿 | 依 2026-11-13 使用者的選擇（iPad 為主、SideStore、第一版四大功能、同一個 repo） |
 | 2026-11-13 | 加入裝置型號、R144 匯入桌面版資料、App 圖示沿用桌面版 | 使用者回覆未決事項 |
+| 2026-11-13 | 狀態改為已確認；R119 的 SideStore 來源檔改成發佈時產生、放在固定的 `ios-source` Release，補充更新內容檔、版本號檢查、不標成最新版本 | 使用者確認規格；實作步驟 1 時調整 |
