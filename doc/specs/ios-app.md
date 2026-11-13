@@ -72,6 +72,7 @@
   - GitHub Actions（`.github/workflows/ios.yml`）在 macOS 機器上執行：
     - 推送到任何分支、而且有改到 `ios/` 時：跑 MultiViewCore 的單元測試，並在 iPad 模擬器上編譯一次。
     - 推送 `ios-v*` 標籤時（例如 `ios-v0.1.0`）：產生沒有簽章的 `MultiView-iOS-<版本號>.ipa`，上傳到 GitHub Releases 的同名版本。
+    - 標籤由使用者建立（每次發佈都經過使用者）：在 GitHub 網頁的 Releases 建立新標籤並發佈，這時 Release 已經存在，Actions 只補上標題、說明和 IPA。
   - SideStore 用的「來源」檔 `sidestore-source.json` 列出最新版本的版本號、IPA 下載網址、更新內容。發佈新版時由 Actions 執行 `ios/scripts/make-source.py` 產生，上傳到固定的 GitHub Release `ios-source`（每次覆蓋），所以來源網址永遠是 `https://github.com/MindGoGo/MultiView/releases/download/ios-source/sidestore-source.json`。不放在 repo 的分支裡，避免 Actions 還要回頭推 commit。
   - 更新內容寫在 `ios/release-notes.txt`，用在 GitHub Releases 的說明和 SideStore 顯示的更新內容。
   - 標籤的版本號必須和 `ios/project.yml` 的版本號相同，不同時發佈失敗。
@@ -487,3 +488,4 @@
 | 2026-11-13 | 初版草稿 | 依 2026-11-13 使用者的選擇（iPad 為主、SideStore、第一版四大功能、同一個 repo） |
 | 2026-11-13 | 加入裝置型號、R144 匯入桌面版資料、App 圖示沿用桌面版 | 使用者回覆未決事項 |
 | 2026-11-13 | 狀態改為已確認；R119 的 SideStore 來源檔改成發佈時產生、放在固定的 `ios-source` Release，補充更新內容檔、版本號檢查、不標成最新版本 | 使用者確認規格；實作步驟 1 時調整 |
+| 2026-11-13 | R119：發佈用的標籤由使用者在 GitHub 網頁建立，Actions 遇到已經存在的 Release 時只補上內容 | 開發環境不能推送標籤；使用者選擇每次發佈都自己建立標籤 |

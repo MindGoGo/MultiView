@@ -59,7 +59,7 @@ SideStore 的安裝步驟會隨版本調整，請照官方說明做：<https://d
 ## 給開發者：發佈新版
 
 1. 改 `ios/project.yml` 的 `MARKETING_VERSION`，並把更新內容寫在 `ios/release-notes.txt`。
-2. 推送標籤 `ios-v<版本號>`（例如 `ios-v0.1.0`）。也可以在 GitHub 網頁的 Releases 按「Draft a new release」，建立這個名稱的新標籤、選好分支後發佈。
+2. 推送後，建立標籤 `ios-v<版本號>`（例如 `ios-v0.1.0`）。在 GitHub 網頁（手機也可以）：Releases →「Draft a new release」→「Choose a tag」輸入標籤名稱並選「Create new tag」→「Target」選要發佈的分支 → 取消勾選「Set as the latest release」→「Publish release」。標題和說明不用填，Actions 會補上。也可以用 `git push origin ios-v<版本號>` 推送標籤。
 3. GitHub Actions（`.github/workflows/ios.yml`）會跑測試、編譯沒有簽章的 IPA、放到 Releases，並更新 `ios-source` 這個固定版本裡的 SideStore 來源檔。
 
 在 Mac 上開發時：`brew install xcodegen`，然後 `cd ios && xcodegen generate` 產生 `MultiView.xcodeproj`（不放進 repo）。

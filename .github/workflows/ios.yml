@@ -97,9 +97,15 @@ jobs:
 
       - name: 發佈到 GitHub Releases
         run: |
-          # iOS 版不標成「最新版本」，README 的桌面版下載連結不受影響
-          gh release create "$TAG" "$IPA" --title "MultiView iOS $VERSION" \
-            --notes-file ios/release-notes.txt --latest=false --verify-tag
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # 標籤是在 GitHub 網頁的 Releases 建立的：Release 已經存在，補上標題、說明和 IPA
+            gh release edit "$TAG" --title "MultiView iOS $VERSION" --notes-file ios/release-notes.txt
+            gh release upload "$TAG" "$IPA" --clobber
+          else
+            # iOS 版不標成「最新版本」，README 的桌面版下載連結不受影響
+            gh release create "$TAG" "$IPA" --title "MultiView iOS $VERSION" \
+              --notes-file ios/release-notes.txt --latest=false --verify-tag
+          fi
 
       - name: 更新 SideStore 來源（固定的 ios-source 版本）
         run: |
