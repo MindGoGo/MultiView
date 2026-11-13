@@ -21,6 +21,10 @@ protocol CellPlayer: AnyObject {
     var supportsVolume: Bool { get }
     /// 手指直接操作播放器的畫面（整頁模式的網頁）；false 時由格子攔下點擊（R127）。
     var isInteractive: Bool { get }
+    /// 聲音是不是由網頁播放。iOS 不讓兩個網頁同時出聲，這類格子同一時間只有一格有聲音（R128）。
+    var usesWebAudio: Bool { get }
+    /// 播放方式的小標示（桌面版 R109），例如「yt-dlp」；不需要標示時為 nil。
+    var badge: String? { get }
 
     func play()
     func pause()

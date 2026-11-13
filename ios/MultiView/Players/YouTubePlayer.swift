@@ -15,6 +15,8 @@ final class YouTubePlayer: NSObject, CellPlayer, WKScriptMessageHandler {
     /// iOS 上網頁不能設定影片的音量，先只提供靜音開關；R121 驗證後再決定（規格 R128）。
     let supportsVolume = false
     let isInteractive = false
+    let usesWebAudio = true
+    var badge: String? { nil }
 
     private let webView: WKWebView
     private var failure: String?

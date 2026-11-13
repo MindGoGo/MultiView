@@ -143,6 +143,13 @@ final class SlotsTests: XCTestCase {
         XCTAssertFalse(AudioRules.unmutingSilencesOthers(muted, 1))
         XCTAssertEqual(AudioRules.toggleMute(muted, 1).prefix(2).map { $0?.muted }, [false, false])
 
+        // YouTube 用 yt-dlp 播放時是原生播放器：由 App 告知不是網頁聲音，就不互相靜音
+        XCTAssertFalse(AudioRules.unmutingSilencesOthers(slots, 1) { _ in false })
+        XCTAssertEqual(
+            AudioRules.toggleMute(slots, 1) { _ in false }.prefix(4).map { $0?.muted },
+            [false, false, false, false]
+        )
+
         // 空白格、不存在的格位
         XCTAssertEqual(AudioRules.toggleMute(slots, 6), slots)
         XCTAssertFalse(AudioRules.unmutingSilencesOthers(slots, 6))

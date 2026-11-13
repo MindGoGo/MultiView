@@ -15,6 +15,8 @@ final class AppModel {
     private(set) var slots: Slots
     /// 總亮度（R41、R130）。
     private(set) var masterBrightness: Int
+    /// YouTube 直播、一般影片的播放方式（R88、R135）。
+    private(set) var youtubeMethods: YouTubeMethods
 
     // MARK: 畫面狀態（不保存）
 
@@ -64,10 +66,22 @@ final class AppModel {
         layout = settings.layout
         ratios = settings.ratios
         masterBrightness = settings.brightness
+        youtubeMethods = AppModel.initialMethods(settings.youtubeMethods)
         // 還原的來源載入後維持暫停（R10 AC1）
         slots = SettingsBridge.restoreSlots(settings.slots)
 
         configureAudioSession()
+    }
+
+    /// iOS 版預設用 yt-dlp 播放 YouTube（R135：實測拿得到 720p，而且原生播放器才能多格同時出聲）。
+    /// 0.0.7 以前的版本沒有這個選項，設定檔裡存的是「內嵌播放器」，所以第一次改成預設值。
+    private static func initialMethods(_ saved: YouTubeMethods) -> YouTubeMethods {
+        let key = "youtubeMethodsDefaultApplied"
+        if UserDefaults.standard.bool(forKey: key) {
+            return saved
+        }
+        UserDefaults.standard.set(true, forKey: key)
+        return YouTubeMethods(live: .ytdlp, vod: .ytdlp)
     }
 
     private static func defaultDirectory() -> URL {
@@ -201,7 +215,11 @@ final class AppModel {
     private func makePlayer(_ source: CellSource) -> CellPlayer {
         switch source.parsed {
         case .youtube(let videoID):
-            return YouTubePlayer(videoID: videoID, source: source)
+            let player = YouTubeSourcePlayer(videoID: videoID, source: source, methods: youtubeMethods)
+            player.onFallback = { [weak self] in
+                self?.showToast("yt-dlp 無法播放，已改用內嵌播放器")
+            }
+            return player
         case .hls(let href), .mp4(let href):
             if let url = URL(string: href) {
                 return NativePlayer(url: url, source: source)
@@ -273,13 +291,40 @@ final class AppModel {
 
     /// 喇叭：只切換這一格，不影響其他格子（多格聲音，R128）。
     func toggleMute(_ index: Int) {
-        if AudioRules.unmutingSilencesOthers(slots, index) {
-            showToast("YouTube 和網頁的格子同一時間只能有一格有聲音")
+        if AudioRules.unmutingSilencesOthers(slots, index, usesWebAudio: usesWebAudio) {
+            showToast("內嵌播放器和網頁的格子同一時間只能有一格有聲音")
         }
         let wasPlaying = playingSourceIDs()
-        slots = AudioRules.toggleMute(slots, index)
+        slots = AudioRules.toggleMute(slots, index, usesWebAudio: usesWebAudio)
         syncAudio()
         resumeIfInterrupted(wasPlaying)
+        keepControlsVisible()
+        scheduleSave()
+    }
+
+    /// 這個來源現在是不是用網頁播放聲音。YouTube 用 yt-dlp 播放時是原生播放器，不算。
+    private func usesWebAudio(_ source: CellSource) -> Bool {
+        players[source.id]?.usesWebAudio ?? source.usesWebAudio
+    }
+
+    /// 播放方式的小標示（R109），例如「yt-dlp」。
+    func badge(of source: CellSource) -> String? {
+        players[source.id]?.badge
+    }
+
+    /// 改變 YouTube 的播放方式（R88）：YouTube 格子從目前的位置重新載入。
+    func setYouTubeMethods(_ methods: YouTubeMethods) {
+        guard methods != youtubeMethods else { return }
+        youtubeMethods = methods
+        for (index, source) in slots.enumerated() {
+            guard var source, source.parsed.kind == .youtube else { continue }
+            if players[source.id] != nil {
+                source.autoplay = statuses[source.id]?.showsPause ?? false
+                source.resume = ProgressRules.resumePosition(progress[source.id]) ?? source.resume
+                releasePlayer(source.id)
+            }
+            slots[index] = source
+        }
         keepControlsVisible()
         scheduleSave()
     }
@@ -290,7 +335,7 @@ final class AppModel {
 
     /// 切換聲音時，iOS 可能把另一個網頁播放的格子暫停（實測）。那一格已經靜音，過一下再讓它繼續播。
     private func resumeIfInterrupted(_ wasPlaying: Set<Int>) {
-        let candidates = slots.compactMap { $0 }.filter { $0.usesWebAudio && $0.muted && wasPlaying.contains($0.id) }.map(\.id)
+        let candidates = slots.compactMap { $0 }.filter { usesWebAudio($0) && $0.muted && wasPlaying.contains($0.id) }.map(\.id)
         guard !candidates.isEmpty else { return }
         Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(900))
@@ -475,6 +520,7 @@ final class AppModel {
         settings.layout = layout
         settings.ratios = ratios
         settings.brightness = masterBrightness
+        settings.youtubeMethods = youtubeMethods
         settings.slots = SettingsBridge.saveSlots(slots, positions: positions)
         baseSettings = settings
         try? FileStore.saveSettings(settings, to: settingsURL)

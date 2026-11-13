@@ -10,6 +10,8 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate {
     var onUpdate: ((PlayerUpdate) -> Void)?
     let supportsVolume = false
     let isInteractive = true
+    let usesWebAudio = true
+    var badge: String? { nil }
 
     private let webView: WKWebView
     private var muted: Bool

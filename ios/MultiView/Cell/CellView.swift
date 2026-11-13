@@ -55,6 +55,19 @@ struct CellView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(source.muted ? "取消靜音" : "靜音")
+                .overlay(alignment: .trailing) {
+                    // 播放方式的小標示（R109）
+                    if let badge = model.badge(of: source) {
+                        Text(badge)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.black.opacity(0.55), in: Capsule())
+                            .fixedSize()
+                            .alignmentGuide(.trailing) { $0[.leading] }
+                            .allowsHitTesting(false)
+                    }
+                }
                 .padding(.top, insets.top + (touchesTop ? Self.toolbarHeight : 0))
                 .padding(.leading, insets.leading)
             } else if source.isAudible {

@@ -9,6 +9,8 @@ final class NativePlayer: NSObject, CellPlayer {
     var onUpdate: ((PlayerUpdate) -> Void)?
     let supportsVolume = true
     let isInteractive = false
+    let usesWebAudio = false
+    var badge: String? { nil }
 
     private let player = AVPlayer()
     private let item: AVPlayerItem

@@ -72,6 +72,7 @@ public struct CellSource: Equatable, Identifiable, Sendable {
 
     /// 用網頁播放的來源（YouTube 內嵌播放器、網頁）。iOS 不讓兩個網頁同時出聲：
     /// 這類來源同一時間只有一格有聲音（R121 的實測結果、R128）。
+    /// 這是只看來源種類的判斷；YouTube 改用 yt-dlp 播放時是原生播放器，由 App 另外判斷。
     public var usesWebAudio: Bool { parsed.kind == .youtube || parsed.kind == .web }
 }
 
@@ -155,14 +156,17 @@ public enum AudioRules {
 
     /// 喇叭按鈕：只切換這一格（R7 AC3）。
     /// 例外：用網頁播放的來源取消靜音時，其他用網頁播放的來源會靜音（iOS 的限制，R128）。
-    public static func toggleMute(_ slots: Slots, _ index: Int) -> Slots {
+    /// usesWebAudio：這個來源現在是不是用網頁播放；不給時只看來源的種類。
+    public static func toggleMute(
+        _ slots: Slots, _ index: Int, usesWebAudio: (CellSource) -> Bool = { $0.usesWebAudio }
+    ) -> Slots {
         guard slots.indices.contains(index), let target = slots[index] else { return slots }
-        let unmuting = target.muted
+        let exclusive = target.muted && usesWebAudio(target)
         return map(slots) { source, position in
             var next = source
             if position == index {
                 next.muted.toggle()
-            } else if unmuting, target.usesWebAudio, source.usesWebAudio {
+            } else if exclusive, usesWebAudio(source) {
                 next.muted = true
             }
             return next
@@ -170,11 +174,13 @@ public enum AudioRules {
     }
 
     /// 按喇叭取消靜音時，會不會讓其他格子跟著靜音（用來顯示提示）。
-    public static func unmutingSilencesOthers(_ slots: Slots, _ index: Int) -> Bool {
-        guard slots.indices.contains(index), let target = slots[index], target.muted, target.usesWebAudio else { return false }
+    public static func unmutingSilencesOthers(
+        _ slots: Slots, _ index: Int, usesWebAudio: (CellSource) -> Bool = { $0.usesWebAudio }
+    ) -> Bool {
+        guard slots.indices.contains(index), let target = slots[index], target.muted, usesWebAudio(target) else { return false }
         return slots.enumerated().contains { position, source in
             guard let source, position != index else { return false }
-            return source.usesWebAudio && !source.muted
+            return usesWebAudio(source) && !source.muted
         }
     }
 
