@@ -43,6 +43,26 @@ jobs:
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO -quiet build
 
+      - name: 檢查 App 裡的 Python
+        run: |
+          cd ios
+          echo "── Python.xcframework ──"
+          find Vendor/Python.xcframework -maxdepth 3 -not -path '*/Headers/*' | sort | head -80
+          echo "── 標準函式庫在哪裡 ──"
+          find Vendor/Python.xcframework -name '__init__.py' -path '*/encodings/*' | head
+          find Vendor/Python.xcframework -name 'os.py' | head
+          find Vendor/Python.xcframework -name '*.so' | head -5
+          find Vendor/Python.xcframework -name '*.so' | wc -l
+          ls Vendor/support 2>/dev/null || true
+          cat Vendor/support/VERSIONS 2>/dev/null || true
+          APP=build/Build/Products/Debug-iphonesimulator/MultiView.app
+          echo "── App ──"
+          ls "$APP" | head -40
+          ls "$APP/python/lib" || true
+          ls "$APP/python/lib"/* | head -30 || true
+          ls "$APP/Frameworks" | head -20 || true
+          du -sh "$APP" "$APP/python" "$APP/site-packages" "$APP/Frameworks" || true
+
   release:
     name: 產生 IPA 並發佈
     if: startsWith(github.ref, 'refs/tags/ios-v')
