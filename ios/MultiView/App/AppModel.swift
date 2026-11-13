@@ -3,6 +3,7 @@ import MediaPlayer
 import MultiViewCore
 import Observation
 import UIKit
+import WebKit
 
 /// App 的狀態：版型、格子、聲音、播放器，以及設定檔與清單檔的保存（R123–R134）。
 @MainActor
@@ -18,6 +19,10 @@ final class AppModel {
     private(set) var masterBrightness: Int
     /// YouTube 直播、一般影片的播放方式（R88、R135）。
     private(set) var youtubeMethods: YouTubeMethods
+    /// 最愛、歷史、訂閱頻道（R141、R142）；存在清單檔，和設定檔分開。
+    private(set) var lists: Lists
+    /// 清單面板上次的那一邊和分頁（R58）。
+    private(set) var listTab: ListTab
 
     // MARK: 畫面狀態（不保存）
 
@@ -42,6 +47,11 @@ final class AppModel {
     /// 已經下載、重新開啟 App 後生效的版本。
     private(set) var ytdlpPendingVersion: String?
     private(set) var ytdlpUpdating = false
+    /// 清單面板、設定畫面是不是開著。
+    var listPanelOpen = false
+    var settingsOpen = false
+    /// 從清單點了一筆、但沒有空格：等使用者選擇要取代哪一格（R64）。
+    var pendingReplaceURL: String?
 
     // MARK: 內部
 
@@ -49,7 +59,6 @@ final class AppModel {
     @ObservationIgnored private var titles: [Int: String] = [:]
     /// 設定檔裡這個版本還沒有畫面可以改的欄位，保存時原樣寫回。
     @ObservationIgnored private var baseSettings: Settings
-    @ObservationIgnored private var lists: Lists
     private let settingsURL: URL
     private let listsURL: URL
     /// 開啟 App 之後播放過的來源。還沒播放過的來源保留原本的觀看進度（R55）。
@@ -88,6 +97,7 @@ final class AppModel {
         ratios = settings.ratios
         masterBrightness = settings.brightness
         youtubeMethods = AppModel.initialMethods(settings.youtubeMethods)
+        listTab = settings.listTab
         // 還原的來源載入後維持暫停（R10 AC1）
         slots = SettingsBridge.restoreSlots(settings.slots)
 
@@ -391,7 +401,127 @@ final class AppModel {
         slots[index] = source
         let now = Date().timeIntervalSince1970 * 1000
         lists = ListRules.recordHistory(lists, url: source.url, title: titles[id], now: now)
+        saveLists()
+    }
+
+    // MARK: 清單（R141）
+
+    private func saveLists() {
         try? FileStore.saveLists(lists, to: listsURL)
+    }
+
+    func setListTab(_ tab: ListTab) {
+        guard listTab != tab else { return }
+        listTab = tab
+        scheduleSave()
+    }
+
+    func isFavorite(_ source: CellSource) -> Bool {
+        ListRules.isFavorite(lists, url: source.url)
+    }
+
+    /// 操作列的星號：加入或移出最愛（R22）。名稱用影片的標題。
+    func toggleFavorite(_ index: Int) {
+        guard slots.indices.contains(index), let source = slots[index] else { return }
+        if ListRules.isFavorite(lists, url: source.url) {
+            lists = ListRules.removeFavorite(lists, url: source.url)
+            showToast("已從最愛移除")
+        } else {
+            let name = ListRules.defaultName(url: source.url, title: titles[source.id])
+            switch ListRules.addFavorite(lists, url: source.url, name: name, now: Date().timeIntervalSince1970 * 1000) {
+            case .success(let next):
+                lists = next
+                showToast("已加入最愛")
+            case .failure(let error):
+                showToast(error.message)
+            }
+        }
+        saveLists()
+        keepControlsVisible()
+    }
+
+    /// 點清單的一筆：放進第一個顯示中的空格；沒有空格時讓使用者選擇要取代哪一格（R21、R64）。
+    func openFromList(_ url: String) {
+        if let index = SlotRules.firstEmptyVisible(slots, layout: displayedLayout, solo: solo) {
+            if let message = setSource(url, at: index) {
+                showToast(message)
+            } else {
+                listPanelOpen = false
+            }
+        } else {
+            pendingReplaceURL = url
+        }
+    }
+
+    /// 目前顯示中、可以被取代的格位。
+    var visibleSlotIndices: [Int] {
+        slots.indices.filter { isVisible($0) }
+    }
+
+    func replaceSlot(_ index: Int, with url: String) {
+        if let message = setSource(url, at: index) {
+            showToast(message)
+        } else {
+            listPanelOpen = false
+        }
+    }
+
+    /// 編輯清單的一筆；失敗時回傳要顯示的訊息（R21）。
+    func editListItem(kind: ListKind, index: Int, url: String, name: String) -> String? {
+        switch ListRules.editItem(lists, kind: kind, index: index, url: url, name: name) {
+        case .success(let next):
+            lists = next
+            saveLists()
+            return nil
+        case .failure(let error):
+            return error.message
+        }
+    }
+
+    func deleteListItem(kind: ListKind, index: Int) {
+        lists = ListRules.deleteItem(lists, kind: kind, index: index)
+        saveLists()
+    }
+
+    func clearHistory(group: ListGroup) {
+        lists = ListRules.clearHistory(lists, group: group)
+        saveLists()
+    }
+
+    // MARK: 匯入桌面版的設定與清單（R144）
+
+    /// 用匯入的設定取代目前的版型、格子、聲音、亮度、播放方式。匯入後所有格子維持暫停。
+    func importSettings(_ settings: Settings) {
+        exitSolo()
+        for source in slots.compactMap({ $0 }) {
+            releasePlayer(source.id)
+        }
+        activeCell = nil
+        layout = settings.layout
+        ratios = settings.ratios
+        masterBrightness = settings.brightness
+        youtubeMethods = settings.youtubeMethods
+        listTab = settings.listTab
+        slots = SettingsBridge.restoreSlots(settings.slots)
+        var base = settings
+        base.slots = SettingsBridge.saveSlots(slots)
+        baseSettings = base
+        saveNow()
+    }
+
+    /// 把匯入的清單合併進目前的清單，回傳新增了幾筆。
+    func importLists(_ imported: Lists) -> ListsImport.Summary {
+        let result = ListsImport.merge(current: lists, imported: imported)
+        lists = result.lists
+        saveLists()
+        return result.summary
+    }
+
+    /// 清除網站資料（Cookie、登入狀態，R139）。
+    func clearWebsiteData() async {
+        let store = WKWebsiteDataStore.default()
+        await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+        showToast("已清除網站資料")
     }
 
     // MARK: 聲音（R128）
@@ -873,6 +1003,7 @@ final class AppModel {
         settings.ratios = ratios
         settings.brightness = masterBrightness
         settings.youtubeMethods = youtubeMethods
+        settings.listTab = listTab
         settings.slots = SettingsBridge.saveSlots(slots, positions: positions)
         baseSettings = settings
         try? FileStore.saveSettings(settings, to: settingsURL)

@@ -19,6 +19,17 @@ struct RootView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
+            // 清單面板：大螢幕在右側（寬 360pt，蓋在影片上方），小螢幕占滿寬度（R141）
+            if model.listPanelOpen {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    ListPanel()
+                        .frame(maxWidth: model.isLarge ? 360 : .infinity)
+                }
+                .padding(.top, model.toolbarVisible ? 52 : 0)
+                .transition(.move(edge: .trailing))
+            }
+
             if let toast = model.toast {
                 Text(toast)
                     .font(.callout)
@@ -32,6 +43,28 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.2), value: model.toolbarVisible)
         .animation(.easeOut(duration: 0.2), value: model.toast)
+        .animation(.easeOut(duration: 0.2), value: model.listPanelOpen)
+        .sheet(isPresented: Binding(get: { model.settingsOpen }, set: { model.settingsOpen = $0 })) {
+            SettingsView()
+        }
+        .confirmationDialog(
+            "沒有空格，要取代哪一格？",
+            isPresented: Binding(get: { model.pendingReplaceURL != nil }, set: { if !$0 { model.pendingReplaceURL = nil } }),
+            titleVisibility: .visible
+        ) {
+            // 沒有空格時選擇要取代的格子（R64）
+            ForEach(model.visibleSlotIndices, id: \.self) { index in
+                Button("第 \(index + 1) 格") {
+                    if let url = model.pendingReplaceURL {
+                        model.replaceSlot(index, with: url)
+                    }
+                    model.pendingReplaceURL = nil
+                }
+            }
+            Button("取消", role: .cancel) {
+                model.pendingReplaceURL = nil
+            }
+        }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)

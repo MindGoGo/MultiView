@@ -33,6 +33,7 @@ struct ControlsBar: View {
                     if model.canSwap { moveHandle }
                     soloButton
                     if model.supportsPictureInPicture(source) { pictureInPictureButton }
+                    favoriteButton
                     editButton
                     removeButton
                 }
@@ -167,6 +168,14 @@ struct ControlsBar: View {
         }
     }
 
+    /// 加入或移出最愛（R22）。
+    private var favoriteButton: some View {
+        let favorite = model.isFavorite(source)
+        return BarButton(icon: favorite ? "star.fill" : "star", label: favorite ? "從最愛移除" : "加入最愛", highlighted: favorite) {
+            model.toggleFavorite(index)
+        }
+    }
+
     private var editButton: some View {
         BarButton(icon: "link", label: "更換網址") {
             beginEdit()
@@ -187,6 +196,9 @@ struct ControlsBar: View {
             Button("亮度", systemImage: "sun.max.fill") { showsBrightness = true }
             if model.supportsPictureInPicture(source) {
                 Button("子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) }
+            }
+            Button(model.isFavorite(source) ? "從最愛移除" : "加入最愛", systemImage: model.isFavorite(source) ? "star.fill" : "star") {
+                model.toggleFavorite(index)
             }
             Button("更換網址", systemImage: "link") { beginEdit() }
             Button("移除", systemImage: "xmark", role: .destructive) { model.removeSource(at: index) }
