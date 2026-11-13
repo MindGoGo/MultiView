@@ -13,24 +13,40 @@ if [ ! -d "$XCFRAMEWORK" ] || [ ! -d "$PACKAGES" ]; then
   exit 1
 fi
 
+# Python-Apple-support（3.13-b18）的結構：
+#   Python.xcframework/lib/python3.13/                    標準函式庫裡用 Python 寫的部分（各平台共用）
+#   Python.xcframework/ios-arm64/lib-arm64/python3.13/    實機用的原生模組（lib-dynload/*.so）與平台設定
+#   Python.xcframework/ios-arm64_x86_64-simulator/lib-arm64、lib-x86_64   模擬器用的
 if [ "${EFFECTIVE_PLATFORM_NAME:-}" = "-iphonesimulator" ]; then
+  # 模擬器只用來確認編譯得過，固定用 arm64 的
   SLICE="$(ls -d "$XCFRAMEWORK"/ios-*simulator* | head -1)"
 else
   SLICE="$XCFRAMEWORK/ios-arm64"
 fi
-if [ ! -d "$SLICE/lib" ]; then
-  echo "error: $SLICE 裡沒有 lib 資料夾（Python-Apple-support 的結構和預期不同）" >&2
+COMMON_LIB="$XCFRAMEWORK/lib"
+NATIVE_LIB="$SLICE/lib-arm64"
+if [ ! -f "$(ls -d "$COMMON_LIB"/python3.* | head -1)/encodings/__init__.py" ] || [ ! -d "$NATIVE_LIB" ]; then
+  echo "error: Python-Apple-support 的結構和預期不同（找不到 $COMMON_LIB/python3.*/encodings 或 $NATIVE_LIB）" >&2
   ls "$XCFRAMEWORK" "$SLICE" >&2 || true
   exit 1
 fi
 
-# 標準函式庫（去掉用不到的部分，減少 App 的大小）
+# 標準函式庫（去掉用不到的部分，減少 App 的大小），再疊上原生模組
+rm -rf "$APP/python"
 mkdir -p "$APP/python/lib"
-rsync -a --delete \
+rsync -a \
   --exclude '__pycache__' --exclude 'test' --exclude 'tests' --exclude 'idlelib' --exclude 'tkinter' \
   --exclude 'turtledemo' --exclude 'ensurepip' --exclude 'lib2to3' --exclude 'pydoc_data' \
   --exclude 'config-*' --exclude '*.a' --exclude 'pkgconfig' \
-  "$SLICE/lib/" "$APP/python/lib/"
+  "$COMMON_LIB/" "$APP/python/lib/"
+rsync -a --exclude '__pycache__' --exclude 'config-*' --exclude '*.a' --exclude 'pkgconfig' \
+  "$NATIVE_LIB/" "$APP/python/lib/"
+
+STDLIB="$(ls -d "$APP"/python/lib/python3.* | head -1)"
+if [ ! -f "$STDLIB/encodings/__init__.py" ] || [ ! -d "$STDLIB/lib-dynload" ]; then
+  echo "error: 標準函式庫沒有放進 App（$STDLIB）" >&2
+  exit 1
+fi
 
 # yt-dlp 等套件
 rsync -a --delete --exclude '__pycache__' "$PACKAGES/" "$APP/site-packages/"
