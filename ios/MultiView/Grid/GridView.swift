@@ -33,7 +33,7 @@ struct GridView: View {
 
                 ForEach(cells(layout: layout, ratios: ratios, stacked: stacked)) { cell in
                     let frame = Self.frame(of: cell.rect, in: size)
-                    cellView(cell, insets: Self.insets(of: cell.rect, safeArea: safeArea))
+                    cellView(cell, insets: Self.insets(of: cell.rect, safeArea: safeArea), touchesTop: cell.rect.y <= Self.edgeTolerance)
                         .frame(width: frame.width, height: frame.height)
                         .position(x: frame.midX, y: frame.midY)
                 }
@@ -63,9 +63,9 @@ struct GridView: View {
     }
 
     @ViewBuilder
-    private func cellView(_ cell: Cell, insets: EdgeInsets) -> some View {
+    private func cellView(_ cell: Cell, insets: EdgeInsets, touchesTop: Bool) -> some View {
         if let source = cell.source {
-            CellView(index: cell.index, source: source, insets: insets)
+            CellView(index: cell.index, source: source, insets: insets, touchesTop: touchesTop)
         } else {
             EmptyCellView(index: cell.index, insets: insets)
         }

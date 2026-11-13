@@ -117,6 +117,37 @@ final class SlotsTests: XCTestCase {
         XCTAssertEqual(AudioRules.toggleMute(next, 1).prefix(2).map { $0?.muted }, [false, true])
     }
 
+    func testWebAudioIsExclusive() {
+        // iOS 不讓兩個網頁同時出聲：YouTube 內嵌、網頁來源同一時間只有一格有聲音（R128）
+        let yt1 = CellSource(url: "https://youtu.be/aaaaaaaaaaa", parsed: .youtube(videoID: "aaaaaaaaaaa"))
+        let yt2 = CellSource(url: "https://youtu.be/bbbbbbbbbbb", parsed: .youtube(videoID: "bbbbbbbbbbb"), muted: true)
+        let web = CellSource(url: "https://example.com/", parsed: .web(url: "https://example.com/"))
+        let native = source("n")
+        let slots = self.slots(yt1, yt2, web, native)
+
+        XCTAssertTrue(yt1.usesWebAudio)
+        XCTAssertTrue(web.usesWebAudio)
+        XCTAssertFalse(native.usesWebAudio)
+
+        // 第 2 格（YouTube）取消靜音 → 其他網頁播放的格子靜音，原生播放器不受影響
+        XCTAssertTrue(AudioRules.unmutingSilencesOthers(slots, 1))
+        let next = AudioRules.toggleMute(slots, 1)
+        XCTAssertEqual(next.prefix(4).map { $0?.muted }, [true, false, true, false])
+
+        // 靜音不影響其他格子
+        XCTAssertFalse(AudioRules.unmutingSilencesOthers(slots, 0))
+        XCTAssertEqual(AudioRules.toggleMute(slots, 0).prefix(4).map { $0?.muted }, [true, true, false, false])
+
+        // 原生播放器取消靜音不影響網頁播放的格子
+        let muted = self.slots(yt1, source("m", muted: true))
+        XCTAssertFalse(AudioRules.unmutingSilencesOthers(muted, 1))
+        XCTAssertEqual(AudioRules.toggleMute(muted, 1).prefix(2).map { $0?.muted }, [false, false])
+
+        // 空白格、不存在的格位
+        XCTAssertEqual(AudioRules.toggleMute(slots, 6), slots)
+        XCTAssertFalse(AudioRules.unmutingSilencesOthers(slots, 6))
+    }
+
     func testSetVolume() {
         let slots = self.slots(source("a"), source("b"))
         let next = AudioRules.setVolume(slots, 1, 40)

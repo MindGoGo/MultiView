@@ -258,17 +258,44 @@ final class AppModel {
     /// 點一下有影片的格子：只有這一格有聲音，並顯示操作列與工具列（R127、R128）。
     func tapCell(_ index: Int) {
         guard slots.indices.contains(index), slots[index] != nil else { return }
+        let wasPlaying = playingSourceIDs()
         slots = AudioRules.focus(slots, index)
         syncAudio()
+        resumeIfInterrupted(wasPlaying)
         showControls(for: index)
         scheduleSave()
     }
 
+    /// 喇叭：只切換這一格，不影響其他格子（多格聲音，R128）。
     func toggleMute(_ index: Int) {
+        if AudioRules.unmutingSilencesOthers(slots, index) {
+            showToast("YouTube 和網頁的格子同一時間只能有一格有聲音")
+        }
+        let wasPlaying = playingSourceIDs()
         slots = AudioRules.toggleMute(slots, index)
         syncAudio()
+        resumeIfInterrupted(wasPlaying)
         keepControlsVisible()
         scheduleSave()
+    }
+
+    private func playingSourceIDs() -> Set<Int> {
+        Set(statuses.filter { $0.value == .playing }.keys)
+    }
+
+    /// 切換聲音時，iOS 可能把另一個網頁播放的格子暫停（實測）。那一格已經靜音，過一下再讓它繼續播。
+    private func resumeIfInterrupted(_ wasPlaying: Set<Int>) {
+        let candidates = slots.compactMap { $0 }.filter { $0.usesWebAudio && $0.muted && wasPlaying.contains($0.id) }.map(\.id)
+        guard !candidates.isEmpty else { return }
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(900))
+            guard let self else { return }
+            for id in candidates where self.statuses[id] == .paused {
+                // 這段時間內被使用者靜音以外的操作改動過的就不管
+                guard let source = self.slots.compactMap({ $0 }).first(where: { $0.id == id }), source.muted else { continue }
+                self.players[id]?.play()
+            }
+        }
     }
 
     func setVolume(_ index: Int, _ volume: Double) {

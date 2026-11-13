@@ -69,6 +69,10 @@ public struct CellSource: Equatable, Identifiable, Sendable {
 
     /// 取消靜音而且音量大於 0。
     public var isAudible: Bool { !muted && volume > 0 }
+
+    /// 用網頁播放的來源（YouTube 內嵌播放器、網頁）。iOS 不讓兩個網頁同時出聲：
+    /// 這類來源同一時間只有一格有聲音（R121 的實測結果、R128）。
+    public var usesWebAudio: Bool { parsed.kind == .youtube || parsed.kind == .web }
 }
 
 /// 來源的 id：每次呼叫都給一個新的數字。
@@ -150,12 +154,27 @@ public enum AudioRules {
     }
 
     /// 喇叭按鈕：只切換這一格（R7 AC3）。
+    /// 例外：用網頁播放的來源取消靜音時，其他用網頁播放的來源會靜音（iOS 的限制，R128）。
     public static func toggleMute(_ slots: Slots, _ index: Int) -> Slots {
-        map(slots) { source, position in
-            guard position == index else { return source }
+        guard slots.indices.contains(index), let target = slots[index] else { return slots }
+        let unmuting = target.muted
+        return map(slots) { source, position in
             var next = source
-            next.muted.toggle()
+            if position == index {
+                next.muted.toggle()
+            } else if unmuting, target.usesWebAudio, source.usesWebAudio {
+                next.muted = true
+            }
             return next
+        }
+    }
+
+    /// 按喇叭取消靜音時，會不會讓其他格子跟著靜音（用來顯示提示）。
+    public static func unmutingSilencesOthers(_ slots: Slots, _ index: Int) -> Bool {
+        guard slots.indices.contains(index), let target = slots[index], target.muted, target.usesWebAudio else { return false }
+        return slots.enumerated().contains { position, source in
+            guard let source, position != index else { return false }
+            return source.usesWebAudio && !source.muted
         }
     }
 

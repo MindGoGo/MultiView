@@ -8,6 +8,11 @@ struct CellView: View {
     let source: CellSource
     /// 這一格貼著畫面邊緣時要避開的範圍（瀏海、圓角、Home 指示條）。
     var insets = EdgeInsets()
+    /// 這一格在畫面最上面一列：喇叭按鈕要往下移，避開工具列。
+    var touchesTop = false
+
+    /// 工具列的高度（按鈕 44pt 加上下留白）。
+    private static let toolbarHeight: CGFloat = 56
 
     var body: some View {
         let player = model.player(for: source)
@@ -34,8 +39,26 @@ struct CellView: View {
             statusOverlay(status: status, interactive: player.isInteractive)
         }
         .overlay(alignment: .topLeading) {
-            // 有聲音的格子一直顯示小喇叭（R7 AC5）
-            if source.isAudible {
+            if model.toolbarVisible {
+                // 工具列顯示時，每一格左上角都有喇叭按鈕：只切換這一格的聲音，
+                // 不像點格子那樣把其他格子靜音，用來讓多格同時出聲（R128）
+                Button {
+                    model.toggleMute(index)
+                } label: {
+                    Image(systemName: source.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.callout)
+                        .foregroundStyle(source.muted ? Color.primary : Color.accentColor)
+                        .frame(width: 40, height: 40)
+                        .background(.black.opacity(0.55), in: Circle())
+                        .padding(4)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(source.muted ? "取消靜音" : "靜音")
+                .padding(.top, insets.top + (touchesTop ? Self.toolbarHeight : 0))
+                .padding(.leading, insets.leading)
+            } else if source.isAudible {
+                // 有聲音的格子一直顯示小喇叭（R7 AC5）
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.caption)
                     .padding(6)
