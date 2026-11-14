@@ -19,12 +19,18 @@ struct RootView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            // 清單面板：大螢幕在右側（寬 360pt，蓋在影片上方），小螢幕占滿寬度（R141）
-            if model.listPanelOpen {
+            // 清單面板、YouTube 小視窗：大螢幕在右側（寬 360pt，蓋在影片上方），小螢幕占滿寬度（R140、R141）
+            if model.listPanelOpen || model.companionOpen {
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
-                    ListPanel()
-                        .frame(maxWidth: model.isLarge ? 360 : .infinity)
+                    Group {
+                        if model.companionOpen {
+                            CompanionPanel()
+                        } else {
+                            ListPanel()
+                        }
+                    }
+                    .frame(maxWidth: model.isLarge ? 360 : .infinity)
                 }
                 .padding(.top, model.toolbarVisible ? 52 : 0)
                 .transition(.move(edge: .trailing))
@@ -44,6 +50,7 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.2), value: model.toolbarVisible)
         .animation(.easeOut(duration: 0.2), value: model.toast)
         .animation(.easeOut(duration: 0.2), value: model.listPanelOpen)
+        .animation(.easeOut(duration: 0.2), value: model.companionOpen)
         .sheet(isPresented: Binding(get: { model.settingsOpen }, set: { model.settingsOpen = $0 })) {
             SettingsView()
         }
@@ -67,6 +74,8 @@ struct RootView: View {
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
+        // 在畫面邊緣拖曳（例如拖下方的格子、進度條）時，第一次滑動不會直接回到主畫面或拉出控制中心
+        .defersSystemGestures(on: .all)
         .preferredColorScheme(.dark)
         .onChange(of: scenePhase) { _, phase in
             switch phase {

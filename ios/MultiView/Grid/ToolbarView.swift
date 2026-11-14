@@ -27,7 +27,7 @@ struct ToolbarView: View {
                 .padding(.trailing, 8)
                 .allowsHitTesting(false)
         }
-        .onChange(of: showsBrightness || model.listPanelOpen || model.settingsOpen) { _, open in
+        .onChange(of: showsBrightness || model.listPanelOpen || model.companionOpen || model.settingsOpen) { _, open in
             // 滑桿、清單、設定開著時，工具列不自動隱藏（R41 AC4、R21）
             model.holdControls(open)
         }
@@ -89,6 +89,9 @@ struct ToolbarView: View {
                 .frame(width: 44, height: 44)
                 .accessibilityLabel("AirPlay")
 
+            BarButton(icon: "play.rectangle.on.rectangle.fill", label: "YouTube 小視窗", highlighted: model.companionOpen) {
+                model.toggleCompanion()
+            }
             BarButton(icon: "list.bullet", label: "清單", highlighted: model.listPanelOpen) {
                 model.listPanelOpen.toggle()
                 model.keepControlsVisible()

@@ -35,7 +35,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: local.multiview.ios
         PRODUCT_NAME: MultiView
         # 發佈新版時改這裡，並推送 ios-v<版本號> 標籤（R143）
-        MARKETING_VERSION: 0.0.11
+        MARKETING_VERSION: 0.0.12
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: MultiView/MultiView-Bridging-Header.h

@@ -121,6 +121,29 @@ struct CellView: View {
                 .onTapGesture {
                     model.tapCell(index)
                 }
+                // 長按影片後拖到另一格放開：兩格互換（R125）。和操作列的「移動」按鈕相同，
+                // 但不用從畫面下緣開始拖
+                .gesture(
+                    LongPressGesture(minimumDuration: 0.45)
+                        .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(GridView.coordinateSpace)))
+                        .onChanged { value in
+                            guard model.canSwap, case .second(true, let drag) = value else { return }
+                            if model.swapFrom == nil {
+                                model.beginSwap(from: index)
+                            }
+                            if let drag {
+                                model.updateSwap(location: drag.location)
+                            }
+                        }
+                        .onEnded { value in
+                            if case .second(true, let drag?) = value, model.swapFrom != nil {
+                                model.updateSwap(location: drag.location)
+                                model.endSwap()
+                            } else {
+                                model.cancelSwap()
+                            }
+                        }
+                )
                 .simultaneousGesture(
                     MagnifyGesture()
                         .onEnded { value in

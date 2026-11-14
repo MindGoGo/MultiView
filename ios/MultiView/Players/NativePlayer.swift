@@ -17,6 +17,7 @@ final class NativePlayer: NSObject, CellPlayer {
     private let layerView: PlayerLayerView
     private var pictureInPicture: AVPictureInPictureController?
     private var automaticPictureInPicture = false
+    private var inBackground = false
     private let item: AVPlayerItem
     private var timeObserver: Any?
     private var observations: [NSKeyValueObservation] = []
@@ -104,18 +105,44 @@ final class NativePlayer: NSObject, CellPlayer {
     }
 
     func didEnterBackground(keepAudio: Bool) {
+        inBackground = true
         // 子母畫面會自己繼續播
         if pictureInPicture?.isPictureInPictureActive == true { return }
-        if keepAudio {
-            if automaticPictureInPicture, pictureInPicture != nil { return }
-            // 影片在背景會被系統暫停；把畫面從播放器拿掉，聲音才會繼續
-            layerView.playerLayer.player = nil
-        } else {
+        guard keepAudio else {
             player.pause()
+            return
+        }
+        guard automaticPictureInPicture, pictureInPicture != nil else {
+            continueAudioOnly()
+            return
+        }
+        // 回到主畫面時系統會自動進入子母畫面；鎖定螢幕時不會，影片會被暫停。
+        // 等一下還沒進入子母畫面的話，改成只播聲音。
+        let application = UIApplication.shared
+        var task = UIBackgroundTaskIdentifier.invalid
+        task = application.beginBackgroundTask {
+            application.endBackgroundTask(task)
+            task = .invalid
+        }
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(800))
+            if let self, self.inBackground, self.pictureInPicture?.isPictureInPictureActive != true {
+                self.continueAudioOnly()
+                self.player.play()
+            }
+            if task != .invalid {
+                application.endBackgroundTask(task)
+            }
         }
     }
 
+    /// 影片在背景會被系統暫停；把畫面從播放器拿掉，聲音才會繼續。
+    private func continueAudioOnly() {
+        layerView.playerLayer.player = nil
+    }
+
     func willEnterForeground() {
+        inBackground = false
         if layerView.playerLayer.player == nil {
             layerView.playerLayer.player = player
         }

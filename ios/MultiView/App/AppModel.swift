@@ -47,8 +47,16 @@ final class AppModel {
     /// 已經下載、重新開啟 App 後生效的版本。
     private(set) var ytdlpPendingVersion: String?
     private(set) var ytdlpUpdating = false
-    /// 清單面板、設定畫面是不是開著。
-    var listPanelOpen = false
+    /// 清單面板、設定畫面是不是開著。清單面板和 YouTube 小視窗用同一個位置，一次只開一個（R140）。
+    var listPanelOpen = false {
+        didSet {
+            if listPanelOpen { companionOpen = false }
+        }
+    }
+    /// YouTube 小視窗（R140）：是不是開著、目前的分頁、連結的格子（最後點過的 YouTube 格子）。
+    private(set) var companionOpen = false
+    var companionTab: CompanionTab = .search
+    private(set) var companionCell: Int?
     var settingsOpen = false
     /// 從清單點了一筆、但沒有空格：等使用者選擇要取代哪一格（R64）。
     var pendingReplaceURL: String?
@@ -275,6 +283,11 @@ final class AppModel {
         if activeCell == from {
             activeCell = over
         }
+        if companionCell == from {
+            companionCell = over
+        } else if companionCell == over {
+            companionCell = from
+        }
         scheduleSave()
     }
 
@@ -404,6 +417,69 @@ final class AppModel {
         saveLists()
     }
 
+    // MARK: YouTube 小視窗（R140）
+
+    func toggleCompanion() {
+        if companionOpen {
+            closeCompanion()
+        } else {
+            listPanelOpen = false
+            if companionSource == nil {
+                // 還沒點過 YouTube 的格子：先連結第一個顯示中的 YouTube 格子
+                companionCell = slots.indices.first { isVisible($0) && slots[$0]?.parsed.kind == .youtube }
+            }
+            companionOpen = true
+        }
+        keepControlsVisible()
+    }
+
+    func closeCompanion() {
+        companionOpen = false
+    }
+
+    /// 連結的格子裡的 YouTube 來源；格子被移除或換成別種來源時為 nil。
+    private var companionSource: CellSource? {
+        guard let cell = companionCell, slots.indices.contains(cell), let source = slots[cell],
+              source.parsed.kind == .youtube
+        else { return nil }
+        return source
+    }
+
+    var companionVideoID: String? {
+        guard case .youtube(let videoID)? = companionSource?.parsed else { return nil }
+        return videoID
+    }
+
+    var companionTitle: String? {
+        companionSource.flatMap { titles[$0.id] }
+    }
+
+    /// 在小視窗裡點了影片連結（R79、R80、R82）。
+    /// replaceLinkedCell：推薦、留言分頁是換掉連結的格子；搜尋分頁是放進空格（沒有空格時詢問）。
+    func companionOpenVideo(_ href: String, replaceLinkedCell: Bool) {
+        guard let action = CompanionRules.linkAction(href: href, currentVideoID: replaceLinkedCell ? companionVideoID : nil) else { return }
+        switch action {
+        case .seek(let seconds):
+            if let source = companionSource {
+                players[source.id]?.seek(to: seconds)
+            }
+        case .play(let url):
+            if replaceLinkedCell, let cell = companionCell, companionSource != nil {
+                if let message = setSource(url, at: cell) {
+                    showToast(message)
+                }
+            } else if let index = SlotRules.firstEmptyVisible(slots, layout: displayedLayout, solo: solo) {
+                if let message = setSource(url, at: index) {
+                    showToast(message)
+                } else {
+                    companionCell = index
+                }
+            } else {
+                pendingReplaceURL = url
+            }
+        }
+    }
+
     // MARK: 清單（R141）
 
     private func saveLists() {
@@ -529,6 +605,10 @@ final class AppModel {
     /// 點一下有影片的格子：只有這一格有聲音，並顯示操作列與工具列（R127、R128）。
     func tapCell(_ index: Int) {
         guard slots.indices.contains(index), slots[index] != nil else { return }
+        // YouTube 小視窗跟著最後點過的 YouTube 格子（R140）
+        if slots[index]?.parsed.kind == .youtube {
+            companionCell = index
+        }
         let wasPlaying = playingSourceIDs()
         slots = AudioRules.focus(slots, index)
         syncAudio()
