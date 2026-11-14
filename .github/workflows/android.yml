@@ -1,0 +1,141 @@
+# Android 版的測試、編譯、發佈（規格 android-app R145）
+# - 推送到分支而且有改到 android/ 或共用檔案：跑 android/core 的單元測試，編譯 debug 版 APK（放在 Actions 的 Artifacts）
+# - 推送 android-v<版本號> 標籤：另外產生簽章的 APK，放到 GitHub Releases
+name: Android
+
+on:
+  push:
+    branches: ['**']
+    tags: ['android-v*']
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+      # Android 版重用桌面版的網頁偵測程式與廣告清單、iOS 版的 yt-dlp 橋接與廣告規則轉換
+      - 'electron/webPreload.ts'
+      - 'src/lib/**'
+      - 'resources/easylist.txt'
+      - 'ios/MultiView/YtDlp/mv_bridge.py'
+      - 'ios/scripts/easylist-to-webkit.mjs'
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: android
+
+jobs:
+  test:
+    name: 測試與編譯
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: 單元測試（android/core）
+        run: ./gradlew :core:test --console=plain
+
+      - name: 編譯 debug 版
+        run: ./gradlew :app:assembleDebug --console=plain
+
+      - name: 檢查 APK
+        run: |
+          APK="$(ls app/build/outputs/apk/debug/*.apk | head -1)"
+          ls -lh "$APK"
+          AAPT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/aapt2"
+          "$AAPT" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label):"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MultiView-Android-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+  release:
+    name: 產生簽章的 APK 並發佈
+    if: startsWith(github.ref, 'refs/tags/android-v')
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 確認標籤和 gradle.properties 的版本號一致
+        run: |
+          VERSION="${TAG#android-v}"
+          PROJECT_VERSION="$(sed -n 's/^multiview\.versionName=//p' gradle.properties | tr -d '[:space:]')"
+          if [ "$VERSION" != "$PROJECT_VERSION" ]; then
+            echo "::error::標籤是 $VERSION，但 android/gradle.properties 的 multiview.versionName 是 $PROJECT_VERSION"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "APK=MultiView-Android-$VERSION.apk" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: 還原簽章金鑰
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::找不到 Secrets 的 ANDROID_KEYSTORE_BASE64，不能產生發佈用的 APK"
+            exit 1
+          fi
+          KEYSTORE="$RUNNER_TEMP/multiview-release.p12"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          echo "MULTIVIEW_KEYSTORE_FILE=$KEYSTORE" >> "$GITHUB_ENV"
+
+      - name: 編譯 release 版（簽章）
+        env:
+          MULTIVIEW_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MULTIVIEW_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          MULTIVIEW_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease --console=plain
+
+      - name: 確認簽章
+        run: |
+          SRC=app/build/outputs/apk/release/app-release.apk
+          test -f "$SRC"
+          cp "$SRC" "$APK"
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$APK"
+          "$BUILD_TOOLS/aapt2" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion):"
+          ls -lh "$APK"
+
+      - name: 發佈到 GitHub Releases
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # 標籤是在 GitHub 網頁的 Releases 建立的：Release 已經存在，補上標題、說明和 APK
+            gh release edit "$TAG" --title "MultiView Android $VERSION" --notes-file release-notes.txt --latest=false
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            # Android 版不標成「最新版本」，README 的桌面版下載連結不受影響
+            gh release create "$TAG" "$APK" --title "MultiView Android $VERSION" \
+              --notes-file release-notes.txt --latest=false --verify-tag
+          fi
+
+      - name: 刪除金鑰檔
+        if: always()
+        run: rm -f "$RUNNER_TEMP/multiview-release.p12"

@@ -2,7 +2,7 @@
 
 - 功能代號：`android-app`
 - Jira：無
-- 狀態：草稿（待使用者確認）
+- 狀態：已確認（2026-11-14），開發中（步驟 1）
 - 最後更新：2026-11-14
 - 前置規格：桌面版的所有規格（R1–R118）、[iOS 版](ios-app.md)（R119–R144）。本規格的需求編號從 R145 開始。
 - 參考：iOS 版從 0.0.1 到 0.0.27 在 iPhone 14 Pro、iPad Pro M1 上的實測結果（[ios-app](ios-app.md) 第 11 節）。
@@ -17,7 +17,7 @@
 |---|---|---|
 | 桌面版（Windows，Electron + React） | `electron/`、`src/` | 0.8.3，規格 R1–R118 |
 | iOS 版（SwiftUI） | `ios/` | 0.0.27，規格 R119–R144，已在 iPhone、iPad 實測 |
-| Android 版 | `android/`（還沒建立） | 本規格 |
+| Android 版（Kotlin + Jetpack Compose） | `android/` | 開發中，規格 R145–R159 |
 
 **開工前要讀的檔案**（依順序；不用全部讀完，需要時再查）：
 
@@ -73,9 +73,10 @@
 
 ### R145：建置與安裝流程（對應 R119）
 - 描述：
-  - 程式放在 `android/`，用 Gradle（Kotlin DSL）建置；畫面用 Jetpack Compose；最低支援 Android 8.0（API 26，待確認，見第 12 節）。
-  - 和畫面無關的邏輯放在獨立的 Kotlin 模組 `android/core/`（純 Kotlin，不依賴 Android），有自己的單元測試，可以在開發環境的 Linux 上直接跑（`./gradlew :core:test`）。
-  - GitHub Actions（`.github/workflows/android.yml`，Ubuntu）：改到 `android/` 或共用檔案（`electron/webPreload.ts`、`src/lib/**`、`resources/easylist.txt`）時跑單元測試並編譯；推送 `android-v*` 標籤時產生簽章的 APK（`MultiView-Android-<版本號>.apk`），補到同名的 Release，不標成最新版本。
+  - 程式放在 `android/`，用 Gradle（Kotlin DSL）建置；畫面用 Jetpack Compose；最低支援 Android 8.0（API 26），目標版本 Android 16（API 36）。套件名稱 `local.multiview.android`（debug 版加 `.debug`，可以和正式版同時安裝）。
+  - 版本號寫在 `android/gradle.properties` 的 `multiview.versionName`；versionCode 由版本號算出來（`主×1000000 + 次×1000 + 修`），版本號變大 versionCode 就變大。
+  - 和畫面無關的邏輯放在獨立的 Kotlin 模組 `android/core/`（純 Kotlin，不依賴 Android），有自己的單元測試，可以在開發環境的 Linux 上直接跑（`./gradlew :core:test`）。開發環境沒有 Android SDK、也連不到 Google 的 Maven，所以找不到 Android SDK 時 Gradle 只載入 `:core`（不載入 Android Gradle Plugin），App 的編譯只在 GitHub Actions 上做。
+  - GitHub Actions（`.github/workflows/android.yml`，Ubuntu）：改到 `android/` 或共用檔案（`electron/webPreload.ts`、`src/lib/**`、`resources/easylist.txt`、`ios/MultiView/YtDlp/mv_bridge.py`、`ios/scripts/easylist-to-webkit.mjs`）時跑單元測試並編譯 debug 版（APK 放在 Actions 的 Artifacts）；推送 `android-v*` 標籤時確認標籤和 `multiview.versionName` 一致，產生簽章的 APK（`MultiView-Android-<版本號>.apk`），用 `apksigner` 確認簽章，補到同名的 Release，不標成最新版本。
   - **簽章**：Android 的 APK 一定要簽章，而且更新時簽章要相同，否則不能覆蓋安裝。簽章金鑰存在 GitHub 的 Secrets（使用者建立，見第 12 節），不放進 repo。
   - **更新**：使用者可以用 Obtainium 之類的 App 追蹤 GitHub Releases 自動提示更新（對應 iOS 版的 SideStore 來源），或直接下載 APK 安裝。
 - 驗收條件：
@@ -264,7 +265,7 @@
 
 - [x] 裝置：POCO F6 Pro（1TB），Xiaomi HyperOS 3.0.303.0（以 Android 16 為基礎）（2026-11-14）。測試以這支手機為準；最低支援版本維持 Android 8.0（API 26），目標版本用 Android 16（API 36）。HyperOS 有比較積極的省電與背景限制，R154 的背景播放要特別測（可能要請使用者把 MultiView 的省電設定改成「無限制」）。
 - [x] APK 的簽章金鑰：由使用者在自己的 Windows 電腦用 `keytool` 產生（PKCS12，金鑰庫與金鑰用同一個密碼），存成 GitHub 的 Actions Secrets，名稱固定為 `ANDROID_KEYSTORE_BASE64`（金鑰檔的 base64）、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`（`multiview`）、`ANDROID_KEY_PASSWORD`（和金鑰庫密碼相同）。開發環境不經手金鑰內容。workflow 在沒有這些 Secrets 時（例如分支的測試）只編譯 debug 版，不簽發佈用的 APK。使用者 2026-11-14 回報已經建立好這四個 Secrets（金鑰檔與密碼由使用者自行備份）。
-- [ ] 更新方式：Obtainium 或直接下載 APK。
+- [x] 更新方式：兩種都寫在 `doc/features/android-app.md`（直接下載 APK 覆蓋安裝；Obtainium 要篩選版本標題 `MultiView Android`，因為同一個 repo 也有桌面版、iOS 版的 Releases）。
 - [ ] yt-dlp 的 JS 執行環境：QuickJS 或 WebView（R148 驗證後決定）。
 - [ ] 共用檔案要不要搬到 `shared/`。
 
@@ -275,3 +276,4 @@
 | 2026-11-14 | 初版草稿 | 使用者要求準備 Android 版的文件；iOS 版 0.0.27 已穩定 |
 | 2026-11-14 | 記錄裝置（POCO F6 Pro、HyperOS 3）與簽章金鑰的 Secrets 名稱 | 使用者回覆未決事項 |
 | 2026-11-14 | 簽章金鑰的 Secrets 已建立 | 使用者回報 |
+| 2026-11-14 | 規格確認；R145 補上套件名稱、版本號與 versionCode、沒有 Android SDK 時只建置 `:core`、workflow 監看的共用檔案 | 步驟 1 實作 |

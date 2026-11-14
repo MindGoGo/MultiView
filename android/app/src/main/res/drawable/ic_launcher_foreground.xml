@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App 圖示的前景：和桌面版、iOS 版相同的圖案（四個彩色格子，左上格有播放符號）。
+     自適應圖示是 108dp，系統裁切後一定看得到的是中間 66dp（21–87），格子放在 25–83。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#3D8BFD"
+        android:pathData="M28,25h20a3,3 0,0 1,3 3v20a3,3 0,0 1,-3 3h-20a3,3 0,0 1,-3 -3v-20a3,3 0,0 1,3 -3z" />
+    <path android:fillColor="#26BAA0"
+        android:pathData="M60,25h20a3,3 0,0 1,3 3v20a3,3 0,0 1,-3 3h-20a3,3 0,0 1,-3 -3v-20a3,3 0,0 1,3 -3z" />
+    <path android:fillColor="#F5B041"
+        android:pathData="M28,57h20a3,3 0,0 1,3 3v20a3,3 0,0 1,-3 3h-20a3,3 0,0 1,-3 -3v-20a3,3 0,0 1,3 -3z" />
+    <path android:fillColor="#E85D75"
+        android:pathData="M60,57h20a3,3 0,0 1,3 3v20a3,3 0,0 1,-3 3h-20a3,3 0,0 1,-3 -3v-20a3,3 0,0 1,3 -3z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M34.5,31.5L34.5,44.5L45,38z" />
+</vector>
