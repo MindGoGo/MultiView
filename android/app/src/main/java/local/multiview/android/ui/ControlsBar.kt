@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import local.multiview.android.AppModel
 import local.multiview.android.player.CellPlayer
+import local.multiview.android.player.WebMode
 import local.multiview.core.Brightness
 import local.multiview.core.CellSource
 import local.multiview.core.PlaybackProgress
@@ -59,6 +60,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
     val supportsQuality = model.supportsQuality(source)
     val favorite = model.isFavorite(source)
     val supportsPip = model.supportsPictureInPicture(source)
+    val webMode = model.webModeOf(source)
     val isSolo = model.solo == index
     val showsPause = model.statusOf(source).showsPause
 
@@ -80,7 +82,8 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
 
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             // 全部按鈕需要的寬度（每個 44dp）
-            val wideCount = 7 + listOf(supportsVolume, supportsQuality, model.canSwap, supportsPip).count { it }
+            val wideCount = 7 + listOf(supportsVolume, supportsQuality, model.canSwap, supportsPip).count { it } +
+                if (webMode != null) 2 else 0
             val wide = maxWidth >= (44 * wideCount + 8).dp
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -125,6 +128,14 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
 
                 if (wide) {
                     if (supportsPip) BarButton(AppIcons.PictureInPicture, "子母畫面") { model.startPictureInPicture(index) }
+                    if (webMode != null) {
+                        WebModeButton(model, index, webMode)
+                        BarButton(
+                            AppIcons.Shield,
+                            if (source.adblock) "廣告阻擋：開" else "廣告阻擋：關",
+                            highlighted = source.adblock,
+                        ) { model.toggleAdblock(index) }
+                    }
                     BarButton(
                         if (favorite) AppIcons.Star else AppIcons.StarBorder,
                         if (favorite) "從最愛移除" else "加入最愛",
@@ -146,6 +157,19 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                                     MenuRow(AppIcons.PictureInPicture, "子母畫面") {
                                         popup = Popup.NONE
                                         model.startPictureInPicture(index)
+                                    }
+                                }
+                                if (webMode != null) {
+                                    MenuRow(
+                                        if (webMode == WebMode.PAGE) AppIcons.VideoOnly else AppIcons.WebPage,
+                                        if (webMode == WebMode.PAGE) "只顯示影片" else "顯示整個網頁",
+                                    ) {
+                                        popup = Popup.NONE
+                                        model.toggleWebMode(index)
+                                    }
+                                    MenuRow(AppIcons.Shield, if (source.adblock) "關閉廣告阻擋" else "開啟廣告阻擋") {
+                                        popup = Popup.NONE
+                                        model.toggleAdblock(index)
                                     }
                                 }
                                 MenuRow(
@@ -194,6 +218,16 @@ private fun BrightnessPopup(model: AppModel, index: Int, source: CellSource, onD
     SliderPopup(
         model, "亮度", source.brightness, Brightness.MIN..Brightness.MAX, Brightness.STEP, Brightness.DEFAULT, onDismiss,
     ) { model.setBrightness(index, it) }
+}
+
+/** 「顯示整個網頁」／「只顯示影片」（R14）。 */
+@Composable
+private fun WebModeButton(model: AppModel, index: Int, mode: WebMode) {
+    BarButton(
+        if (mode == WebMode.PAGE) AppIcons.VideoOnly else AppIcons.WebPage,
+        if (mode == WebMode.PAGE) "只顯示影片" else "顯示整個網頁",
+        highlighted = mode == WebMode.PAGE,
+    ) { model.toggleWebMode(index) }
 }
 
 /** 畫質選單（R153）。 */

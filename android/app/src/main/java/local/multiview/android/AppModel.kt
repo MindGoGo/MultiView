@@ -19,7 +19,9 @@ import kotlinx.coroutines.launch
 import local.multiview.android.player.CellPlayer
 import local.multiview.android.player.NativePlayer
 import local.multiview.android.player.PlayerUpdate
-import local.multiview.android.player.SimpleWebPlayer
+import local.multiview.android.player.AdBlocker
+import local.multiview.android.player.WebMode
+import local.multiview.android.player.WebPagePlayer
 import local.multiview.android.player.YouTubeSourcePlayer
 import local.multiview.android.ytdlp.YtDlp
 import local.multiview.android.ytdlp.YtDlpUpdater
@@ -172,6 +174,9 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     private val players = mutableMapOf<Int, CellPlayer>()
     private val titles = mutableMapOf<Int, String>()
 
+    /** 重新載入的網頁格子要沿用的顯示方式（以新來源的 id 為索引）。 */
+    private val pendingWebModes = mutableMapOf<Int, WebMode>()
+
     /** 設定檔裡這個版本還沒有畫面可以改的欄位，保存時原樣寫回。 */
     private var baseSettings: Settings
     private val settingsFile = File(directory, FileStore.SETTINGS_FILE_NAME)
@@ -225,6 +230,8 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         slots = SettingsBridge.restoreSlots(settings.slots)
 
         startYtDlpAutoUpdate()
+        // 廣告阻擋的規則在背景準備
+        AdBlocker.prepare(appContext)
 
         // 拔掉耳機時全部暫停（R152）
         ContextCompat.registerReceiver(
@@ -474,7 +481,73 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         }
         is ParsedSource.Hls -> NativePlayer(context, parsed.url, source, adaptive = true)
         is ParsedSource.Mp4 -> NativePlayer(context, parsed.url, source, adaptive = false)
-        is ParsedSource.Web -> SimpleWebPlayer(context, parsed.url, source)
+        is ParsedSource.Web -> makeWebPlayer(context, parsed.url, source)
+    }
+
+    /** 網頁格子（R157）。YouTube 網站頁面以整頁模式顯示，點了影片就把這一格換成那部影片（R57）。 */
+    private fun makeWebPlayer(context: Context, url: String, source: CellSource): CellPlayer {
+        val youtubeSite = SourceParser.isYouTubeSite(source.url)
+        // 切換廣告阻擋而重新載入時，沿用切換前的顯示方式
+        val mode = pendingWebModes.remove(source.id) ?: if (youtubeSite) WebMode.PAGE else WebMode.VIDEO
+        val id = source.id
+        return WebPagePlayer(context, url, source, mode, adblock = source.adblock, interceptYouTube = youtubeSite).also { player ->
+            player.onNotice = ::showToast
+            player.onYouTubeVideo = { href ->
+                val index = slots.indexOfFirst { it?.id == id }
+                if (index >= 0) setSource(href, index)?.let(::showToast)
+            }
+        }
+    }
+
+    // 網頁格子（R157）
+
+    /** 這一格現在顯示的是網頁時，回傳它的顯示方式。 */
+    fun webModeOf(source: CellSource): WebMode? = (players[source.id] as? WebPagePlayer)?.mode
+
+    /** 「顯示整個網頁」／「只顯示影片」（R14）。 */
+    fun toggleWebMode(index: Int) {
+        val page = players[slots.getOrNull(index)?.id] as? WebPagePlayer ?: return
+        if (page.mode == WebMode.PAGE) page.requestVideoMode() else page.changeModeByUser(WebMode.PAGE)
+        keepControlsVisible()
+    }
+
+    /** 廣告阻擋的開關（R17）：只影響這一格，網頁重新載入，保留原本的顯示方式。 */
+    fun toggleAdblock(index: Int) {
+        val old = slots.getOrNull(index) ?: return
+        if (old.parsed !is ParsedSource.Web) return
+        val next = old.copy(
+            id = SourceId.next(),
+            adblock = !old.adblock,
+            autoplay = statuses[old.id]?.showsPause ?: old.autoplay,
+            record = false,
+        )
+        webModeOf(old)?.let { pendingWebModes[next.id] = it }
+        releasePlayer(old.id)
+        slots = SlotRules.set(slots, index, next)
+        showToast(if (next.adblock) "廣告阻擋：開" else "廣告阻擋：關")
+        scheduleSave()
+    }
+
+    /**
+     * 系統的返回鍵：先關清單面板；整頁模式的網頁回上一頁；單格全螢幕回到分割畫面。
+     * 都沒有的時候回傳 false（由系統處理：離開 App）。
+     */
+    fun handleBack(): Boolean {
+        if (listPanelOpen) {
+            listPanelOpen = false
+            return true
+        }
+        val index = activeCell ?: solo ?: visibleSlotIndices.singleOrNull { (players[slots[it]?.id] as? WebPagePlayer)?.mode == WebMode.PAGE }
+        val page = players[slots.getOrNull(index ?: -1)?.id] as? WebPagePlayer
+        if (page != null && page.mode == WebMode.PAGE && page.canGoBack) {
+            page.goBack()
+            return true
+        }
+        if (solo != null) {
+            exitSolo()
+            return true
+        }
+        return false
     }
 
     private fun releasePlayer(id: Int) {

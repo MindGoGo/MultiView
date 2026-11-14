@@ -80,6 +80,9 @@ jobs:
       - name: 單元測試（android/core）
         run: ./gradlew :core:test --console=plain
 
+      - name: 產生網頁格子的檔案（注入網頁的程式、廣告阻擋規則）
+        run: scripts/build-web.sh
+
       - name: 編譯 debug 版
         run: ./gradlew :app:assembleDebug --console=plain
 
@@ -89,6 +92,8 @@ jobs:
           ls -lh "$APK"
           AAPT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/aapt2"
           "$AAPT" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label):"
+          # 注入網頁的程式與廣告阻擋規則有放進 APK（R157）
+          unzip -l "$APK" | grep -E "assets/(web-inject.js|adblock/manifest.json)"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -135,6 +140,9 @@ jobs:
           KEYSTORE="$RUNNER_TEMP/multiview-release.p12"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
           echo "MULTIVIEW_KEYSTORE_FILE=$KEYSTORE" >> "$GITHUB_ENV"
+
+      - name: 產生網頁格子的檔案（注入網頁的程式、廣告阻擋規則）
+        run: scripts/build-web.sh
 
       - name: 編譯 release 版（簽章）
         env:

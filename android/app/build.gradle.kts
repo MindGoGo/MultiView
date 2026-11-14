@@ -72,6 +72,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // 注入網頁的程式與廣告阻擋規則（R157）：由 android/scripts/build-web.sh 產生，沒有產生時 App 照樣能編譯
+    sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/multiview-assets"))
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -118,6 +121,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
     implementation("androidx.media3:media3-ui:1.8.0")
+
+    // 網頁格子：在每一個框架、網頁自己的程式之前注入偵測程式（R157）
+    implementation("androidx.webkit:webkit:1.14.0")
 
     // yt-dlp 的 JS 解題程式用手機 WebView 的 V8 執行，在獨立的沙箱裡（R148）
     implementation("androidx.javascriptengine:javascriptengine:1.0.0")

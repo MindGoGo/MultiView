@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
@@ -86,6 +87,14 @@ class MainActivity : ComponentActivity(), AppModel.Host {
         model.host = this
         hideSystemBars()
         setContent { RootScreen(model) }
+        // 返回鍵：先讓 App 處理（關面板、網頁回上一頁、離開全螢幕）；都沒有時照系統的行為離開
+        onBackPressedDispatcher.addCallback(this) {
+            if (!model.handleBack()) {
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
+            }
+        }
         if (savedInstanceState == null) handleIntent(intent)
     }
 

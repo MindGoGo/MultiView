@@ -35,6 +35,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import local.multiview.android.AppModel
 import local.multiview.android.BuildConfig
+import local.multiview.android.player.AdBlocker
 import local.multiview.core.AppInfo
 import local.multiview.core.ListsCodec
 import local.multiview.core.PlayMethod
@@ -99,6 +100,10 @@ fun SettingsScreen(model: AppModel) {
                     Text(if (model.ytdlpUpdating) "正在檢查更新…" else "檢查更新")
                 }
                 Note("每 24 小時自動檢查一次；下載後用官方的雜湊值驗證，下次開啟 App 生效。")
+
+                Section("廣告阻擋")
+                Label("規則：${AdBlocker.status}")
+                Note("網頁格子的廣告阻擋用 EasyList，在操作列的盾牌按鈕各自開關。")
 
                 Section("從其他 App 分享網址")
                 Note("在 YouTube App、Chrome 等 App 按「分享」，選 MultiView，網址會放進第一個空格；沒有空格時會問要取代哪一格。")
