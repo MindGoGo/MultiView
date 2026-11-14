@@ -108,7 +108,7 @@ fun CellView(
                 LoadingCritter(player?.isResolving ?: false, width, height, modifier = Modifier.align(Alignment.Center))
             }
             // 暫停時一直顯示播放鈕
-            PlayStatus.PAUSED, PlayStatus.ENDED -> if (!interactive) {
+            PlayStatus.PAUSED, PlayStatus.ENDED -> if (!interactive && model.pipCell == null) {
                 CenterButton(AppIcons.Play, "播放", Modifier.align(Alignment.Center)) { model.togglePlay(index) }
             }
             // 播放中：點一下格子、操作列顯示時才出現暫停鈕
@@ -153,7 +153,7 @@ fun CellView(
                 // 放在喇叭按鈕右邊，不要蓋住喇叭（iOS 0.0.16 的問題）
                 model.badgeOf(source)?.let { Pill(it, Modifier.padding(start = 4.dp), fontSize = 10) }
             }
-        } else if (source.isAudible) {
+        } else if (source.isAudible && model.pipCell == null) {
             // 有聲音的格子一直顯示小喇叭（R7 AC5）
             Icon(
                 AppIcons.VolumeUp,

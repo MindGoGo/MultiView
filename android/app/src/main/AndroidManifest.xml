@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 背景播放（R154）：前景服務、播放時不讓 CPU 與網路休眠 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name=".MultiViewApplication"
@@ -17,6 +21,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|layoutDirection|locale"
             android:windowSoftInputMode="adjustNothing">
             <intent-filter>
@@ -39,5 +44,10 @@
                 <data android:scheme="multiview" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>

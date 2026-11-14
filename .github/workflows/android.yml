@@ -73,6 +73,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # 廣告阻擋的效能測試要用真正的 EasyList（R157）
+      - name: 轉換 EasyList
+        run: node ../ios/scripts/easylist-to-webkit.mjs ../resources/easylist.txt core/build/adblock
+
       - name: 單元測試（android/core）
         run: ./gradlew :core:test --console=plain
 

@@ -100,6 +100,8 @@ class NativePlayer(
             AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
             /* handleAudioFocus = */ false,
         )
+        // 背景播放時（R154）不讓 CPU 與網路休眠；只在播放中才會佔用
+        exo.setWakeMode(C.WAKE_MODE_NETWORK)
         exo.addListener(listener)
         applyQuality(source.quality)
         applyVolume()

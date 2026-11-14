@@ -22,6 +22,7 @@ import local.multiview.android.player.PlayerUpdate
 import local.multiview.android.player.SimpleWebPlayer
 import local.multiview.android.player.YouTubeSourcePlayer
 import local.multiview.android.ytdlp.YtDlp
+import local.multiview.android.ytdlp.YtDlpUpdater
 import org.json.JSONObject
 import local.multiview.core.AudioRules
 import local.multiview.core.Brightness
@@ -69,6 +70,12 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
 
         /** 固定成橫向或直向；null 是跟著裝置旋轉。 */
         fun lockOrientation(landscape: Boolean?)
+
+        /** 回到主畫面時要不要自動進入子母畫面（只有一格有聲音的原生播放器在播放時，R154）。 */
+        fun setAutoPictureInPicture(enabled: Boolean)
+
+        /** 現在就進入子母畫面；不支援或失敗時回傳 false。 */
+        fun enterPictureInPicture(): Boolean
     }
 
     var host: Host? = null
@@ -138,11 +145,21 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     var ytdlpVersion by mutableStateOf<String?>(null)
         private set
 
+    /** 已經下載、重新開啟 App 後生效的 yt-dlp 版本（R156）。 */
+    var ytdlpPendingVersion by mutableStateOf<String?>(null)
+        private set
+    var ytdlpUpdating by mutableStateOf(false)
+        private set
+
     /** 沒有空格：等使用者選擇要取代哪一格（R150）。 */
     var pendingReplaceUrl by mutableStateOf<String?>(null)
 
     /** 畫面方向被固定了（工具列的旋轉按鈕）；圖示跟著改變。 */
     var orientationLocked by mutableStateOf(false)
+        private set
+
+    /** 子母畫面中顯示的格位（R154）；不在子母畫面時為 null。 */
+    var pipCell by mutableStateOf<Int?>(null)
         private set
 
     /** `2` 版型是不是上下排列（小螢幕直向）；版型圖示跟著畫。 */
@@ -183,6 +200,12 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     private var interruptionPaused = setOf<Int>()
     private var inBackground = false
 
+    /** 從通知或鎖定畫面按了暫停：記下正在播放的格子，按播放時恢復它們。 */
+    private var remotePaused = setOf<Int>()
+
+    /** 操作列的子母畫面按鈕指定的格位；自動進入子母畫面時為 null。 */
+    private var pipRequested: Int? = null
+
     /** 格子區域的大小（像素），由畫面回報（拖曳換位時用來找手指在哪一格）。 */
     private var gridWidth = 0f
     private var gridHeight = 0f
@@ -200,6 +223,8 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         listTab = settings.listTab
         // 還原的來源載入後維持暫停（R10 AC1）
         slots = SettingsBridge.restoreSlots(settings.slots)
+
+        startYtDlpAutoUpdate()
 
         // 拔掉耳機時全部暫停（R152）
         ContextCompat.registerReceiver(
@@ -442,7 +467,10 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
 
     private fun makePlayer(context: Context, source: CellSource): CellPlayer = when (val parsed = source.parsed) {
         is ParsedSource.YouTube -> YouTubeSourcePlayer(context, parsed.videoId, source, youtubeMethods).also { player ->
-            player.onFallback = { showToast("yt-dlp 無法播放，已改用內嵌播放器") }
+            player.onFallback = { reason ->
+                showToast("yt-dlp 無法播放，已改用內嵌播放器")
+                updateYtDlpAfterFailure(reason)
+            }
         }
         is ParsedSource.Hls -> NativePlayer(context, parsed.url, source, adaptive = true)
         is ParsedSource.Mp4 -> NativePlayer(context, parsed.url, source, adaptive = false)
@@ -457,6 +485,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         titles.remove(id)
         everPlayed.remove(id)
         updateAudioFocus()
+        updateBackgroundPlayback()
     }
 
     /**
@@ -487,7 +516,8 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
 
     private fun applyUpdate(update: PlayerUpdate, id: Int) {
         if (!players.containsKey(id)) return
-        if (statuses[id] != update.status) {
+        val statusChanged = statuses[id] != update.status
+        if (statusChanged) {
             statuses[id] = update.status
             updateAudioFocus()
         }
@@ -498,6 +528,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         update.title?.let { titles[id] = it }
         if (update.status == PlayStatus.PLAYING) everPlayed += id
         if (update.status == PlayStatus.PLAYING || update.status == PlayStatus.PAUSED) recordHistoryIfNeeded(id)
+        if (statusChanged) updateBackgroundPlayback()
     }
 
     /** 使用者放入的來源，第一次成功載入時記錄到歷史（R23）。 */
@@ -649,6 +680,55 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         showToast("已清除網站資料")
     }
 
+    // yt-dlp 的更新（R156）
+
+    /** 開啟 App 後在背景檢查更新（距離上次檢查超過 24 小時才檢查），不顯示訊息。 */
+    private fun startYtDlpAutoUpdate() {
+        scope.launch {
+            // 先讓畫面和影片載入
+            delay(5000)
+            try {
+                noteYtDlpUpdate(YtDlpUpdater.autoUpdateIfNeeded(appContext))
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** 設定畫面的「檢查更新」。 */
+    fun checkYtDlpUpdate() {
+        if (ytdlpUpdating) return
+        ytdlpUpdating = true
+        scope.launch {
+            val outcome = try {
+                YtDlpUpdater.update(appContext)
+            } catch (error: Exception) {
+                YtDlpUpdater.Outcome.Failed(error.message ?: "未知的錯誤")
+            }
+            ytdlpUpdating = false
+            noteYtDlpUpdate(outcome)
+            showToast(outcome.message)
+        }
+    }
+
+    /** 解析失敗、看起來是 yt-dlp 太舊：在背景更新，下次開啟 App 生效。 */
+    private fun updateYtDlpAfterFailure(reason: String) {
+        scope.launch {
+            val outcome = try {
+                YtDlpUpdater.updateAfterFailure(appContext, reason)
+            } catch (_: Exception) {
+                null
+            }
+            if (outcome is YtDlpUpdater.Outcome.Updated) {
+                noteYtDlpUpdate(outcome)
+                showToast(outcome.message)
+            }
+        }
+    }
+
+    private fun noteYtDlpUpdate(outcome: YtDlpUpdater.Outcome?) {
+        if (outcome is YtDlpUpdater.Outcome.Updated) ytdlpPendingVersion = outcome.version
+    }
+
     /** 讀取目前使用的 yt-dlp 版本（要啟動 Python，設定畫面打開時才讀）。 */
     fun refreshYtDlpVersion() {
         if (ytdlpVersion != null) return
@@ -741,6 +821,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
             player.setVolume(source.volume)
         }
         updateAudioFocus()
+        updateBackgroundPlayback()
     }
 
     // 音訊焦點：被其他 App 的聲音打斷（R152）
@@ -862,21 +943,110 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     /** 有任何一格在播放：畫面用來決定要不要保持螢幕開啟（R149）。 */
     val anyPlaying: Boolean get() = statuses.values.any { it == PlayStatus.PLAYING }
 
-    // 切到背景（背景播放是 R154，之後的版本；目前切到背景時全部暫停，回來時恢復）
+    // 背景播放、子母畫面（R154）
 
+    /** 顯示中、有聲音、正在播放、可以在背景繼續播的來源（原生播放器）。 */
+    private fun backgroundSources(): List<CellSource> = slots.filterIndexed { index, source ->
+        source != null && isVisible(index) && source.isAudible && statuses[source.id] == PlayStatus.PLAYING &&
+            players[source.id]?.supportsBackground == true
+    }.filterNotNull()
+
+    /** 回到主畫面時自動進入子母畫面的格位：只有一格有聲音、而且是原生播放器在播放。 */
+    private fun pipCandidate(): Int? {
+        val sources = backgroundSources()
+        if (sources.size != 1) return null
+        // 還有其他有聲音的格子在播放（網頁）時不自動進入
+        val audiblePlaying = slots.filterNotNull().count { it.isAudible && statuses[it.id] == PlayStatus.PLAYING }
+        return if (audiblePlaying == 1) slots.indexOfFirst { it?.id == sources[0].id } else null
+    }
+
+    /** 回到主畫面或關螢幕：原生播放器中有聲音、正在播放的格子繼續播聲音，其他暫停。 */
     fun didEnterBackground() {
         if (inBackground) return
         inBackground = true
         saveNow()
-        backgroundPaused = playingSourceIds()
-        pauseAll()
+        val keep = backgroundSources().map { it.id }.toSet()
+        val paused = mutableSetOf<Int>()
+        for (id in playingSourceIds()) {
+            if (id in keep) continue
+            paused += id
+            players[id]?.pause()
+        }
+        backgroundPaused = paused
+        hideControls()
+        updateBackgroundPlayback()
     }
 
+    /** 回到 App：因為切到背景而暫停的格子恢復播放。 */
     fun willEnterForeground() {
         if (!inBackground) return
         inBackground = false
         backgroundPaused.forEach { players[it]?.play() }
         backgroundPaused = emptySet()
+        remotePaused = emptySet()
+        updateBackgroundPlayback()
+    }
+
+    /** 操作列的子母畫面按鈕：這一格用子母畫面繼續播。 */
+    fun startPictureInPicture(index: Int) {
+        val source = slots.getOrNull(index) ?: return
+        if (players[source.id]?.supportsBackground != true) return
+        pipRequested = index
+        if (host?.enterPictureInPicture() != true) {
+            pipRequested = null
+            showToast("這支裝置不能用子母畫面")
+        }
+    }
+
+    fun supportsPictureInPicture(source: CellSource): Boolean = players[source.id]?.supportsBackground == true
+
+    /** 進入子母畫面：畫面只顯示那一格，其他格子照切到背景的規則處理。 */
+    fun enterPip() {
+        val cell = pipRequested ?: pipCandidate() ?: solo ?: slots.indices.firstOrNull { isVisible(it) && slots[it] != null }
+        pipRequested = null
+        pipCell = cell
+        cancelSwap()
+        didEnterBackground()
+    }
+
+    /**
+     * 離開子母畫面。resumed：回到完整的畫面（true），或子母畫面被關掉（false）。
+     * 被關掉時全部暫停；下次回到 App 時恢復。
+     */
+    fun leavePip(resumed: Boolean) {
+        pipCell = null
+        if (resumed) {
+            willEnterForeground()
+        } else {
+            backgroundPaused = backgroundPaused + playingSourceIds()
+            pauseAll()
+            updateBackgroundPlayback()
+        }
+    }
+
+    /** 從通知或鎖定畫面按暫停：記下正在播放的格子，按播放時恢復它們。 */
+    fun remotePause() {
+        val playing = playingSourceIds()
+        if (playing.isNotEmpty()) remotePaused = playing
+        pauseAll()
+        updateBackgroundPlayback()
+    }
+
+    fun remotePlay() {
+        val targets = remotePaused.ifEmpty {
+            slots.filterIndexed { index, source -> source != null && isVisible(index) && source.isAudible }.mapNotNull { it?.id }.toSet()
+        }
+        remotePaused = emptySet()
+        targets.forEach { players[it]?.play() }
+    }
+
+    /** 依目前的播放狀態更新背景播放的服務（通知、鎖定畫面）與自動子母畫面。 */
+    private fun updateBackgroundPlayback() {
+        val sources = backgroundSources()
+        val wanted = sources.isNotEmpty() || (inBackground && remotePaused.isNotEmpty())
+        val title = sources.singleOrNull()?.let { titles[it.id] ?: ListRules.defaultName(it.url) } ?: "MultiView"
+        PlaybackService.sync(appContext, wanted, title, playing = sources.isNotEmpty())
+        host?.setAutoPictureInPicture(!inBackground && pipCandidate() != null)
     }
 
     // 操作列與工具列（R151）

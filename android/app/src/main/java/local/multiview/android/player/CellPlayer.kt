@@ -50,6 +50,9 @@ interface CellPlayer {
     /** 移除來源時釋放資源。 */
     fun shutdown()
 
+    /** 能不能在背景繼續播聲音、用子母畫面（只有原生播放器，R154）。 */
+    val supportsBackground: Boolean get() = !usesWebAudio && !isInteractive && !isResolving
+
     /** 能不能選畫質（原生播放器播 HLS 時，R153）。 */
     val supportsQuality: Boolean get() = false
 

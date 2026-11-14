@@ -24,6 +24,10 @@ object YtDlp {
 
     private var runner: JsRunner? = null
 
+    /** 啟動 Python 時有下載的新版 yt-dlp（已經要求優先載入）。 */
+    @Volatile
+    private var archiveAtLaunch = false
+
     @Synchronized
     private fun start(context: Context): JsRunner {
         runner?.let { return it }
@@ -32,6 +36,11 @@ object YtDlp {
         }
         val jsRunner = JsRunner(context)
         Python.getInstance().getModule("mv_android").callAttr("install", jsRunner)
+        // 有下載的新版 yt-dlp 時優先載入（R156）；要在第一次載入 yt-dlp 之前
+        YtDlpUpdater.archivePathForLaunch(context.applicationContext)?.let { archive ->
+            Python.getInstance().getModule("mv_bridge").callAttr("use_update_archive", archive)
+            archiveAtLaunch = true
+        }
         runner = jsRunner
         return jsRunner
     }
@@ -42,7 +51,14 @@ object YtDlp {
         val jsRunner = start(context)
         val startMillis = (System.nanoTime() - started) / 1_000_000
         val text = Python.getInstance().getModule("mv_bridge").callAttr("versions").toString()
-        JSONObject(text)
+        val info = JSONObject(text)
+        // 有下載的新版、但 Python 沒有用到它：檔案壞了，刪掉之後重新下載
+        // （只看啟動時就有的那一份；這次開啟之後才下載的還沒載入，不能刪）
+        if (archiveAtLaunch && !info.optBoolean("yt_dlp_updated")) {
+            archiveAtLaunch = false
+            YtDlpUpdater.discardArchive(context.applicationContext)
+        }
+        info
             .put("js_runtime", jsRunner.describe())
             .put("start_ms", startMillis)
             .toString(2)

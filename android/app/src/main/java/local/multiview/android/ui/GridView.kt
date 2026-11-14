@@ -67,7 +67,8 @@ fun GridView(model: AppModel, safeArea: EdgeInsets) {
         val stacked = ScreenRules.isStacked(maxWidth.value.toDouble(), maxHeight.value.toDouble())
         val layout = ScreenRules.displayedLayout(model.layout, isLarge)
         val ratios = model.ratiosFor(layout)
-        val solo = model.solo
+        // 子母畫面中只顯示那一格（和單格全螢幕相同的畫法）
+        val solo = model.pipCell ?: model.solo
         val slots = model.slots
 
         SideEffect { model.setGrid(widthPx, heightPx, isLarge, stacked) }
@@ -136,7 +137,7 @@ fun GridView(model: AppModel, safeArea: EdgeInsets) {
 
         // 沒有任何「點一下就會叫出工具列」的格子時（全部是空白格或網頁），用上方的小把手叫出工具列
         val needsHandle = slots.take(layout.cellCount).none { it != null && it.parsed.kind != ParsedSource.Kind.WEB }
-        if (!model.toolbarVisible && needsHandle) {
+        if (!model.toolbarVisible && needsHandle && model.pipCell == null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)

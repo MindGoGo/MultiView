@@ -1,14 +1,19 @@
 package local.multiview.android
 
 import android.content.Context
+import android.app.PictureInPictureParams
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import local.multiview.android.ui.RootScreen
@@ -28,6 +33,50 @@ class MainActivity : ComponentActivity(), AppModel.Host {
             true -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             false -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             null -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    /** 回到主畫面時自動進入子母畫面（Android 12 以上由系統處理；之前的版本在 onUserLeaveHint 進入）。 */
+    private var autoPictureInPicture = false
+
+    private fun pictureInPictureParams(): PictureInPictureParams {
+        val builder = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(autoPictureInPicture)
+            builder.setSeamlessResizeEnabled(true)
+        }
+        return builder.build()
+    }
+
+    override fun setAutoPictureInPicture(enabled: Boolean) {
+        if (autoPictureInPicture == enabled) return
+        autoPictureInPicture = enabled
+        try {
+            setPictureInPictureParams(pictureInPictureParams())
+        } catch (_: Exception) {
+        }
+    }
+
+    override fun enterPictureInPicture(): Boolean = try {
+        packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
+            enterPictureInPictureMode(pictureInPictureParams())
+    } catch (_: Exception) {
+        false
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Android 11 以下沒有自動進入子母畫面，按 Home 鍵時自己進入
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && autoPictureInPicture) enterPictureInPicture()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (isInPictureInPictureMode) {
+            model.enterPip()
+        } else {
+            // 回到完整的畫面時 Activity 還在執行中；子母畫面被關掉時 Activity 已經停止
+            model.leavePip(resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
         }
     }
 
@@ -74,7 +123,7 @@ class MainActivity : ComponentActivity(), AppModel.Host {
 
     override fun onStop() {
         super.onStop()
-        // 背景播放是 R154 的範圍；目前切到背景時保存並全部暫停，回來時恢復
+        // 回到主畫面或關螢幕：有聲音的原生播放器繼續播聲音，其他暫停（R154）
         model.didEnterBackground()
     }
 

@@ -58,6 +58,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
     val supportsVolume = player?.supportsVolume ?: false
     val supportsQuality = model.supportsQuality(source)
     val favorite = model.isFavorite(source)
+    val supportsPip = model.supportsPictureInPicture(source)
     val isSolo = model.solo == index
     val showsPause = model.statusOf(source).showsPause
 
@@ -79,7 +80,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
 
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             // 全部按鈕需要的寬度（每個 44dp）
-            val wideCount = 7 + listOf(supportsVolume, supportsQuality, model.canSwap).count { it }
+            val wideCount = 7 + listOf(supportsVolume, supportsQuality, model.canSwap, supportsPip).count { it }
             val wide = maxWidth >= (44 * wideCount + 8).dp
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -123,6 +124,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                 ) { model.toggleSolo(index) }
 
                 if (wide) {
+                    if (supportsPip) BarButton(AppIcons.PictureInPicture, "子母畫面") { model.startPictureInPicture(index) }
                     BarButton(
                         if (favorite) AppIcons.Star else AppIcons.StarBorder,
                         if (favorite) "從最愛移除" else "加入最愛",
@@ -140,6 +142,12 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                                 if (supportsVolume) MenuRow(AppIcons.Tune, "音量") { popup = Popup.VOLUME }
                                 MenuRow(AppIcons.Brightness, "亮度") { popup = Popup.BRIGHTNESS }
                                 if (supportsQuality) MenuRow(AppIcons.Quality, "畫質：${source.quality.label}") { popup = Popup.QUALITY }
+                                if (supportsPip) {
+                                    MenuRow(AppIcons.PictureInPicture, "子母畫面") {
+                                        popup = Popup.NONE
+                                        model.startPictureInPicture(index)
+                                    }
+                                }
                                 MenuRow(
                                     if (favorite) AppIcons.Star else AppIcons.StarBorder,
                                     if (favorite) "從最愛移除" else "加入最愛",
