@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
+import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -45,6 +46,9 @@ fun YouTubeCell(input: String, index: Int, controller: LabController) {
 
     val webView = remember {
         WebView(context).apply {
+            // 一定要填滿格子：沒有指定時 WebView 依網頁內容決定高度，
+            // 播放器是絕對定位，內容高度是 0，結果有聲音沒畫面（0.0.2 實測）
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             setBackgroundColor(Color.BLACK)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -64,8 +68,8 @@ fun YouTubeCell(input: String, index: Int, controller: LabController) {
 
     DisposableEffect(webView) {
         val cell = object : LabCell {
-            override fun play() = run("player.playVideo()")
-            override fun pause() = run("player.pauseVideo()")
+            override fun play() = run("window.userPaused = false; player.playVideo()")
+            override fun pause() = run("window.userPaused = true; player.pauseVideo()")
         }
         controller.register(cell)
         onDispose {
@@ -124,9 +128,12 @@ private fun describe(message: String): String = try {
                 5 -> "已載入"
                 else -> "尚未開始"
             }
-            // 頁面回報的實際狀態：靜音與音量，用來確認設定有沒有生效
+            // 頁面回報的實際狀態：靜音與音量（確認設定有沒有生效）、網頁大小（確認有畫面）、
+            // 被暫停的次數（不是使用者按的暫停，用來確認系統會不會讓其他格暫停，R147）
             val audio = if (json.optBoolean("muted")) "靜音" else "音量 ${json.optInt("volume")}"
-            "$state $audio"
+            val size = "${json.optInt("width")}×${json.optInt("height")}"
+            val paused = json.optInt("paused")
+            "$state $audio $size" + if (paused > 0) " 被暫停 $paused 次" else ""
         }
     }
 } catch (_: Exception) {
@@ -164,13 +171,23 @@ private fun page(videoId: String): String {
             player.setVolume(window.wantVolume);
             if (window.wantMuted) { player.mute(); } else { player.unMute(); }
           }
+          window.pausedCount = 0;
+          window.userPaused = false;
+          var lastState = -1;
           function report() {
             if (!window.ready) return;
+            var state = player.getPlayerState();
+            // 從播放中變成暫停，而且不是 App 要求的暫停：被系統（或其他格）暫停
+            if (lastState === 1 && state === 2 && !window.userPaused) window.pausedCount++;
+            lastState = state;
             post({
               type: 'state',
-              state: player.getPlayerState(),
+              state: state,
               muted: player.isMuted(),
-              volume: player.getVolume()
+              volume: player.getVolume(),
+              width: window.innerWidth,
+              height: window.innerHeight,
+              paused: window.pausedCount
             });
           }
           function onYouTubeIframeAPIReady() {

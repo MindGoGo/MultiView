@@ -112,6 +112,9 @@ fun NativeCell(url: String, index: Int, controller: LabController) {
 private fun describe(player: ExoPlayer): String {
     val state = when {
         player.isPlaying -> "播放中"
+        // 要播放但被系統擋下（例如音訊輸出不能用），顯示原因
+        player.playWhenReady && player.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE ->
+            "被擋下（${player.playbackSuppressionReason}）"
         player.playbackState == Player.STATE_BUFFERING -> "緩衝中"
         player.playbackState == Player.STATE_ENDED -> "已結束"
         player.playbackState == Player.STATE_IDLE -> "停止"
