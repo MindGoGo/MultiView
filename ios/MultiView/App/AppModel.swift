@@ -68,6 +68,8 @@ final class AppModel {
     // MARK: 內部
 
     @ObservationIgnored private var players: [Int: CellPlayer] = [:]
+    /// 重新載入的網頁格子要沿用的顯示方式（以新來源的 id 為索引）。
+    @ObservationIgnored private var pendingWebModes: [Int: WebMode] = [:]
     /// 訂閱頻道的最新影片與直播狀態（R142）。
     let subscriptions = SubscriptionStore()
     @ObservationIgnored private var titles: [Int: String] = [:]
@@ -385,7 +387,8 @@ final class AppModel {
     /// 網頁格子（R137）。YouTube 網站頁面以整頁模式顯示，點了影片就把這一格換成那部影片（R57）。
     private func makeWebPlayer(url: URL, source: CellSource) -> CellPlayer {
         let youtubeSite = SourceParser.isYouTubeSite(source.url)
-        let mode: WebMode = youtubeSite ? .page : .video
+        // 切換廣告阻擋而重新載入時，沿用切換前的顯示方式
+        let mode: WebMode = pendingWebModes.removeValue(forKey: source.id) ?? (youtubeSite ? .page : .video)
         let id = source.id
         let player = WebSourcePlayer(url: url, source: source, mode: mode, interceptYouTube: youtubeSite, method: webMethod)
         // 播放器是在畫格子的時候建立的，畫面更新中不能改狀態，所以晚一點再記下顯示方式
@@ -446,6 +449,9 @@ final class AppModel {
         next.brightness = old.brightness
         next.adblock = !old.adblock
         next.backURL = old.backURL
+        if let mode = webModes[old.id] {
+            pendingWebModes[next.id] = mode
+        }
         releasePlayer(old.id)
         slots[index] = next
         showToast(next.adblock ? "廣告阻擋：開" : "廣告阻擋：關")

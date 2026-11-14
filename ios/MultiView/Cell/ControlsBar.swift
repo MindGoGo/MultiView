@@ -215,28 +215,12 @@ struct ControlsBar: View {
         }
     }
 
-    /// 「⋯」：放不下的按鈕（R127）。用對話框而不是系統選單：開著時 App 知道，操作列不會自動收起把它關掉。
+    /// 「⋯」：放不下的按鈕（R127）。用系統的浮動選單；選單開著時操作列不自動收起。
     private var moreMenu: some View {
-        BarButton(icon: "ellipsis", label: "更多") {
-            showsMore = true
+        MenuButton(systemImage: "ellipsis", accessibilityLabel: "更多", items: moreItems) { open in
+            showsMore = open
         }
-        .confirmationDialog("", isPresented: $showsMore, titleVisibility: .hidden) {
-            if supportsVolume {
-                Button("音量") { showsVolume = true }
-            }
-            Button("亮度") { showsBrightness = true }
-            if model.supportsPictureInPicture(source) {
-                Button("子母畫面") { model.startPictureInPicture(index) }
-            }
-            if let mode = model.webMode(of: source) {
-                Button(mode == .page ? "只顯示影片" : "顯示整個網頁") { model.toggleWebMode(index) }
-                Button(source.adblock ? "關閉廣告阻擋" : "開啟廣告阻擋") { model.toggleAdblock(index) }
-            }
-            Button(model.isFavorite(source) ? "從最愛移除" : "加入最愛") { model.toggleFavorite(index) }
-            Button("更換網址") { beginEdit() }
-            Button("移除", role: .destructive) { model.removeSource(at: index) }
-            Button("取消", role: .cancel) {}
-        }
+        .frame(width: 44, height: 44)
         .popover(isPresented: $showsVolume) {
             SliderPopup(title: "音量", value: Double(source.volume), range: 0...Double(Volume.max), step: 1, resetValue: nil) { value in
                 model.setVolume(index, value)
@@ -253,6 +237,35 @@ struct ControlsBar: View {
                 model.setBrightness(index, value)
             }
         }
+    }
+
+    /// 「⋯」選單的項目。
+    private func moreItems() -> [MenuItem] {
+        var items: [MenuItem] = []
+        if supportsVolume {
+            items.append(MenuItem(title: "音量", systemImage: "slider.horizontal.3") { showsVolume = true })
+        }
+        items.append(MenuItem(title: "亮度", systemImage: "sun.max.fill") { showsBrightness = true })
+        if model.supportsPictureInPicture(source) {
+            items.append(MenuItem(title: "子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) })
+        }
+        if let mode = model.webMode(of: source) {
+            items.append(MenuItem(
+                title: mode == .page ? "只顯示影片" : "顯示整個網頁",
+                systemImage: mode == .page ? "play.rectangle" : "doc.richtext"
+            ) { model.toggleWebMode(index) })
+            items.append(MenuItem(
+                title: source.adblock ? "關閉廣告阻擋" : "開啟廣告阻擋",
+                systemImage: source.adblock ? "shield.slash" : "shield.lefthalf.filled"
+            ) { model.toggleAdblock(index) })
+        }
+        let favorite = model.isFavorite(source)
+        items.append(MenuItem(title: favorite ? "從最愛移除" : "加入最愛", systemImage: favorite ? "star.fill" : "star") {
+            model.toggleFavorite(index)
+        })
+        items.append(MenuItem(title: "更換網址", systemImage: "link") { beginEdit() })
+        items.append(MenuItem(title: "移除", systemImage: "xmark", destructive: true) { model.removeSource(at: index) })
+        return items
     }
 
     private func beginEdit() {

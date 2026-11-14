@@ -14,7 +14,7 @@ enum WebMode: String {
 /// 網頁的每一個框架都注入桌面版的偵測程式（ios/web/inject.ts），由它找主要影片、只顯示影片、回報播放狀態。
 @MainActor
 final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptMessageHandler {
-    var view: UIView { webView }
+    var view: UIView { container }
     var onUpdate: ((PlayerUpdate) -> Void)?
     /// 顯示方式改變（找不到影片時自動換成整頁、按「只顯示影片」找到影片時換回來）。
     var onModeChange: ((WebMode) -> Void)?
@@ -31,6 +31,7 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
 
     private(set) var mode: WebMode
     private let webView: WKWebView
+    private let container: ScaledWebContainer
     private let pageURL: URL
     private let interceptYouTube: Bool
 
@@ -83,6 +84,7 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         configuration.mediaTypesRequiringUserActionForPlayback = []
         configuration.allowsPictureInPictureMediaPlayback = false
         webView = WKWebView(frame: .zero, configuration: configuration)
+        container = ScaledWebContainer(webView: webView)
         pageURL = url
         self.mode = mode
         self.interceptYouTube = interceptYouTube
@@ -206,6 +208,7 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
     }
 
     private func applyModeToView() {
+        container.scalesUp = mode == .video
         // 整頁模式：網頁照原本的樣子，可以左緣右滑回上一頁；影片模式：點擊由格子攔下
         webView.isUserInteractionEnabled = mode == .page
         webView.allowsBackForwardNavigationGestures = mode == .page
@@ -455,5 +458,52 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         fail("無法載入網頁")
+    }
+}
+
+/// 網頁格子的外框：影片模式時網頁至少以 1280×720 排版，再縮小到格子的大小（桌面版 R13）。
+/// 格子很小時（例如 iPhone 的分割畫面），網站會改用手機版的窄版面，影片常常排在畫面外面而找不到；
+/// 用比較大的版面排，影片比較會在畫面裡。整頁模式照格子的大小排版，方便操作。
+final class ScaledWebContainer: UIView {
+    static let minWidth: CGFloat = 1280
+    static let minHeight: CGFloat = 720
+
+    private let webView: UIView
+
+    var scalesUp = false {
+        didSet {
+            if scalesUp != oldValue { setNeedsLayout() }
+        }
+    }
+
+    init(webView: UIView) {
+        self.webView = webView
+        super.init(frame: .zero)
+        backgroundColor = .black
+        clipsToBounds = true
+        addSubview(webView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 縮小的比例：格子比 1280×720 小時，網頁以 (寬 / 比例) × (高 / 比例) 排版再縮小；格子夠大時為 1。
+    static func scale(for size: CGSize) -> CGFloat {
+        guard size.width > 0, size.height > 0 else { return 1 }
+        return min(1, size.width / minWidth, size.height / minHeight)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let factor = scalesUp ? Self.scale(for: bounds.size) : 1
+        webView.transform = .identity
+        webView.frame = CGRect(x: 0, y: 0, width: bounds.width / factor, height: bounds.height / factor)
+        if factor != 1 {
+            // 以左上角為原點縮小
+            webView.transform = CGAffineTransform(scaleX: factor, y: factor)
+            webView.frame.origin = .zero
+        }
     }
 }
