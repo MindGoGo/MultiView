@@ -19,6 +19,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -30,7 +32,15 @@ import kotlinx.coroutines.delay
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun NativeCell(url: String, index: Int, controller: LabController) {
+fun NativeCell(
+    url: String,
+    index: Int,
+    controller: LabController,
+    /** 串流要帶的請求標頭（yt-dlp 解析其他網站時，R103）。 */
+    headers: Map<String, String> = emptyMap(),
+    /** 顯示在狀態前面的說明，例如 yt-dlp 的解析時間。 */
+    note: String = "",
+) {
     val context = LocalContext.current
     var muted by remember { mutableStateOf(false) }
     var volume by remember { mutableFloatStateOf(1f) }
@@ -38,7 +48,10 @@ fun NativeCell(url: String, index: Int, controller: LabController) {
     var failure by remember { mutableStateOf<String?>(null) }
 
     val player = remember {
-        ExoPlayer.Builder(context).build().apply {
+        val http = DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(http))
+            .build().apply {
             setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -82,7 +95,7 @@ fun NativeCell(url: String, index: Int, controller: LabController) {
     // 每秒更新一次狀態：播放狀態、解析度、掉格數（R146 AC2 的效能紀錄）
     LaunchedEffect(player) {
         while (true) {
-            status = failure ?: describe(player)
+            status = note + (failure ?: describe(player))
             delay(1000)
         }
     }

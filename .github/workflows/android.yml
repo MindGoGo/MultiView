@@ -66,6 +66,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Chaquopy 編譯時用和 App 相同版本的 Python 安裝 yt-dlp 等套件（R148）
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
       - uses: gradle/actions/setup-gradle@v4
 
       - name: 單元測試（android/core）
@@ -107,6 +112,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      # Chaquopy 編譯時用和 App 相同版本的 Python 安裝 yt-dlp 等套件（R148）
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
 
       - uses: gradle/actions/setup-gradle@v4
 

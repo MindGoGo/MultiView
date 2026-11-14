@@ -9,6 +9,8 @@ buildscript {
     dependencies {
         if (findProject(":app") != null) {
             classpath("com.android.tools.build:gradle:8.13.0")
+            // 內嵌 Python（R148）
+            classpath("com.chaquo.python:gradle:17.1.0")
         }
     }
 }

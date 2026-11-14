@@ -104,6 +104,7 @@
   - 用 **Chaquopy**（Gradle 外掛，開源）把 Python 3.13 和 yt-dlp、yt-dlp-ejs、certifi 包進 App。版本和 iOS 版相同（`ios/scripts/fetch-python.sh` 裡固定的版本）。
   - **直接重用 iOS 版的 `ios/MultiView/YtDlp/mv_bridge.py`**（解析、頻道影片列表、更新用的版本資訊），只把 JS 執行的部分換掉。
   - yt-dlp 解析 YouTube 需要 JS 執行環境。iOS 版寫了一個 yt-dlp 外掛（`ios/MultiView/YtDlp/mv_jsc.py`）把 JS 交給 JavaScriptCore。Android 有兩個選項，技術驗證時兩個都試：
+    0. **（0.0.4 先試）AndroidX JavaScriptEngine**：`androidx.javascriptengine` 用手機 WebView 的 V8 執行 JS，在獨立的沙箱程序裡，不需要主執行緒也不需要顯示的 WebView；`mv_android.py` 把它包成 `mv_bridge.install_python_eval` 要的函式，`mv_bridge.py`、`mv_jsc.py` 不用改。不行再試下面兩個。
     1. **QuickJS**：yt-dlp 本身就支援（`--js-runtimes quickjs`）。把編譯好的 Android 版 QuickJS 執行檔放在 App 的 native library 資料夾（Android 允許執行 `nativeLibraryDir` 裡的檔案），告訴 yt-dlp 它的路徑。不用寫外掛。
     2. **WebView 的 JS**：照 iOS 版的 `mv_jsc.py` 寫一個外掛，把 JS 交給一個不顯示的 WebView 執行（`evaluateJavascript`）。WebView 要在主執行緒操作，要注意不要卡住畫面。
   - 解析要在背景執行緒；Python 同一時間只能跑一段程式（GIL），同時最多解析 2 個（和 iOS 版相同）。
@@ -287,3 +288,4 @@
 | 2026-11-14 | 第 11 節記錄 0.0.1 的實測結果；R146、R147 的測試畫面（0.0.2）；`android/core` 加入網址解析（照搬 iOS 版 Source.swift 與測試） | 使用者回報 0.0.1 安裝成功 |
 | 2026-11-14 | 第 11 節記錄 0.0.2 的實測結果（覆蓋安裝、多格原生播放、YouTube 內嵌沒畫面的原因）；0.0.3 修正 | 使用者實測 0.0.2 |
 | 2026-11-14 | 第 11 節記錄 0.0.3 的實測結果；R152 確定網頁格子同一時間只有一格有聲音（和 iOS 相同） | 使用者實測 0.0.3 |
+| 2026-11-14 | R148 的第一個做法：Chaquopy（Python 3.13）+ AndroidX JavaScriptEngine 執行 JS，重用 iOS 版的 mv_bridge.py、mv_jsc.py；`android/core` 加入 yt-dlp 串流選擇（照搬 iOS 版 YtDlp.swift 與測試）（0.0.4） | 開發順序第 2 步 |

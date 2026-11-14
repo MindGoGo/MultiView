@@ -13,3 +13,7 @@ ios/MultiView/Info.plist
 ios/build/
 ios/Vendor/
 ios/MultiViewCore/.build/
+
+# Python 的快取檔
+__pycache__/
+*.pyc

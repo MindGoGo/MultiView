@@ -50,6 +50,16 @@ enum class LabMode(val label: String, val prefKey: String, val defaults: List<St
             "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
         ),
     ),
+    YTDLP(
+        "yt-dlp",
+        "ytdlp_urls",
+        listOf(
+            "https://www.youtube.com/watch?v=jfKfPfyJRdk",
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "https://www.youtube.com/watch?v=9bZkp7q19f0",
+            "https://www.youtube.com/watch?v=OPf0YbXqDm0",
+        ),
+    ),
     YOUTUBE(
         "YouTube 內嵌",
         "youtube_urls",
@@ -86,6 +96,7 @@ fun LabScreen(controller: LabController) {
         // 重新載入時換一個值，讓所有格子重建播放器
         var generation by remember { mutableIntStateOf(0) }
         var editing by remember { mutableStateOf(false) }
+        var showingInfo by remember { mutableStateOf(false) }
 
         Column(
             modifier = Modifier
@@ -99,6 +110,7 @@ fun LabScreen(controller: LabController) {
                 onMode = { mode = it },
                 onColumns = { columns = it },
                 onEdit = { editing = true },
+                onInfo = { showingInfo = true },
                 onReload = { generation++ },
                 onPlayAll = controller::playAll,
                 onPauseAll = controller::pauseAll,
@@ -111,6 +123,10 @@ fun LabScreen(controller: LabController) {
                 generation = generation,
                 controller = controller,
             )
+        }
+
+        if (showingInfo) {
+            YtDlpInfoDialog(onDismiss = { showingInfo = false })
         }
 
         if (editing) {
@@ -137,6 +153,7 @@ private fun Toolbar(
     onMode: (LabMode) -> Unit,
     onColumns: (Int) -> Unit,
     onEdit: () -> Unit,
+    onInfo: () -> Unit,
     onReload: () -> Unit,
     onPlayAll: () -> Unit,
     onPauseAll: () -> Unit,
@@ -161,6 +178,7 @@ private fun Toolbar(
         ToolButton("全部暫停", onClick = onPauseAll)
         ToolButton("重新載入", onClick = onReload)
         ToolButton("網址", onClick = onEdit)
+        ToolButton("yt-dlp 資訊", onClick = onInfo)
     }
 }
 
@@ -200,6 +218,7 @@ private fun LabGrid(
                             when (mode) {
                                 LabMode.NATIVE -> NativeCell(url, index + 1, controller)
                                 LabMode.YOUTUBE -> YouTubeCell(url, index + 1, controller)
+                                LabMode.YTDLP -> YtDlpCell(url, index + 1, controller)
                             }
                         }
                     }
@@ -224,7 +243,11 @@ private fun UrlDialog(
             Column {
                 Text(
                     "一行一個，依序放進格子；格子比網址多時從頭重複。" +
-                        if (mode == LabMode.YOUTUBE) "可以貼 YouTube 網址或影片代碼。" else "可以貼 m3u8 或 mp4 網址。",
+                        when (mode) {
+                            LabMode.YOUTUBE -> "可以貼 YouTube 網址或影片代碼。"
+                            LabMode.YTDLP -> "可以貼 YouTube 或其他影片網站的網址，用 yt-dlp 解析後以原生播放器播放。"
+                            LabMode.NATIVE -> "可以貼 m3u8 或 mp4 網址。"
+                        },
                     fontSize = 13.sp,
                 )
                 OutlinedTextField(
