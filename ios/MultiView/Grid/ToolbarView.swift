@@ -89,6 +89,18 @@ struct ToolbarView: View {
                 .frame(width: 44, height: 44)
                 .accessibilityLabel("AirPlay")
 
+            // 旋轉：關了自動旋轉也能切換橫向、直向（R123）
+            BarButton(icon: "rotate.right", label: "旋轉畫面", highlighted: model.orientationLocked) {
+                model.rotate()
+            }
+            .contextMenu {
+                if model.orientationLocked {
+                    Button("跟著裝置旋轉", systemImage: "lock.open.rotation") {
+                        model.unlockOrientation()
+                    }
+                }
+            }
+
             BarButton(icon: "play.rectangle.on.rectangle.fill", label: "YouTube 小視窗", highlighted: model.companionOpen) {
                 model.toggleCompanion()
             }

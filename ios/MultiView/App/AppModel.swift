@@ -84,6 +84,26 @@ final class AppModel {
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     /// 滑桿等彈出視窗開著時，操作列與工具列不自動隱藏。
     @ObservationIgnored private var controlsHeld = false
+    /// 進入單格全螢幕時自動轉成了橫向，離開時要轉回直向。
+    @ObservationIgnored private var rotatedForSolo = false
+    /// 畫面方向被固定了（工具列的旋轉按鈕）；圖示跟著改變。
+    private(set) var orientationLocked = false
+
+    /// 工具列的旋轉按鈕：轉成另一個方向並固定（關了自動旋轉也可以轉）；再按一次轉回來。
+    func rotate() {
+        rotatedForSolo = false
+        Orientation.lock(Orientation.isPortrait ? .landscape : .portrait)
+        orientationLocked = true
+        keepControlsVisible()
+    }
+
+    /// 解除固定，回到跟著裝置旋轉。
+    func unlockOrientation() {
+        Orientation.lock(nil)
+        orientationLocked = false
+        keepControlsVisible()
+    }
+
     /// 進入單格全螢幕時因此暫停的來源；離開時恢復播放。
     @ObservationIgnored private var soloPaused: Set<Int> = []
     /// 切到背景、或被其他 App 的聲音打斷時因此暫停的來源；回來時恢復播放。
@@ -224,6 +244,11 @@ final class AppModel {
     /// 這一格占滿畫面，其他顯示中、正在播放的來源暫停。
     func enterSolo(_ index: Int) {
         guard solo == nil, slots.indices.contains(index), slots[index] != nil, isVisible(index) else { return }
+        // iPhone 直向時轉成橫向（關了自動旋轉也一樣），離開時轉回來
+        if UIDevice.current.userInterfaceIdiom == .phone, Orientation.locked == nil, Orientation.isPortrait {
+            rotatedForSolo = true
+            Orientation.lock(.landscape)
+        }
         soloPaused = []
         for (position, source) in slots.enumerated() {
             guard let source, position != index, isVisible(position), statuses[source.id] == .playing else { continue }
@@ -240,6 +265,11 @@ final class AppModel {
     func exitSolo() {
         guard solo != nil else { return }
         solo = nil
+        if rotatedForSolo {
+            rotatedForSolo = false
+            Orientation.lock(.portrait)
+            Orientation.lock(nil)
+        }
         for id in soloPaused {
             players[id]?.play()
         }
@@ -774,8 +804,14 @@ final class AppModel {
     // MARK: 聲音（R128）
 
     /// 點一下有影片的格子：只有這一格有聲音，並顯示操作列與工具列（R127、R128）。
+    ///
+    /// 這一格的操作列已經顯示時，再點一下就收起來（和一般影片 App 相同）；聲音已經在這一格，不用再切換。
     func tapCell(_ index: Int) {
         guard slots.indices.contains(index), slots[index] != nil else { return }
+        if activeCell == index, toolbarVisible {
+            hideControls()
+            return
+        }
         // YouTube 小視窗跟著最後點過的 YouTube 格子（R140）
         if slots[index]?.parsed.kind == .youtube {
             companionCell = index
