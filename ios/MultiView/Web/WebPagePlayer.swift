@@ -273,8 +273,8 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
                 $0.intent = "pause"
             }
         case "mv:report":
-            if let report = args.first as? [String: Any] {
-                handleReport(report)
+            if let data = args.first as? [String: Any] {
+                handleReport(data)
             }
         case "mv:ytvideo":
             if let href = args.first as? String, SourceParser.parse(href)?.kind == .youtube {
@@ -285,15 +285,15 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         }
     }
 
-    private func handleReport(_ report: [String: Any]) {
-        if (report["drm"] as? Bool) == true {
+    private func handleReport(_ data: [String: Any]) {
+        if (data["drm"] as? Bool) == true {
             fail("這個影片有版權保護，無法播放")
             return
         }
         guard !failed else { return }
-        found = (report["found"] as? Bool) == true
-        let status = report["status"] as? String
-        let reportVersion = (report["v"] as? NSNumber)?.intValue ?? -1
+        found = (data["found"] as? Bool) == true
+        let status = data["status"] as? String
+        let reportVersion = (data["v"] as? NSNumber)?.intValue ?? -1
 
         if found, waitVideoTimer != nil {
             waitVideoTimer?.cancel()
@@ -301,7 +301,7 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
             changeMode(.video)
         }
 
-        let progress = (report["progress"] as? [String: Any]).flatMap(Self.progress)
+        let progress = (data["progress"] as? [String: Any]).flatMap(Self.progress)
         lastProgress = progress
         // 上次的觀看進度：等影片長度大於那個位置才跳過去（R55）
         if let start = pendingStart, let progress {
