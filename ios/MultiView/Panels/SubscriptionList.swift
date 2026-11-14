@@ -146,7 +146,7 @@ struct SubscriptionList: View {
 
         if open {
             if videos.isEmpty {
-                Text(feed?.failed == true ? "無法取得最新影片" : (feed?.loading == true ? "讀取中…" : "沒有影片"))
+                Text(emptyText(feed))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 18)
@@ -170,6 +170,15 @@ struct SubscriptionList: View {
                 .padding(.leading, 18)
             }
         }
+    }
+
+    /// 展開後沒有影片時顯示的文字。失敗時帶上原因，方便回報問題。
+    private func emptyText(_ feed: SubscriptionStore.Feed?) -> String {
+        guard let feed else { return "讀取中…" }
+        if feed.failed {
+            return "無法取得最新影片" + (feed.failure.map { "（\($0)）" } ?? "")
+        }
+        return feed.loading ? "讀取中…" : "沒有影片"
     }
 
     private func add() {

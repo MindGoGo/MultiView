@@ -31,6 +31,16 @@ public enum YouTubeFeed {
         "https://www.youtube.com/feeds/videos.xml?channel_id=\(channelID)"
     }
 
+    /// 頻道摘要的網址，依序嘗試：頻道的摘要、頻道「上傳的影片」播放清單的摘要。
+    /// YouTube 的頻道摘要有時會回傳錯誤，播放清單的摘要內容相同，可以當備用（頻道代碼的 UC 換成 UU 就是那個播放清單）。
+    public static func feedURLs(channelID: String) -> [String] {
+        var urls = [feedURL(channelID: channelID)]
+        if channelID.hasPrefix("UC") {
+            urls.append("https://www.youtube.com/feeds/videos.xml?playlist_id=UU\(channelID.dropFirst(2))")
+        }
+        return urls
+    }
+
     public static func liveURL(channelID: String) -> String {
         "https://www.youtube.com/channel/\(channelID)/live"
     }

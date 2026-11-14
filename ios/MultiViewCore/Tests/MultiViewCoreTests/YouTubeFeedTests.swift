@@ -24,6 +24,14 @@ final class YouTubeFeedTests: XCTestCase {
         XCTAssertNil(lookup("nope"))
     }
 
+    func testFeedURLs() {
+        let rest = String(repeating: "a", count: 22)
+        XCTAssertEqual(YouTubeFeed.feedURLs(channelID: channelID), [
+            "https://www.youtube.com/feeds/videos.xml?channel_id=UC\(rest)",
+            "https://www.youtube.com/feeds/videos.xml?playlist_id=UU\(rest)"
+        ])
+    }
+
     func testExtractChannelInfo() {
         let videoPage = #"...,"channelId":"\#(channelID)","isOwnerViewing":false,"ownerChannelName":"A & B \"頻道\"","author":"x"..."#
         let video = YouTubeFeed.extractChannelInfo(html: videoPage, kind: .video)

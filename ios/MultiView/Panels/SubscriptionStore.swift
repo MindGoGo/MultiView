@@ -16,6 +16,8 @@ final class SubscriptionStore {
         var loading = false
         /// 上次讀取失敗（顯示「無法取得最新影片」）。
         var failed = false
+        /// 失敗的原因，例如「HTTP 404」；顯示在訊息後面，方便回報問題。
+        var failure: String?
     }
 
     private(set) var feeds: [String: Feed] = [:]
@@ -62,11 +64,38 @@ final class SubscriptionStore {
 
     /// 讀取一個網頁的文字；失敗時回傳 nil。
     func fetchText(_ address: String) async -> String? {
-        guard let url = URL(string: address),
-              let (data, response) = try? await session.data(from: url),
-              let http = response as? HTTPURLResponse, http.statusCode == 200
-        else { return nil }
-        return String(data: data, encoding: .utf8)
+        await fetch(address).text
+    }
+
+    /// 讀取一個網頁的文字；失敗時 text 是 nil，problem 是原因。
+    private func fetch(_ address: String) async -> (text: String?, problem: String?) {
+        guard let url = URL(string: address) else { return (nil, "網址錯誤") }
+        do {
+            let (data, response) = try await session.data(from: url)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200 else { return (nil, "HTTP \(status)") }
+            // 少數回應不是合法的 UTF-8：容許錯誤的位元組，不要整份丟掉
+            return (String(decoding: data, as: UTF8.self), nil)
+        } catch {
+            return (nil, error.localizedDescription)
+        }
+    }
+
+    /// 讀取頻道的最新影片：依序嘗試每一個摘要網址，都失敗時回傳原因。
+    private func fetchVideos(_ id: String) async -> (videos: [FeedVideo]?, problem: String?) {
+        var problems: [String] = []
+        for address in YouTubeFeed.feedURLs(channelID: id) {
+            let result = await fetch(address)
+            if let text = result.text {
+                if let videos = YouTubeFeed.parseFeed(xml: text) {
+                    return (videos, nil)
+                }
+                problems.append("內容不是摘要（\(text.prefix(40).replacingOccurrences(of: "\n", with: " "))）")
+            } else {
+                problems.append(result.problem ?? "未知的錯誤")
+            }
+        }
+        return (nil, problems.joined(separator: "；"))
     }
 
     private func pump() {
@@ -82,9 +111,9 @@ final class SubscriptionStore {
     }
 
     private func fetch(_ id: String) async {
-        async let feedText = fetchText(YouTubeFeed.feedURL(channelID: id))
+        async let feedResult = fetchVideos(id)
         async let liveText = fetchText(YouTubeFeed.liveURL(channelID: id))
-        let videos = await feedText.flatMap { YouTubeFeed.parseFeed(xml: $0) }
+        let (videos, problem) = await feedResult
         let live = await liveText.flatMap { YouTubeFeed.parseLiveStatus(html: $0) }
 
         // 讀取期間頻道被移除了
@@ -92,6 +121,7 @@ final class SubscriptionStore {
         feed.loading = false
         feed.loadedAt = Date().timeIntervalSince1970 * 1000
         feed.failed = videos == nil
+        feed.failure = problem
         if let videos {
             feed.videos = videos
         }
