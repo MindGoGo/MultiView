@@ -27,8 +27,13 @@ final class NativePlayer: NSObject, CellPlayer {
     private var ended = false
     private var failure: String?
 
+    /// 能不能選畫質：HLS 才有不同畫質可以選（mp4 只有一種）。
+    let supportsQuality: Bool
+
     /// headers：串流請求要帶的標頭（其他網站用 yt-dlp 播放時，桌面版 R110）。
-    init(url: URL, source: CellSource, headers: [String: String] = [:]) {
+    /// adaptive：串流是 HLS，可以選畫質（R131）。
+    init(url: URL, source: CellSource, headers: [String: String] = [:], adaptive: Bool = false) {
+        supportsQuality = adaptive
         let layerView = PlayerLayerView()
         layerView.backgroundColor = .black
         layerView.playerLayer.videoGravity = .resizeAspect
@@ -48,6 +53,9 @@ final class NativePlayer: NSObject, CellPlayer {
         player.replaceCurrentItem(with: item)
         player.isMuted = source.muted
         player.volume = Float(Volume.fraction(source.volume))
+        if adaptive {
+            applyQuality(source.quality)
+        }
         // AirPlay 只送聲音，畫面留在裝置上（R132）
         player.allowsExternalPlayback = false
         observe()
@@ -82,6 +90,24 @@ final class NativePlayer: NSObject, CellPlayer {
         pendingResume = nil
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             Task { @MainActor [weak self] in self?.report() }
+        }
+    }
+
+    // MARK: 畫質（R131）
+
+    func setQuality(_ quality: Quality) {
+        guard supportsQuality else { return }
+        applyQuality(quality)
+    }
+
+    /// 限制 HLS 的最高畫質：系統只在不超過這個大小的畫質之間自動切換。自動時不限制。
+    private func applyQuality(_ quality: Quality) {
+        switch quality {
+        case .auto:
+            item.preferredMaximumResolution = .zero
+        case .height(let height):
+            // 寬度用 16:9 換算；直式影片也只看高度不超過
+            item.preferredMaximumResolution = CGSize(width: CGFloat(height) * 16 / 9, height: CGFloat(height))
         }
     }
 

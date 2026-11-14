@@ -94,6 +94,13 @@ final class WebSourcePlayer: NSObject, CellPlayer {
         inner?.willEnterForeground()
     }
 
+    var supportsQuality: Bool { inner?.supportsQuality ?? false }
+
+    func setQuality(_ quality: Quality) {
+        source.quality = quality
+        inner?.setQuality(quality)
+    }
+
     func shutdown() {
         closed = true
         inner?.shutdown()
@@ -127,7 +134,9 @@ final class WebSourcePlayer: NSObject, CellPlayer {
         usingYtDlp = true
         var start = startingSource()
         if stream.isLive { start.resume = nil }
-        install(NativePlayer(url: streamURL, source: start, headers: Self.headers(page: url, fromYtdlp: stream.headers)))
+        install(NativePlayer(
+            url: streamURL, source: start, headers: Self.headers(page: url, fromYtdlp: stream.headers), adaptive: stream.kind == .hls
+        ))
     }
 
     /// 串流要帶的標頭：Referer 是原本的網頁網址，yt-dlp 有提供時用 yt-dlp 的（桌面版 R110）。

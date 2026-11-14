@@ -79,6 +79,10 @@ struct RootView: View {
         .persistentSystemOverlays(.hidden)
         // 在畫面邊緣拖曳（例如拖下方的格子、進度條）時，第一次滑動不會直接回到主畫面或拉出控制中心
         .defersSystemGestures(on: .all)
+        // 從其他 App 的分享捷徑送網址進來（R126）
+        .onOpenURL { url in
+            model.openExternalLink(url.absoluteString)
+        }
         .preferredColorScheme(.dark)
         .onChange(of: scenePhase) { _, phase in
             switch phase {

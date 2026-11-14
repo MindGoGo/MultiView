@@ -44,8 +44,8 @@ struct ToolbarView: View {
                     model.setLayout(layout)
                     model.keepControlsVisible()
                 } label: {
-                    Text(layout.label)
-                        .font(.callout.weight(.semibold))
+                    LayoutIcon(layout: layout, stacked: model.gridStacked)
+                        .foregroundStyle(model.displayedLayout == layout ? Color.white : Color.secondary)
                         .frame(minWidth: 44, minHeight: 36)
                         .background(
                             model.displayedLayout == layout ? Color.accentColor.opacity(0.35) : Color.clear,

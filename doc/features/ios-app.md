@@ -49,6 +49,17 @@ SideStore 的安裝步驟會隨版本調整，請照官方說明做：<https://d
 
 用免費 Apple ID 時，簽章 7 天後失效，失效後 App 打不開（資料不會消失）。請每隔幾天打開 SideStore，在「My Apps」按「Refresh All」；也可以照 SideStore 的說明設定自動重新簽章。
 
+### 從其他 App 分享網址到 MultiView
+
+在 Safari、YouTube App 按「分享」就能把網址送進 MultiView。先在「捷徑」App 做一個分享捷徑（設定畫面也有同樣的步驟）：
+
+1. 打開「捷徑」App，按右上角的「＋」新增捷徑，名稱取「分享到 MultiView」。
+2. 按捷徑的設定（ⓘ），打開「在分享表單中顯示」，接收的類型選「URL」和「Safari 網頁」。
+3. 加入動作「文字」，內容輸入 `multiview://open?url=`，再接著插入變數「捷徑輸入」。
+4. 加入動作「打開 URL」。
+
+之後在分享選單選「分享到 MultiView」，網址會放進第一個空格；沒有空格時會問要取代哪一格。
+
 ## 限制與注意事項
 
 - 免費 Apple ID 同時最多只能有 3 個自己簽章的 App，SideStore 本身占 1 個。

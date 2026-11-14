@@ -92,7 +92,8 @@ final class AppModel {
     @ObservationIgnored private var inBackground = false
     /// 格子區域的大小與 `2` 版型是不是上下排列，由畫面回報（拖曳換位時用來找手指在哪一格）。
     @ObservationIgnored private var gridSize: CGSize = .zero
-    @ObservationIgnored private var gridStacked = false
+    /// `2` 版型是不是上下排列（小螢幕直向，R124）；版型圖示跟著畫。
+    private(set) var gridStacked = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     /// 操作列與工具列在手指離開後多久隱藏（R127）。
@@ -264,7 +265,9 @@ final class AppModel {
 
     func setGrid(size: CGSize, stacked: Bool) {
         gridSize = size
-        gridStacked = stacked
+        if gridStacked != stacked {
+            gridStacked = stacked
+        }
     }
 
     func beginSwap(from index: Int) {
@@ -378,7 +381,11 @@ final class AppModel {
                 self?.updateYtDlpAfterFailure(reason)
             }
             return player
-        case .hls(let href), .mp4(let href):
+        case .hls(let href):
+            if let url = URL(string: href) {
+                return NativePlayer(url: url, source: source, adaptive: true)
+            }
+        case .mp4(let href):
             if let url = URL(string: href) {
                 return NativePlayer(url: url, source: source)
             }
@@ -633,6 +640,25 @@ final class AppModel {
             }
         } else {
             pendingReplaceURL = url
+        }
+    }
+
+    /// 從其他 App 送進來的網址（R126）：放進第一個顯示中的空格；沒有空格時讓使用者選擇要取代哪一格。
+    func openExternalLink(_ link: String) {
+        guard let target = ExternalLink.target(of: link) else { return }
+        guard SourceParser.parse(target) != nil else {
+            showToast(ListError.unsupported.message)
+            return
+        }
+        exitSolo()
+        if let index = SlotRules.firstEmptyVisible(slots, layout: displayedLayout, solo: solo) {
+            if let message = setSource(target, at: index) {
+                showToast(message)
+            } else {
+                showToast("已放進第 \(index + 1) 格")
+            }
+        } else {
+            pendingReplaceURL = target
         }
     }
 
@@ -895,6 +921,27 @@ final class AppModel {
             player.setVolume(source.volume)
         }
         updatePictureInPicture()
+    }
+
+    // MARK: 畫質（R131）
+
+    /// 畫質選單的選項（R131）。
+    static let qualityOptions: [Quality] = [.auto, .height(1080), .height(720), .height(480), .height(360)]
+
+    func supportsQuality(_ source: CellSource) -> Bool {
+        // 播放器換成原生播放器（yt-dlp 解析完成）時，狀態會更新、畫面會重畫
+        _ = statuses[source.id]
+        return players[source.id]?.supportsQuality ?? false
+    }
+
+    func setQuality(_ index: Int, _ quality: Quality) {
+        guard slots.indices.contains(index), var source = slots[index] else { return }
+        source.quality = quality
+        slots[index] = source
+        players[source.id]?.setQuality(quality)
+        showToast("畫質：\(quality.label)")
+        keepControlsVisible()
+        scheduleSave()
     }
 
     // MARK: 亮度（R130）

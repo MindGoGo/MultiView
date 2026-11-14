@@ -30,6 +30,7 @@ struct ControlsBar: View {
                     muteButton
                     if supportsVolume { volumeButton }
                     brightnessButton
+                    if model.supportsQuality(source) { qualityButton }
                     Spacer(minLength: 8)
                     if model.canSwap { moveHandle }
                     soloButton
@@ -239,6 +240,27 @@ struct ControlsBar: View {
         }
     }
 
+    /// 畫質的子選單（R131）。
+    private var qualityMenu: MenuItem {
+        MenuItem(
+            title: "畫質：\(source.quality.label)",
+            systemImage: "tv",
+            children: AppModel.qualityOptions.map { quality in
+                MenuItem(title: quality.label, systemImage: "", checked: quality == source.quality) {
+                    model.setQuality(index, quality)
+                }
+            }
+        )
+    }
+
+    /// 畫質按鈕（寬的操作列）。
+    private var qualityButton: some View {
+        MenuButton(systemImage: "tv", accessibilityLabel: "畫質", items: { qualityMenu.children }) { open in
+            showsMore = open
+        }
+        .frame(width: 44, height: 44)
+    }
+
     /// 「⋯」選單的項目。
     private func moreItems() -> [MenuItem] {
         var items: [MenuItem] = []
@@ -246,6 +268,9 @@ struct ControlsBar: View {
             items.append(MenuItem(title: "音量", systemImage: "slider.horizontal.3") { showsVolume = true })
         }
         items.append(MenuItem(title: "亮度", systemImage: "sun.max.fill") { showsBrightness = true })
+        if model.supportsQuality(source) {
+            items.append(qualityMenu)
+        }
         if model.supportsPictureInPicture(source) {
             items.append(MenuItem(title: "子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) })
         }

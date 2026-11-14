@@ -55,6 +55,28 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("廣告阻擋") {
+                    LabeledContent("規則", value: adblockStatus)
+                    Text("網頁格子的廣告阻擋用 EasyList，在操作列的盾牌按鈕各自開關。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("從其他 App 分享網址") {
+                    Text("""
+                    在 Safari、YouTube App 按「分享」把網址送進 MultiView，要先在「捷徑」App 做一個分享捷徑：
+                    1. 打開「捷徑」App，按右上角的「＋」新增捷徑，名稱取「分享到 MultiView」。
+                    2. 按捷徑的設定（ⓘ），打開「在分享表單中顯示」，接收的類型選「URL」和「Safari 網頁」。
+                    3. 加入動作「文字」，內容輸入 multiview://open?url= ，再接著插入變數「捷徑輸入」。
+                    4. 加入動作「打開 URL」。
+                    之後在任何 App 的分享選單選「分享到 MultiView」，網址會放進第一個空格；沒有空格時會問要取代哪一格。
+                    """)
+                    .font(.footnote)
+                    Button("複製「multiview://open?url=」") {
+                        UIPasteboard.general.string = "multiview://open?url="
+                    }
+                }
+
                 Section("資料") {
                     Button("匯入桌面版資料…") {
                         importing = true
@@ -117,6 +139,19 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showsYtDlpTest) {
             YtDlpTestView(url: model.firstYouTubeURL ?? "")
+        }
+    }
+
+    /// 廣告阻擋規則的準備狀態（R138）。
+    private var adblockStatus: String {
+        switch AdBlocker.shared.status {
+        case .preparing:
+            return "準備中…"
+        case .unavailable:
+            return "這個版本的 App 沒有附規則"
+        case .ready(let loaded, let total, let rules, let version):
+            let count = rules > 0 ? "，約 \(rules) 條" : ""
+            return "\(loaded)／\(total) 份可以用\(count)（EasyList \(version)）"
         }
     }
 

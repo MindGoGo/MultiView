@@ -99,6 +99,13 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
         inner?.willEnterForeground()
     }
 
+    var supportsQuality: Bool { inner?.supportsQuality ?? false }
+
+    func setQuality(_ quality: Quality) {
+        source.quality = quality
+        inner?.setQuality(quality)
+    }
+
     func shutdown() {
         closed = true
         resolveTask?.cancel()
@@ -134,7 +141,7 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
             return
         }
         usingYtDlp = true
-        install(NativePlayer(url: url, source: startingSource(live: stream.isLive)))
+        install(NativePlayer(url: url, source: startingSource(live: stream.isLive), adaptive: stream.kind == .hls))
     }
 
     /// yt-dlp 失敗：改用內嵌播放器，從原本的時間點繼續（R90）。

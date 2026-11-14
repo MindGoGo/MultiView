@@ -37,6 +37,11 @@ protocol CellPlayer: AnyObject {
     /// 移除來源時釋放資源。
     func shutdown()
 
+    /// 能不能選畫質（原生播放器播 HLS 時，R131）。
+    var supportsQuality: Bool { get }
+    /// 畫質：自動，或最高畫面高度。
+    func setQuality(_ quality: Quality)
+
     /// 能不能用子母畫面（只有原生播放器，R132）。
     var supportsPictureInPicture: Bool { get }
     func startPictureInPicture()
@@ -49,6 +54,8 @@ protocol CellPlayer: AnyObject {
 
 extension CellPlayer {
     var isResolving: Bool { false }
+    var supportsQuality: Bool { false }
+    func setQuality(_ quality: Quality) {}
     var supportsPictureInPicture: Bool { false }
     func startPictureInPicture() {}
     func setAutomaticPictureInPicture(_ enabled: Bool) {}

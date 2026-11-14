@@ -1,17 +1,30 @@
 import Foundation
+import Observation
 import WebKit
 
 /// 網頁格子的廣告阻擋（規格 R138）：App 裡附的規則（EasyList 在編譯時轉成的 WebKit 內容阻擋規則）
 /// 第一次開啟時編譯起來，之後沿用系統保存的結果。編譯完成前開啟的網頁格子先不擋。
 @MainActor
+@Observable
 final class AdBlocker {
     static let shared = AdBlocker()
 
+    /// 規則的準備狀態，顯示在設定畫面（R138）。
+    enum Status: Equatable {
+        case preparing
+        /// loaded／total 份規則可以用；version 是 EasyList 的版本。
+        case ready(loaded: Int, total: Int, rules: Int, version: String)
+        /// App 裡沒有規則（編譯時沒有產生）。
+        case unavailable
+    }
+
+    private(set) var status: Status = .preparing
+
     /// 編譯好的規則清單；還沒編譯好時是空的。
-    private(set) var lists: [WKContentRuleList] = []
-    private var preparing: Task<Void, Never>?
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-    private var ready = false
+    @ObservationIgnored private(set) var lists: [WKContentRuleList] = []
+    @ObservationIgnored private var preparing: Task<Void, Never>?
+    @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
+    @ObservationIgnored private var ready = false
 
     /// 其他網站裡內嵌的 YouTube 播放器不阻擋（桌面版 R17 AC4）。加在每一份清單的最後。
     private static let youtubeFrameException =
@@ -25,6 +38,10 @@ final class AdBlocker {
 
         let version: String
         let lists: [Entry]
+    }
+
+    private struct EntryRules: Decodable {
+        let rules: Int?
     }
 
     private var folder: URL? {
@@ -74,7 +91,11 @@ final class AdBlocker {
               let data = try? Data(contentsOf: folder.appendingPathComponent("manifest.json")),
               let manifest = try? JSONDecoder().decode(Manifest.self, from: data),
               let store = WKContentRuleListStore.default()
-        else { return }
+        else {
+            status = .unavailable
+            return
+        }
+        let ruleCounts = (try? JSONDecoder().decode(RuleCounts.self, from: data))?.lists.map { $0.rules ?? 0 } ?? []
 
         let prefix = "multiview-adblock-"
         let current = Set(manifest.lists.map { prefix + manifest.version + "-" + $0.name })
@@ -86,18 +107,25 @@ final class AdBlocker {
         }
 
         var compiled: [WKContentRuleList] = []
-        for entry in manifest.lists {
+        var rules = 0
+        for (index, entry) in manifest.lists.enumerated() {
             let identifier = prefix + manifest.version + "-" + entry.name
-            if let list = try? await store.contentRuleList(forIdentifier: identifier) {
-                compiled.append(list)
-                continue
+            var list = try? await store.contentRuleList(forIdentifier: identifier)
+            if list == nil, let json = try? String(contentsOf: folder.appendingPathComponent(entry.file), encoding: .utf8) {
+                list = await compile(json, identifier: identifier, store: store)
             }
-            guard let json = try? String(contentsOf: folder.appendingPathComponent(entry.file), encoding: .utf8) else { continue }
-            if let list = await compile(json, identifier: identifier, store: store) {
+            if let list {
                 compiled.append(list)
+                rules += index < ruleCounts.count ? ruleCounts[index] : 0
             }
         }
         lists = compiled
+        status = .ready(loaded: compiled.count, total: manifest.lists.count, rules: rules, version: manifest.version)
+    }
+
+    /// manifest.json 裡每一份清單的規則數。
+    private struct RuleCounts: Decodable {
+        let lists: [EntryRules]
     }
 
     /// 編譯一份清單；加上 YouTube 的例外失敗時，改成不加再試一次。這一份還是失敗就略過，不影響其他的。

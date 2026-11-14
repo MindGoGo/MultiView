@@ -6,7 +6,26 @@ struct MenuItem {
     let title: String
     let systemImage: String
     var destructive = false
-    let action: () -> Void
+    /// 目前選中的選項（顯示打勾）。
+    var checked = false
+    /// 有子項目時是子選單，action 不會被呼叫。
+    var children: [MenuItem] = []
+    var action: () -> Void = {}
+
+    /// 轉成系統的選單元素。
+    func element() -> UIMenuElement {
+        let image = systemImage.isEmpty ? nil : UIImage(systemName: systemImage)
+        if !children.isEmpty {
+            return UIMenu(title: title, image: image, children: children.map { $0.element() })
+        }
+        let run = action
+        return UIAction(
+            title: title,
+            image: image,
+            attributes: destructive ? .destructive : [],
+            state: checked ? .on : .off
+        ) { _ in run() }
+    }
 }
 
 /// 點一下就打開系統浮動選單的圖示按鈕（R127 的「⋯」）。
@@ -32,13 +51,7 @@ struct MenuButton: UIViewRepresentable {
         // 打開時才建立選單，項目的文字（例如「加入最愛」／「從最愛移除」）才會是最新的
         button.menu = UIMenu(children: [
             UIDeferredMenuElement.uncached { completion in
-                completion(build().map { item in
-                    UIAction(
-                        title: item.title,
-                        image: UIImage(systemName: item.systemImage),
-                        attributes: item.destructive ? .destructive : []
-                    ) { _ in item.action() }
-                })
+                completion(build().map { $0.element() })
             }
         ])
     }

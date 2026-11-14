@@ -39,7 +39,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: local.multiview.ios
         PRODUCT_NAME: MultiView
         # 發佈新版時改這裡，並推送 ios-v<版本號> 標籤（R143）
-        MARKETING_VERSION: 0.0.24
+        MARKETING_VERSION: 0.0.25
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: MultiView/MultiView-Bridging-Header.h
@@ -60,6 +60,11 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
+        # 從其他 App 送網址進來：multiview://open?url=<網址>（R126）
+        CFBundleURLTypes:
+          - CFBundleURLName: local.multiview.ios
+            CFBundleURLSchemes:
+              - multiview
         # 背景播放聲音、子母畫面（R132）
         UIBackgroundModes:
           - audio
