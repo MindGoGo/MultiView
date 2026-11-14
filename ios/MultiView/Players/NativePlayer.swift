@@ -27,13 +27,20 @@ final class NativePlayer: NSObject, CellPlayer {
     private var ended = false
     private var failure: String?
 
-    init(url: URL, source: CellSource) {
+    /// headers：串流請求要帶的標頭（其他網站用 yt-dlp 播放時，桌面版 R110）。
+    init(url: URL, source: CellSource, headers: [String: String] = [:]) {
         let layerView = PlayerLayerView()
         layerView.backgroundColor = .black
         layerView.playerLayer.videoGravity = .resizeAspect
         view = layerView
         self.layerView = layerView
-        item = AVPlayerItem(url: url)
+        if headers.isEmpty {
+            item = AVPlayerItem(url: url)
+        } else {
+            // AVURLAsset 沒有公開的設定標頭方式；這個鍵是常用的做法
+            let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+            item = AVPlayerItem(asset: asset)
+        }
         pendingResume = source.resume
         super.init()
 

@@ -10,6 +10,10 @@ on:
     paths:
       - 'ios/**'
       - '.github/workflows/ios.yml'
+      # iOS 版重用桌面版的網頁偵測程式與廣告清單
+      - 'electron/webPreload.ts'
+      - 'src/lib/**'
+      - 'resources/easylist.txt'
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -30,6 +34,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ios/scripts/fetch-python.sh
+
+      - name: 產生網頁格子的檔案（注入網頁的程式、廣告阻擋規則）
+        run: ios/scripts/build-web.sh
 
       - name: 產生 Xcode 專案
         run: |
@@ -84,6 +91,9 @@ jobs:
 
       - name: 下載 Python 與 yt-dlp
         run: ios/scripts/fetch-python.sh
+
+      - name: 產生網頁格子的檔案（注入網頁的程式、廣告阻擋規則）
+        run: ios/scripts/build-web.sh
 
       - name: 產生 Xcode 專案
         run: |

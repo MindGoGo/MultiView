@@ -29,6 +29,16 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Section("其他網站的播放方式") {
+                    Picker("其他網站", selection: Binding(get: { model.webMethod }, set: { model.setWebMethod($0) })) {
+                        Text("網頁").tag(WebMethod.web)
+                        Text("yt-dlp").tag(WebMethod.ytdlp)
+                    }
+                    Text("yt-dlp：先試著用 yt-dlp 取得影片，成功時用 App 的播放器播放（可以多格同時出聲）；不支援的網站照樣顯示網頁。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("yt-dlp") {
                     LabeledContent("版本", value: model.ytdlpVersion ?? "—")
                     if let pending = model.ytdlpPendingVersion {

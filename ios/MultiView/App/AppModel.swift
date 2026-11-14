@@ -19,6 +19,10 @@ final class AppModel {
     private(set) var masterBrightness: Int
     /// YouTube 直播、一般影片的播放方式（R88、R135）。
     private(set) var youtubeMethods: YouTubeMethods
+    /// 其他網站的播放方式（R102、R135）：網頁，或先用 yt-dlp。
+    private(set) var webMethod: WebMethod
+    /// 網頁格子目前的顯示方式（R13、R14），以來源的 id 為索引；不保存，重新開啟時從影片模式開始。
+    private(set) var webModes: [Int: WebMode] = [:]
     /// 最愛、歷史、訂閱頻道（R141、R142）；存在清單檔，和設定檔分開。
     private(set) var lists: Lists
     /// 清單面板上次的那一邊和分頁（R58）。
@@ -107,11 +111,14 @@ final class AppModel {
         ratios = settings.ratios
         masterBrightness = settings.brightness
         youtubeMethods = AppModel.initialMethods(settings.youtubeMethods)
+        webMethod = settings.webMethod
         listTab = settings.listTab
         // 還原的來源載入後維持暫停（R10 AC1）
         slots = SettingsBridge.restoreSlots(settings.slots)
 
         configureAudioSession()
+        // 廣告阻擋的規則在背景準備（第一次開啟時要編譯，R138）
+        AdBlocker.shared.prepare()
         observeAudioSession()
         configureRemoteCommands()
         startYtDlpAutoUpdate()
@@ -368,11 +375,95 @@ final class AppModel {
             }
         case .web(let href):
             if let url = URL(string: href) {
-                return WebPagePlayer(url: url, source: source)
+                return makeWebPlayer(url: url, source: source)
             }
         }
         // 網址判斷通過但系統無法使用的網址：顯示成空白的網頁
-        return WebPagePlayer(url: URL(string: "about:blank") ?? URL(fileURLWithPath: "/"), source: source)
+        return makeWebPlayer(url: URL(string: "about:blank") ?? URL(fileURLWithPath: "/"), source: source)
+    }
+
+    /// 網頁格子（R137）。YouTube 網站頁面以整頁模式顯示，點了影片就把這一格換成那部影片（R57）。
+    private func makeWebPlayer(url: URL, source: CellSource) -> CellPlayer {
+        let youtubeSite = SourceParser.isYouTubeSite(source.url)
+        let mode: WebMode = youtubeSite ? .page : .video
+        let id = source.id
+        let player = WebSourcePlayer(url: url, source: source, mode: mode, interceptYouTube: youtubeSite, method: webMethod)
+        // 播放器是在畫格子的時候建立的，畫面更新中不能改狀態，所以晚一點再記下顯示方式
+        Task { [weak self] in
+            guard let self, self.webModes[id] == nil else { return }
+            self.webModes[id] = mode
+        }
+        player.onModeChange = { [weak self] mode in
+            self?.webModes[id] = mode
+        }
+        player.onNotice = { [weak self] text in
+            self?.showToast(text)
+        }
+        player.onYouTubeVideo = { [weak self] href in
+            guard let self, let index = self.slots.firstIndex(where: { $0?.id == id }) else { return }
+            if let message = self.setSource(href, at: index) {
+                self.showToast(message)
+            }
+        }
+        return player
+    }
+
+    // MARK: 網頁格子（R137、R138）
+
+    /// 這一格現在顯示的是網頁（不是用 yt-dlp 播放、也不是解析中）時，回傳它的顯示方式。
+    func webMode(of source: CellSource) -> WebMode? {
+        guard source.parsed.kind == .web, let mode = webModes[source.id],
+              (players[source.id] as? WebSourcePlayer)?.webPage != nil
+        else { return nil }
+        return mode
+    }
+
+    /// 這一格的手指操作直接交給網頁（整頁模式）。
+    func isInteractive(_ source: CellSource) -> Bool {
+        webMode(of: source) == .page
+    }
+
+    /// 「顯示整個網頁」／「只顯示影片」（R14）。
+    func toggleWebMode(_ index: Int) {
+        guard slots.indices.contains(index), let source = slots[index],
+              let page = (players[source.id] as? WebSourcePlayer)?.webPage
+        else { return }
+        if page.mode == .page {
+            page.requestVideoMode()
+        } else {
+            page.setMode(.page)
+            webModes[source.id] = .page
+        }
+        keepControlsVisible()
+    }
+
+    /// 廣告阻擋的開關（R17、R138）：只影響這一格，網頁重新載入。
+    func toggleAdblock(_ index: Int) {
+        guard slots.indices.contains(index), let old = slots[index], old.parsed.kind == .web else { return }
+        var next = CellSource(url: old.url, parsed: old.parsed, autoplay: statuses[old.id]?.showsPause ?? old.autoplay)
+        next.muted = old.muted
+        next.volume = old.volume
+        next.brightness = old.brightness
+        next.adblock = !old.adblock
+        next.backURL = old.backURL
+        releasePlayer(old.id)
+        slots[index] = next
+        showToast(next.adblock ? "廣告阻擋：開" : "廣告阻擋：關")
+        keepControlsVisible()
+        scheduleSave()
+    }
+
+    /// 改變其他網站的播放方式（R102）：網頁格子重新載入。
+    func setWebMethod(_ method: WebMethod) {
+        guard method != webMethod else { return }
+        webMethod = method
+        for (index, source) in slots.enumerated() {
+            guard var source, source.parsed.kind == .web, !SourceParser.isYouTubeSite(source.url), players[source.id] != nil else { continue }
+            source.autoplay = statuses[source.id]?.showsPause ?? false
+            releasePlayer(source.id)
+            slots[index] = source
+        }
+        scheduleSave()
     }
 
     private func releasePlayer(_ id: Int) {
@@ -383,6 +474,7 @@ final class AppModel {
         errors[id] = nil
         titles[id] = nil
         everPlayed.remove(id)
+        webModes[id] = nil
     }
 
     private func apply(_ update: PlayerUpdate, id: Int) {
@@ -616,6 +708,7 @@ final class AppModel {
         ratios = settings.ratios
         masterBrightness = settings.brightness
         youtubeMethods = settings.youtubeMethods
+        webMethod = settings.webMethod
         listTab = settings.listTab
         slots = SettingsBridge.restoreSlots(settings.slots)
         var base = settings
@@ -1122,6 +1215,7 @@ final class AppModel {
         settings.ratios = ratios
         settings.brightness = masterBrightness
         settings.youtubeMethods = youtubeMethods
+        settings.webMethod = webMethod
         settings.listTab = listTab
         settings.slots = SettingsBridge.saveSlots(slots, positions: positions)
         baseSettings = settings

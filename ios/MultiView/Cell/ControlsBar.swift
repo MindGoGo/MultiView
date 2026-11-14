@@ -33,6 +33,10 @@ struct ControlsBar: View {
                     if model.canSwap { moveHandle }
                     soloButton
                     if model.supportsPictureInPicture(source) { pictureInPictureButton }
+                    if let mode = model.webMode(of: source) {
+                        webModeButton(mode)
+                        adblockButton
+                    }
                     favoriteButton
                     editButton
                     removeButton
@@ -168,6 +172,28 @@ struct ControlsBar: View {
         }
     }
 
+    /// 「顯示整個網頁」／「只顯示影片」（R14）。
+    private func webModeButton(_ mode: WebMode) -> some View {
+        BarButton(
+            icon: mode == .page ? "play.rectangle" : "doc.richtext",
+            label: mode == .page ? "只顯示影片" : "顯示整個網頁",
+            highlighted: mode == .page
+        ) {
+            model.toggleWebMode(index)
+        }
+    }
+
+    /// 廣告阻擋的開關（R17、R138）。
+    private var adblockButton: some View {
+        BarButton(
+            icon: source.adblock ? "shield.lefthalf.filled" : "shield.slash",
+            label: source.adblock ? "廣告阻擋：開" : "廣告阻擋：關",
+            highlighted: source.adblock
+        ) {
+            model.toggleAdblock(index)
+        }
+    }
+
     /// 加入或移出最愛（R22）。
     private var favoriteButton: some View {
         let favorite = model.isFavorite(source)
@@ -196,6 +222,14 @@ struct ControlsBar: View {
             Button("亮度", systemImage: "sun.max.fill") { showsBrightness = true }
             if model.supportsPictureInPicture(source) {
                 Button("子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) }
+            }
+            if let mode = model.webMode(of: source) {
+                Button(mode == .page ? "只顯示影片" : "顯示整個網頁", systemImage: mode == .page ? "play.rectangle" : "doc.richtext") {
+                    model.toggleWebMode(index)
+                }
+                Button(source.adblock ? "關閉廣告阻擋" : "開啟廣告阻擋", systemImage: source.adblock ? "shield.slash" : "shield.lefthalf.filled") {
+                    model.toggleAdblock(index)
+                }
             }
             Button(model.isFavorite(source) ? "從最愛移除" : "加入最愛", systemImage: model.isFavorite(source) ? "star.fill" : "star") {
                 model.toggleFavorite(index)

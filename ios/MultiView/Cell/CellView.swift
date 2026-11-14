@@ -25,6 +25,8 @@ struct CellView: View {
         let player = model.player(for: source)
         let status = model.status(of: source)
         let active = model.activeCell == index
+        // 整頁模式：手指操作直接交給網頁（R127）
+        let interactive = model.isInteractive(source)
 
         ZStack {
             PlayerHostView(player: player)
@@ -34,11 +36,11 @@ struct CellView: View {
                 .opacity(Brightness.dimOpacity(cell: source.brightness, master: model.masterBrightness))
                 .allowsHitTesting(false)
 
-            if !player.isInteractive {
+            if !interactive {
                 touchLayer
             }
 
-            statusOverlay(status: status, interactive: player.isInteractive, active: active, resolving: player.isResolving)
+            statusOverlay(status: status, interactive: interactive, active: active, resolving: player.isResolving)
 
             if let skipHint {
                 Text(skipHint)
@@ -98,7 +100,7 @@ struct CellView: View {
             if active {
                 ControlsBar(index: index, source: source, supportsVolume: player.supportsVolume, insets: insets)
                     .transition(.opacity)
-            } else if player.isInteractive {
+            } else if interactive {
                 // 整頁模式：點網頁就是操作網頁，用小把手叫出操作列（R127）
                 handle
                     .padding(.bottom, insets.bottom)
