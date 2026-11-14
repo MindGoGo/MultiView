@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -177,6 +179,29 @@ fun UrlDialog(
         confirmButton = { TextButton(onClick = { submit(text) }, enabled = text.isNotBlank()) { Text(confirmLabel) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+}
+
+/**
+ * 手指碰到工具列、操作列（包括滑動、拖曳）就算還在操作：重新計算自動隱藏的時間，手指放開後才開始倒數。
+ * 只是觀察，不會把事件吃掉。
+ */
+fun Modifier.keepsControlsVisible(model: AppModel): Modifier = pointerInput(model) {
+    var touching = false
+    try {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val pressed = event.changes.any { it.pressed }
+                if (pressed != touching) {
+                    touching = pressed
+                    model.holdControls(pressed)
+                }
+            }
+        }
+    } finally {
+        // 手指還按著的時候工具列被收起來（例如按了「隱藏工具列」）：把「操作中」的狀態還回去
+        if (touching) model.holdControls(false)
+    }
 }
 
 /** 黑底圓角的小標籤（狀態文字、提示）。 */

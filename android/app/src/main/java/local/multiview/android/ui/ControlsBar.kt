@@ -65,6 +65,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
         modifier = Modifier
             .fillMaxWidth()
             .background(BarBackground)
+            .keepsControlsVisible(model)
             // 操作列上的點擊不要傳到下面的影片
             .pointerInput(Unit) { detectTapGestures { model.keepControlsVisible() } }
             .padding(insets)

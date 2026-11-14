@@ -149,8 +149,11 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     /** 滑桿、選單等彈出視窗開著的數量；大於 0 時操作列與工具列不自動隱藏。 */
     private var controlsHolds = 0
 
-    /** 進入單格全螢幕時自動轉成了橫向，離開時要轉回直向。 */
+    /** 進入單格全螢幕時自動轉成了橫向，離開時要轉回原本的方向。 */
     private var rotatedForSolo = false
+
+    /** 旋轉按鈕固定的方向：true 橫向、false 直向、null 沒有固定（跟著裝置旋轉）。 */
+    private var lockedLandscape: Boolean? = null
 
     /** 進入單格全螢幕時因此暫停的來源；離開時恢復播放。 */
     private var soloPaused = setOf<Int>()
@@ -262,13 +265,17 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     fun rotate() {
         val host = host ?: return
         rotatedForSolo = false
-        host.lockOrientation(landscape = host.isPortrait)
+        val landscape = host.isPortrait
+        lockedLandscape = landscape
+        host.lockOrientation(landscape)
         orientationLocked = true
         keepControlsVisible()
     }
 
     /** 解除固定，回到跟著裝置旋轉。 */
     fun unlockOrientation() {
+        rotatedForSolo = false
+        lockedLandscape = null
         host?.lockOrientation(null)
         orientationLocked = false
         keepControlsVisible()
@@ -279,9 +286,9 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     /** 這一格占滿畫面，其他顯示中、正在播放的來源暫停。 */
     fun enterSolo(index: Int) {
         if (solo != null || slots.getOrNull(index) == null || !isVisible(index)) return
-        // 手機直向時轉成橫向（關了自動旋轉也一樣），離開時轉回來
+        // 手機直向時轉成橫向（關了自動旋轉、或用旋轉按鈕固定成直向也一樣），離開時轉回原本的方向
         val host = host
-        if (host != null && !isLarge && !orientationLocked && host.isPortrait) {
+        if (host != null && !isLarge && host.isPortrait) {
             rotatedForSolo = true
             host.lockOrientation(landscape = true)
         }
@@ -304,7 +311,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         solo = null
         if (rotatedForSolo) {
             rotatedForSolo = false
-            host?.lockOrientation(null)
+            host?.lockOrientation(lockedLandscape)
         }
         soloPaused.forEach { players[it]?.play() }
         soloPaused = emptySet()

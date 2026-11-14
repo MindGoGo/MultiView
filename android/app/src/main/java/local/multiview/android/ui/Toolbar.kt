@@ -42,7 +42,7 @@ import local.multiview.core.PlaybackRules
 fun Toolbar(model: AppModel, insets: PaddingValues) {
     var showsBrightness by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxWidth().background(BarBackground).padding(insets)) {
+    Box(modifier = Modifier.fillMaxWidth().background(BarBackground).keepsControlsVisible(model).padding(insets)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
