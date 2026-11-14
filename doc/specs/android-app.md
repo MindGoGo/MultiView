@@ -267,13 +267,14 @@
 | R146：多格原生播放 | POCO F6 Pro，Android 版 0.0.2（2026-11-14） | `2×2` 正常（同時出聲、各自靜音與音量）。`3×3`：9 格 ExoPlayer 可以同時播放；其中 2 格是預設的 Sintel 測試網址失效（`ERROR_CODE_IO_BAD_HTTP_STATUS`，伺服器的問題）。720p 的格子掉格數持續增加（約 1400，其中一格 2.8 萬），1680×750 的格子沒有掉格 | 0.0.3 換掉失效的測試網址。`3×3` 的效能等正式畫面（R153 的畫質）再評估 |
 | R147：多格 YouTube 內嵌 | POCO F6 Pro，Android 版 0.0.2（2026-11-14） | 有聲音但完全沒有畫面。狀態顯示同時只有 1 格在播放，其他格「暫停」或「尚未開始」 | 沒有畫面是 App 的錯：WebView 沒有指定大小，依網頁內容量出高度 0。0.0.3 改成填滿格子，並顯示「被暫停幾次」，確認是不是 WebView 搶音訊焦點讓其他格暫停 |
 | R147：多格 YouTube 內嵌（修正後） | POCO F6 Pro，Android 版 0.0.3（2026-11-14） | 4 格都有畫面。只留 1 格有聲音、其他 3 格靜音時，4 格都能同時播放；0.0.2 時 4 格都有聲音，同時只有 1 格在播放。第 1 格的預設影片顯示 YouTube 的「無法播放這部直播影片的存檔」（影片本身不能內嵌，不是 App 的問題） | **和 iOS 相同：網頁格子同一時間只有一格有聲音**，靜音的網頁格子可以繼續播放。R152 照 iOS 版的規則；多格同時出聲靠原生播放器與 yt-dlp（R148、R156） |
+| R148：內嵌 Python 與 yt-dlp | POCO F6 Pro，Android 版 0.0.4（2026-11-14） | 成功。Python 3.13.16、yt-dlp 2026.10.26、yt-dlp-ejs 0.8.0、OpenSSL 3.5.9；JS 執行環境用 AndroidX JavaScriptEngine，手機支援 heap、large（大的 JS）、console。4 格 YouTube（3 部一般影片、1 個直播）都解析成功，拿到 720p 的 HLS，原生播放器播放、沒有掉格。解析時間 4.4–13.5 秒：同時最多解析 2 個，後面的格子包含排隊時間，單獨一個約 4–8 秒（iOS 版 4.2 秒）。APK 35MB（只有 arm64）。預設的第 1 個網址（jfKfPfyJRdk）是「直播存檔不能播放」，影片本身的問題 | **JS 執行環境定為 AndroidX JavaScriptEngine**（不用 QuickJS、不用隱藏的 WebView）。R156 照 iOS 版接進正式的播放流程 |
 
 ## 12. 未決事項
 
 - [x] 裝置：POCO F6 Pro（1TB），Xiaomi HyperOS 3.0.303.0（以 Android 16 為基礎）（2026-11-14）。測試以這支手機為準；最低支援版本維持 Android 8.0（API 26），目標版本用 Android 16（API 36）。HyperOS 有比較積極的省電與背景限制，R154 的背景播放要特別測（可能要請使用者把 MultiView 的省電設定改成「無限制」）。
 - [x] APK 的簽章金鑰：由使用者在自己的 Windows 電腦用 `keytool` 產生（PKCS12，金鑰庫與金鑰用同一個密碼），存成 GitHub 的 Actions Secrets，名稱固定為 `ANDROID_KEYSTORE_BASE64`（金鑰檔的 base64）、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`（`multiview`）、`ANDROID_KEY_PASSWORD`（和金鑰庫密碼相同）。開發環境不經手金鑰內容。workflow 在沒有這些 Secrets 時（例如分支的測試）只編譯 debug 版，不簽發佈用的 APK。使用者 2026-11-14 回報已經建立好這四個 Secrets（金鑰檔與密碼由使用者自行備份）。
 - [x] 更新方式：兩種都寫在 `doc/features/android-app.md`（直接下載 APK 覆蓋安裝；Obtainium 要篩選版本標題 `MultiView Android`，因為同一個 repo 也有桌面版、iOS 版的 Releases）。
-- [ ] yt-dlp 的 JS 執行環境：QuickJS 或 WebView（R148 驗證後決定）。
+- [x] yt-dlp 的 JS 執行環境：AndroidX JavaScriptEngine（手機 WebView 的 V8 沙箱），0.0.4 在 POCO F6 Pro 實測成功（2026-11-14）。手機的 Android System WebView 太舊、不支援時，App 要顯示「請更新 Android System WebView」。
 - [ ] 共用檔案要不要搬到 `shared/`。
 
 ## 變更紀錄
@@ -289,3 +290,4 @@
 | 2026-11-14 | 第 11 節記錄 0.0.2 的實測結果（覆蓋安裝、多格原生播放、YouTube 內嵌沒畫面的原因）；0.0.3 修正 | 使用者實測 0.0.2 |
 | 2026-11-14 | 第 11 節記錄 0.0.3 的實測結果；R152 確定網頁格子同一時間只有一格有聲音（和 iOS 相同） | 使用者實測 0.0.3 |
 | 2026-11-14 | R148 的第一個做法：Chaquopy（Python 3.13）+ AndroidX JavaScriptEngine 執行 JS，重用 iOS 版的 mv_bridge.py、mv_jsc.py；`android/core` 加入 yt-dlp 串流選擇（照搬 iOS 版 YtDlp.swift 與測試）（0.0.4） | 開發順序第 2 步 |
+| 2026-11-14 | 第 11 節記錄 0.0.4 的實測結果；技術驗證（R146–R148）完成，JS 執行環境定為 AndroidX JavaScriptEngine | 使用者實測 0.0.4 |
