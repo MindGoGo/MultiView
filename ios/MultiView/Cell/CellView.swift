@@ -38,7 +38,7 @@ struct CellView: View {
                 touchLayer
             }
 
-            statusOverlay(status: status, interactive: player.isInteractive, active: active)
+            statusOverlay(status: status, interactive: player.isInteractive, active: active, resolving: player.isResolving)
 
             if let skipHint {
                 Text(skipHint)
@@ -201,7 +201,7 @@ struct CellView: View {
     }
 
     @ViewBuilder
-    private func statusOverlay(status: PlayStatus, interactive: Bool, active: Bool) -> some View {
+    private func statusOverlay(status: PlayStatus, interactive: Bool, active: Bool, resolving: Bool) -> some View {
         switch status {
         case .error:
             Text(model.errors[source.id] ?? "無法播放")
@@ -213,10 +213,12 @@ struct CellView: View {
                 .allowsHitTesting(false)
         case .loading:
             if !interactive {
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(.white)
-                    .allowsHitTesting(false)
+                // 讀取動畫：彈跳的小生物（R99）。網頁來源不顯示，網頁本身會逐步顯示內容
+                GeometryReader { geometry in
+                    LoadingCritter(kind: resolving ? .resolving : .loading, containerSize: geometry.size)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                }
+                .allowsHitTesting(false)
             }
         case .paused, .ended:
             if !interactive {

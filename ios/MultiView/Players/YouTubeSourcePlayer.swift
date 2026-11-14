@@ -15,6 +15,8 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
     /// 解析中還不知道用哪一種；當作原生（不會讓其他網頁格子靜音）。
     var usesWebAudio: Bool { inner?.usesWebAudio ?? false }
     var badge: String? { usingYtDlp ? "yt-dlp" : nil }
+    /// 還沒有裡面的播放器：yt-dlp 解析中。
+    var isResolving: Bool { inner == nil && !closed }
 
     private let videoID: String
     private var source: CellSource

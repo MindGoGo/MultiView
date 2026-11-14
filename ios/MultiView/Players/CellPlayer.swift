@@ -25,6 +25,8 @@ protocol CellPlayer: AnyObject {
     var usesWebAudio: Bool { get }
     /// 播放方式的小標示（桌面版 R109），例如「yt-dlp」；不需要標示時為 nil。
     var badge: String? { get }
+    /// 正在用 yt-dlp 解析（讀取動畫顯示「解析中…」，R99）。
+    var isResolving: Bool { get }
 
     func play()
     func pause()
@@ -46,6 +48,7 @@ protocol CellPlayer: AnyObject {
 }
 
 extension CellPlayer {
+    var isResolving: Bool { false }
     var supportsPictureInPicture: Bool { false }
     func startPictureInPicture() {}
     func setAutomaticPictureInPicture(_ enabled: Bool) {}
