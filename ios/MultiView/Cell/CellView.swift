@@ -38,7 +38,7 @@ struct CellView: View {
                 touchLayer
             }
 
-            statusOverlay(status: status, interactive: player.isInteractive)
+            statusOverlay(status: status, interactive: player.isInteractive, active: active)
 
             if let skipHint {
                 Text(skipHint)
@@ -185,8 +185,23 @@ struct CellView: View {
         }
     }
 
+    /// 中央的半透明播放／暫停鈕（R30）。
+    private func centerButton(icon: String, label: String) -> some View {
+        Button {
+            model.togglePlay(index)
+        } label: {
+            Image(systemName: icon)
+                .font(.title)
+                .frame(width: 64, height: 64)
+                .background(.black.opacity(0.45), in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
     @ViewBuilder
-    private func statusOverlay(status: PlayStatus, interactive: Bool) -> some View {
+    private func statusOverlay(status: PlayStatus, interactive: Bool, active: Bool) -> some View {
         switch status {
         case .error:
             Text(model.errors[source.id] ?? "無法播放")
@@ -205,20 +220,14 @@ struct CellView: View {
             }
         case .paused, .ended:
             if !interactive {
-                // 中央的半透明播放鈕（R30）
-                Button {
-                    model.togglePlay(index)
-                } label: {
-                    Image(systemName: "play.fill")
-                        .font(.title)
-                        .frame(width: 64, height: 64)
-                        .background(.black.opacity(0.45), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("播放")
+                // 暫停時一直顯示播放鈕
+                centerButton(icon: "play.fill", label: "播放")
             }
         case .playing:
-            EmptyView()
+            if !interactive, active {
+                // 播放中：點一下格子、操作列顯示時才出現暫停鈕
+                centerButton(icon: "pause.fill", label: "暫停")
+            }
         }
     }
 
