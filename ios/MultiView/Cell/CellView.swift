@@ -56,6 +56,7 @@ struct CellView: View {
             if model.toolbarVisible {
                 // 工具列顯示時，每一格左上角都有喇叭按鈕：只切換這一格的聲音，
                 // 不像點格子那樣把其他格子靜音，用來讓多格同時出聲（R128）
+                HStack(spacing: 4) {
                 Button {
                     model.toggleMute(index)
                 } label: {
@@ -69,18 +70,17 @@ struct CellView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(source.muted ? "取消靜音" : "靜音")
-                .overlay(alignment: .trailing) {
-                    // 播放方式的小標示（R109）
-                    if let badge = model.badge(of: source) {
-                        Text(badge)
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(.black.opacity(0.55), in: Capsule())
-                            .fixedSize()
-                            .alignmentGuide(.trailing) { $0[.leading] }
-                            .allowsHitTesting(false)
-                    }
+
+                // 播放方式的小標示（R109），放在喇叭按鈕右邊
+                if let badge = model.badge(of: source) {
+                    Text(badge)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .fixedSize()
+                        .allowsHitTesting(false)
+                }
                 }
                 .padding(.top, insets.top + (touchesTop ? Self.toolbarHeight : 0))
                 .padding(.leading, insets.leading)

@@ -103,6 +103,7 @@ struct SubscriptionList: View {
                     expanded.remove(channel.id)
                 } else {
                     expanded.insert(channel.id)
+                    store.prioritize(channel.id)
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -159,9 +160,12 @@ struct SubscriptionList: View {
                         Text(video.title)
                             .font(.footnote)
                             .lineLimit(2)
-                        Text(YouTubeFeed.formatAgo(published: video.published, now: now))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        let ago = YouTubeFeed.formatAgo(published: video.published, now: now)
+                        if !ago.isEmpty {
+                            Text(ago)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
@@ -178,7 +182,7 @@ struct SubscriptionList: View {
         if feed.failed {
             return "無法取得最新影片" + (feed.failure.map { "（\($0)）" } ?? "")
         }
-        return feed.loading ? "讀取中…" : "沒有影片"
+        return feed.loading || feed.videosLoading ? "讀取中…" : "沒有影片"
     }
 
     private func add() {

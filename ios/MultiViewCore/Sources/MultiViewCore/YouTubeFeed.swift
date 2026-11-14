@@ -129,12 +129,31 @@ public enum YouTubeFeed {
         return out.isEmpty ? nil : out
     }
 
+    /// mv_bridge.channel_videos 的結果 → 最新影片，新的在上面；失敗時回傳錯誤訊息。
+    /// 沒有時間的影片排在最後（維持頻道頁的順序）。
+    public static func parseChannelVideos(_ text: String) -> Result<[FeedVideo], YtDlpRules.ResolveError> {
+        guard let result = JSON.object(JSON.parse(text)) else {
+            return .failure(YtDlpRules.ResolveError(message: "無法讀取 yt-dlp 的結果"))
+        }
+        guard JSON.bool(result["ok"]) == true else {
+            return .failure(YtDlpRules.ResolveError(message: JSON.nonEmptyString(result["error"]) ?? "yt-dlp 讀取失敗"))
+        }
+        let videos: [FeedVideo] = (JSON.array(result["videos"]) ?? []).compactMap { raw in
+            guard let video = JSON.object(raw), let id = JSON.string(video["id"]), SourceParser.isVideoID(id) else { return nil }
+            let published = JSON.number(video["timestamp"]).map { $0 * 1000 } ?? 0
+            return FeedVideo(videoID: id, title: JSON.string(video["title"]) ?? id, published: published)
+        }
+        return .success(videos)
+    }
+
     public static func countNew(_ videos: [FeedVideo], now: Double) -> Int {
-        videos.filter { now - $0.published < newVideoInterval }.count
+        videos.filter { $0.published > 0 && now - $0.published < newVideoInterval }.count
     }
 
     /// 發布時間的簡短說明，例如「3 小時前」「2 天前」。
     public static func formatAgo(published: Double, now: Double) -> String {
+        // 不知道發布時間（yt-dlp 推算不出來）
+        guard published > 0 else { return "" }
         let minutes = max(0, Int(((now - published) / 60000).rounded(.down)))
         if minutes < 60 { return "\(max(minutes, 1)) 分鐘前" }
         let hours = minutes / 60

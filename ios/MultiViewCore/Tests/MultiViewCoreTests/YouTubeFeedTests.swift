@@ -131,6 +131,24 @@ final class YouTubeFeedTests: XCTestCase {
         XCTAssertEqual(YouTubeFeed.formatAgo(published: now - 800 * 24 * hour, now: now), "2 年前")
     }
 
+    func testParseChannelVideos() throws {
+        let ok = #"{"ok": true, "videos": [{"id": "aaaaaaaaaaa", "title": "新的", "timestamp": 1794573000}, {"id": "bbbbbbbbbbb", "title": "沒有時間", "timestamp": null}, {"id": "bad", "title": "x"}]}"#
+        let videos = try YouTubeFeed.parseChannelVideos(ok).get()
+        XCTAssertEqual(videos.map(\.videoID), ["aaaaaaaaaaa", "bbbbbbbbbbb"])
+        XCTAssertEqual(videos[0].published, 1_794_573_000_000)
+        XCTAssertEqual(videos[1].published, 0)
+        // 不知道發布時間：不顯示時間、不算新影片
+        XCTAssertEqual(YouTubeFeed.formatAgo(published: 0, now: 1_794_600_000_000), "")
+        XCTAssertEqual(YouTubeFeed.countNew(videos, now: 1_794_573_000_000 + 1000), 1)
+
+        func error(_ text: String) -> String? {
+            if case .failure(let error) = YouTubeFeed.parseChannelVideos(text) { return error.message }
+            return nil
+        }
+        XCTAssertEqual(error(#"{"ok": false, "error": "HTTP Error 404"}"#), "HTTP Error 404")
+        XCTAssertEqual(error("not json"), "無法讀取 yt-dlp 的結果")
+    }
+
     func testDecodeEntities() {
         XCTAssertEqual(YouTubeFeed.decodeEntities("a &amp; b &lt;c&gt; &quot;d&quot; &apos;e&apos;"), "a & b <c> \"d\" 'e'")
         XCTAssertEqual(YouTubeFeed.decodeEntities("&#20013;&#x6587; &#39;"), "中文 '")

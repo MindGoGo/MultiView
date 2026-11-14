@@ -4,6 +4,8 @@ import SwiftUI
 /// 依版型排列格子與分隔線（R124、R125）。
 struct GridView: View {
     @Environment(AppModel.self) private var model
+    /// 螢幕的安全區域（瀏海、圓角、Home 指示條）：格子畫到邊緣，貼著邊緣的操作列、按鈕要避開。
+    let safeArea: EdgeInsets
 
     static let coordinateSpace = "grid"
     /// 格子之間的間隔（分隔線看起來的寬度）。只在格子和格子之間，畫面邊緣沒有。
@@ -26,7 +28,6 @@ struct GridView: View {
             let layout = ScreenRules.displayedLayout(model.layout, isLarge: isLarge)
             let stacked = ScreenRules.isStacked(width: size.width, height: size.height)
             let ratios = model.ratios(for: layout)
-            let safeArea = geometry.safeAreaInsets
             let solo = model.solo
 
             ZStack(alignment: .topLeading) {

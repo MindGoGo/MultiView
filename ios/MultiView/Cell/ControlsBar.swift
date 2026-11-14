@@ -13,6 +13,7 @@ struct ControlsBar: View {
     @State private var showsVolume = false
     @State private var showsBrightness = false
     @State private var showsEdit = false
+    @State private var showsMore = false
 
     var body: some View {
         VStack(spacing: 4) {
@@ -62,7 +63,7 @@ struct ControlsBar: View {
                 .presentationDetents([.height(230)])
                 .presentationDragIndicator(.visible)
         }
-        .onChange(of: showsVolume || showsBrightness || showsEdit) { _, open in
+        .onChange(of: showsVolume || showsBrightness || showsEdit || showsMore) { _, open in
             // 彈出視窗開著時，操作列不自動隱藏
             model.holdControls(open)
         }
@@ -214,34 +215,28 @@ struct ControlsBar: View {
         }
     }
 
+    /// 「⋯」：放不下的按鈕（R127）。用對話框而不是系統選單：開著時 App 知道，操作列不會自動收起把它關掉。
     private var moreMenu: some View {
-        Menu {
+        BarButton(icon: "ellipsis", label: "更多") {
+            showsMore = true
+        }
+        .confirmationDialog("", isPresented: $showsMore, titleVisibility: .hidden) {
             if supportsVolume {
-                Button("音量", systemImage: "slider.horizontal.3") { showsVolume = true }
+                Button("音量") { showsVolume = true }
             }
-            Button("亮度", systemImage: "sun.max.fill") { showsBrightness = true }
+            Button("亮度") { showsBrightness = true }
             if model.supportsPictureInPicture(source) {
-                Button("子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) }
+                Button("子母畫面") { model.startPictureInPicture(index) }
             }
             if let mode = model.webMode(of: source) {
-                Button(mode == .page ? "只顯示影片" : "顯示整個網頁", systemImage: mode == .page ? "play.rectangle" : "doc.richtext") {
-                    model.toggleWebMode(index)
-                }
-                Button(source.adblock ? "關閉廣告阻擋" : "開啟廣告阻擋", systemImage: source.adblock ? "shield.slash" : "shield.lefthalf.filled") {
-                    model.toggleAdblock(index)
-                }
+                Button(mode == .page ? "只顯示影片" : "顯示整個網頁") { model.toggleWebMode(index) }
+                Button(source.adblock ? "關閉廣告阻擋" : "開啟廣告阻擋") { model.toggleAdblock(index) }
             }
-            Button(model.isFavorite(source) ? "從最愛移除" : "加入最愛", systemImage: model.isFavorite(source) ? "star.fill" : "star") {
-                model.toggleFavorite(index)
-            }
-            Button("更換網址", systemImage: "link") { beginEdit() }
-            Button("移除", systemImage: "xmark", role: .destructive) { model.removeSource(at: index) }
-        } label: {
-            Image(systemName: "ellipsis")
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+            Button(model.isFavorite(source) ? "從最愛移除" : "加入最愛") { model.toggleFavorite(index) }
+            Button("更換網址") { beginEdit() }
+            Button("移除", role: .destructive) { model.removeSource(at: index) }
+            Button("取消", role: .cancel) {}
         }
-        .accessibilityLabel("更多")
         .popover(isPresented: $showsVolume) {
             SliderPopup(title: "音量", value: Double(source.volume), range: 0...Double(Volume.max), step: 1, resetValue: nil) { value in
                 model.setVolume(index, value)

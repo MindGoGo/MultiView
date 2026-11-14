@@ -10,9 +10,12 @@ struct RootView: View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
 
-            // 格子畫到螢幕邊緣（滿版）；操作列等會自己避開瀏海、圓角和 Home 指示條
-            GridView()
-                .ignoresSafeArea()
+            // 格子畫到螢幕邊緣（滿版）；操作列等會自己避開瀏海、圓角和 Home 指示條。
+            // 安全區域要在忽略安全區域之前量（忽略之後量到的都是 0）
+            GeometryReader { proxy in
+                GridView(safeArea: proxy.safeAreaInsets)
+                    .ignoresSafeArea()
+            }
 
             if model.toolbarVisible {
                 ToolbarView()

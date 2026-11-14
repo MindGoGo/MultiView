@@ -179,6 +179,54 @@ def _slim(info: dict) -> dict:
     return out
 
 
+def channel_videos(argument: str) -> str:
+    """頻道的最新影片（規格 ios-app R142）。argument 是 JSON：{"channel_id": ..., "count": 15, "cache_dir": ...}。
+
+    YouTube 的 RSS 摘要對 App 回傳 404 時改用這個。發布時間由「3 天前」這類文字推算（yt-dlp 的 approximate_date），
+    所以只是大約的時間。回傳 JSON：{"ok": true, "videos": [{"id", "title", "timestamp"}]}，失敗時 {"ok": false, "error"}。
+    """
+    logger = _Logger(False)
+    try:
+        request = json.loads(argument)
+        channel_id = str(request['channel_id'])
+        if not (channel_id.startswith('UC') and len(channel_id) == 24):
+            raise ValueError('頻道代碼不正確')
+        count = max(1, min(int(request.get('count') or 15), 50))
+        yt_dlp = _load_yt_dlp()
+        import mv_jsc  # noqa: F401
+
+        options = {
+            'logger': logger,
+            'quiet': True,
+            'noprogress': True,
+            'ignoreconfig': True,
+            'skip_download': True,
+            'extract_flat': 'in_playlist',
+            'playlistend': count,
+            'socket_timeout': 20,
+            'color': 'never',
+            # 用英文介面，「3 days ago」才推算得出時間
+            'extractor_args': {'youtubetab': {'approximate_date': ['']}, 'youtube': {'lang': ['en']}},
+        }
+        if request.get('cache_dir'):
+            options['cachedir'] = request['cache_dir']
+        with yt_dlp.YoutubeDL(options) as downloader:
+            info = downloader.extract_info(f'https://www.youtube.com/channel/{channel_id}/videos', download=False)
+            info = downloader.sanitize_info(info)
+        videos = []
+        for entry in (info or {}).get('entries') or []:
+            if not isinstance(entry, dict) or not entry.get('id'):
+                continue
+            videos.append({
+                'id': entry['id'],
+                'title': entry.get('title') or '',
+                'timestamp': entry.get('timestamp') or entry.get('release_timestamp'),
+            })
+        return _json({'ok': True, 'videos': videos[:count]})
+    except Exception as error:  # noqa: BLE001
+        return _json({'ok': False, 'error': str(error), 'log': logger.lines[-8:]})
+
+
 def resolve(argument: str) -> str:
     """解析一個網址。argument 是 JSON：{"url": ..., "cache_dir": ..., "verbose": bool, "timeout": 秒}。
 
