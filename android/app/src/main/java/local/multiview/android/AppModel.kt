@@ -261,9 +261,16 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
 
     // 旋轉（R149）
 
-    /** 工具列的旋轉按鈕：轉成另一個方向並固定（關了自動旋轉也可以轉）；再按一次轉回來。 */
+    /**
+     * 工具列的旋轉按鈕：轉成另一個方向並固定（關了自動旋轉也可以轉，按鈕變成藍色）；
+     * 再按一次取消固定，回到跟著裝置旋轉（0.0.5 實測：按過之後一直是藍色，只有長按才能取消，不直覺）。
+     */
     fun rotate() {
         val host = host ?: return
+        if (orientationLocked) {
+            unlockOrientation()
+            return
+        }
         rotatedForSolo = false
         val landscape = host.isPortrait
         lockedLandscape = landscape
