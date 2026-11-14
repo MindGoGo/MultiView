@@ -349,9 +349,16 @@ final class AppModel {
     }
 
     /// 這個來源的播放器；第一次要用時才建立，之後沿用同一個。
+    ///
+    /// 只替目前還在格子裡的來源建立播放器。格子換成別的影片、或被移除時，畫面在更新的那一瞬間
+    /// 可能還會畫一次舊的格子；這時如果建立播放器，舊影片會在背景重新載入、出聲，卻不在任何格子裡
+    /// （2026-11-14 實測：從 YouTube 小視窗換影片時，被換掉的影片在背景重新播放）。
     func player(for source: CellSource) -> CellPlayer {
         if let player = players[source.id] {
             return player
+        }
+        guard slots.contains(where: { $0?.id == source.id }) else {
+            return InertPlayer.shared
         }
         let player = makePlayer(source)
         let id = source.id
