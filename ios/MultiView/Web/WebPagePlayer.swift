@@ -45,6 +45,9 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
 
     // 網頁回報的結果
     private var loaded = false
+    /// 網頁至少載入完成過一次。之後網站自己發起的跳轉失敗（例如導向 App 專用的連結），
+    /// 原本的網頁還在、影片也還在播，不算載入失敗。
+    private var hasLoaded = false
     private var found = false
     private var failed = false
     private var lastProgress: PlaybackProgress?
@@ -207,7 +210,14 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         onModeChange?(next)
     }
 
+    /// 影片模式還沒找到影片時，用黑色蓋住網頁（桌面版 R13：找到主要影片前整頁都是黑色），
+    /// 不會先看到縮小的整個網頁。
+    private func updateCover() {
+        container.covered = mode == .video && !found && !failed
+    }
+
     private func applyModeToView() {
+        updateCover()
         container.scalesUp = mode == .video
         // 整頁模式：網頁照原本的樣子，可以左緣右滑回上一頁；影片模式：點擊由格子攔下
         webView.isUserInteractionEnabled = mode == .page
@@ -295,6 +305,7 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         }
         guard !failed else { return }
         found = (data["found"] as? Bool) == true
+        updateCover()
         let status = data["status"] as? String
         let reportVersion = (data["v"] as? NSNumber)?.intValue ?? -1
 
@@ -359,6 +370,7 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
     private func fail(_ message: String) {
         guard !failed else { return }
         failed = true
+        updateCover()
         cancelTimers()
         updateState { $0.intent = "pause" }
         onUpdate?(PlayerUpdate(status: .error, progress: nil, title: title, errorMessage: message))
@@ -399,7 +411,7 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         loadTimer?.cancel()
         loadTimer = Task { [weak self] in
             try? await Task.sleep(for: Self.loadTimeout)
-            guard let self, !Task.isCancelled, !self.loaded else { return }
+            guard let self, !Task.isCancelled, !self.loaded, !self.hasLoaded else { return }
             self.fail("無法載入網頁")
         }
     }
@@ -428,7 +440,8 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void
     ) {
         // 主文件的 HTTP 狀態碼 400 以上算載入失敗（桌面版 R16 AC2）
-        if navigationResponse.isForMainFrame, let http = navigationResponse.response as? HTTPURLResponse, http.statusCode >= 400 {
+        if !hasLoaded, navigationResponse.isForMainFrame,
+           let http = navigationResponse.response as? HTTPURLResponse, http.statusCode >= 400 {
             decisionHandler(.allow)
             fail("無法載入網頁（HTTP \(http.statusCode)）")
             return
@@ -440,6 +453,7 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         loadTimer?.cancel()
         loadTimer = nil
         loaded = true
+        hasLoaded = true
         title = webView.title.flatMap { $0.isEmpty ? nil : $0 }
         sendState()
         checkNoVideo()
@@ -453,7 +467,21 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         // 被新的導覽取代或被停止，不是載入失敗
         if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled { return }
         if nsError.domain == "WebKitErrorDomain", nsError.code == 102 { return }
+        // 已經顯示過網頁：網站之後的跳轉失敗不影響目前的網頁
+        if hasLoaded {
+            loaded = true
+            return
+        }
         fail("無法載入網頁：\(error.localizedDescription)")
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        // 換成新的網頁了：之前的錯誤不再適用，重新找影片
+        guard failed else { return }
+        failed = false
+        found = false
+        updateCover()
+        report(.loading)
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
@@ -469,6 +497,12 @@ final class ScaledWebContainer: UIView {
     static let minHeight: CGFloat = 720
 
     private let webView: UIView
+    private let cover = UIView()
+
+    /// 用黑色蓋住網頁（網頁照常載入、播放，只是看不到）。
+    var covered = false {
+        didSet { cover.isHidden = !covered }
+    }
 
     var scalesUp = false {
         didSet {
@@ -482,6 +516,10 @@ final class ScaledWebContainer: UIView {
         backgroundColor = .black
         clipsToBounds = true
         addSubview(webView)
+        cover.backgroundColor = .black
+        cover.isHidden = true
+        cover.isUserInteractionEnabled = false
+        addSubview(cover)
     }
 
     @available(*, unavailable)
@@ -497,6 +535,7 @@ final class ScaledWebContainer: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        cover.frame = bounds
         let factor = scalesUp ? Self.scale(for: bounds.size) : 1
         webView.transform = .identity
         webView.frame = CGRect(x: 0, y: 0, width: bounds.width / factor, height: bounds.height / factor)
