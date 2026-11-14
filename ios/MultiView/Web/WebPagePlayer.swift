@@ -50,6 +50,10 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
     private var hasLoaded = false
     private var found = false
     private var failed = false
+    /// 目前的錯誤是載入失敗（不是 DRM）：之後網頁回報找到影片，表示網頁其實正常，取消錯誤。
+    private var loadFailure = false
+    /// 網頁程序被系統結束後，已經自動重新載入過一次。
+    private var reloadedAfterTermination = false
     private var lastProgress: PlaybackProgress?
     private var lastStatus: PlayStatus?
     private var title: String?
@@ -300,8 +304,13 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
 
     private func handleReport(_ data: [String: Any]) {
         if (data["drm"] as? Bool) == true {
-            fail("這個影片有版權保護，無法播放")
+            fail("這個影片有版權保護，無法播放", load: false)
             return
+        }
+        // 顯示「無法載入網頁」之後，網頁還在回報影片：網頁其實正常，取消錯誤
+        if failed, loadFailure, (data["found"] as? Bool) == true {
+            failed = false
+            loadFailure = false
         }
         guard !failed else { return }
         found = (data["found"] as? Bool) == true
@@ -367,9 +376,10 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         onUpdate?(PlayerUpdate(status: status, progress: progress, title: title, errorMessage: nil))
     }
 
-    private func fail(_ message: String) {
+    private func fail(_ message: String, load: Bool = true) {
         guard !failed else { return }
         failed = true
+        loadFailure = load
         updateCover()
         cancelTimers()
         updateState { $0.intent = "pause" }
@@ -412,7 +422,7 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
         loadTimer = Task { [weak self] in
             try? await Task.sleep(for: Self.loadTimeout)
             guard let self, !Task.isCancelled, !self.loaded, !self.hasLoaded else { return }
-            self.fail("無法載入網頁")
+            self.fail("無法載入網頁（逾時）")
         }
     }
 
@@ -476,16 +486,33 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        // 網頁開始顯示就算載入成功。新聞網站常常一直在載入廣告、推薦內容，等不到「載入完成」，
+        // 不能用它判斷成功（2026-11-14 實測 news.tvbs.com.tw：影片在播，30 秒後被判成載入失敗）
+        loadTimer?.cancel()
+        loadTimer = nil
+        hasLoaded = true
+        loaded = true
+        checkNoVideo()
         // 換成新的網頁了：之前的錯誤不再適用，重新找影片
         guard failed else { return }
         failed = false
+        loadFailure = false
         found = false
         updateCover()
         report(.loading)
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        fail("無法載入網頁")
+        // 網頁程序被系統結束（通常是記憶體不足）：重新載入一次，還是不行才顯示錯誤
+        guard !reloadedAfterTermination else {
+            fail("網頁停止運作")
+            return
+        }
+        reloadedAfterTermination = true
+        found = false
+        updateCover()
+        report(.loading)
+        webView.reload()
     }
 }
 
