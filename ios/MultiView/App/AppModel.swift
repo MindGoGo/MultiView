@@ -64,6 +64,8 @@ final class AppModel {
     // MARK: 內部
 
     @ObservationIgnored private var players: [Int: CellPlayer] = [:]
+    /// 訂閱頻道的最新影片與直播狀態（R142）。
+    let subscriptions = SubscriptionStore()
     @ObservationIgnored private var titles: [Int: String] = [:]
     /// 設定檔裡這個版本還沒有畫面可以改的欄位，保存時原樣寫回。
     @ObservationIgnored private var baseSettings: Settings
@@ -562,6 +564,43 @@ final class AppModel {
     func clearHistory(group: ListGroup) {
         lists = ListRules.clearHistory(lists, group: group)
         saveLists()
+    }
+
+    // MARK: 訂閱頻道（R142）
+
+    /// 加入頻道：貼上頻道網址或影片網址（加入那部影片的頻道）。成功回傳 nil，失敗回傳要顯示的訊息（R59）。
+    func addChannel(_ input: String) async -> String? {
+        let notFound = "找不到這個頻道"
+        guard let lookup = YouTubeFeed.channelLookup(input),
+              let html = await subscriptions.fetchText(lookup.page),
+              let info = YouTubeFeed.extractChannelInfo(html: html, kind: lookup.kind)
+        else { return notFound }
+        let now = Date().timeIntervalSince1970 * 1000
+        switch ListRules.addChannel(lists, id: info.id, name: info.name, url: Channel.pageURL(id: info.id), now: now) {
+        case .success(let next):
+            lists = next
+            saveLists()
+            return nil
+        case .failure(let error):
+            return error.message
+        }
+    }
+
+    func removeChannel(_ id: String) {
+        lists = ListRules.removeChannel(lists, id: id)
+        subscriptions.forget(id)
+        saveLists()
+    }
+
+    /// 匯入 Google Takeout 的訂閱檔（subscriptions.csv），回傳要顯示的結果（R61）。
+    func importTakeout(_ text: String) -> String {
+        guard let channels = YouTubeFeed.parseTakeoutCSV(text) else {
+            return "這個檔案不是 YouTube 訂閱清單"
+        }
+        let result = ListRules.addChannels(lists, channels, now: Date().timeIntervalSince1970 * 1000)
+        lists = result.lists
+        saveLists()
+        return "已匯入 \(result.added) 個頻道（略過 \(result.skipped) 個已訂閱）"
     }
 
     // MARK: 匯入桌面版的設定與清單（R144）

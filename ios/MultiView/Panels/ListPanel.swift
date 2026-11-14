@@ -25,6 +25,12 @@ struct ListPanel: View {
     private var group: ListGroup { model.listTab.group }
     private var kind: ListKind { model.listTab.tab == .history ? .history : .favorites }
 
+    /// 目前的分頁；「其他網站」沒有訂閱分頁。
+    private var currentTab: ListTab.Tab {
+        if model.listTab.tab == .subscriptions, group == .youtube { return .subscriptions }
+        return kind == .history ? .history : .favorites
+    }
+
     private var rows: [Row] {
         let items = kind == .favorites ? model.lists.favorites : model.lists.history
         return items.enumerated()
@@ -36,7 +42,9 @@ struct ListPanel: View {
         VStack(spacing: 0) {
             header
 
-            if rows.isEmpty {
+            if model.listTab.tab == .subscriptions, group == .youtube {
+                SubscriptionList()
+            } else if rows.isEmpty {
                 Spacer()
                 Text(kind == .favorites ? "還沒有最愛。\n播放影片時按操作列的星號加入。" : "還沒有歷史紀錄。")
                     .font(.callout)
@@ -106,7 +114,7 @@ struct ListPanel: View {
 
             Picker("來源", selection: Binding(
                 get: { group },
-                set: { model.setListTab(ListTab(group: $0, tab: kind == .history ? .history : .favorites)) }
+                set: { model.setListTab(ListTab(group: $0, tab: $0 == .youtube ? currentTab : (kind == .history ? .history : .favorites))) }
             )) {
                 Text("YouTube").tag(ListGroup.youtube)
                 Text("其他網站").tag(ListGroup.other)
@@ -114,9 +122,13 @@ struct ListPanel: View {
             .pickerStyle(.segmented)
 
             Picker("分頁", selection: Binding(
-                get: { kind == .history ? ListTab.Tab.history : ListTab.Tab.favorites },
+                get: { currentTab },
                 set: { model.setListTab(ListTab(group: group, tab: $0)) }
             )) {
+                // 訂閱只在 YouTube 那一邊（R59）
+                if group == .youtube {
+                    Text("訂閱").tag(ListTab.Tab.subscriptions)
+                }
                 Text("最愛").tag(ListTab.Tab.favorites)
                 Text("歷史").tag(ListTab.Tab.history)
             }
