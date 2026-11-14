@@ -1,10 +1,10 @@
 # Android 版：安裝與更新
 
-> 上線版本：Android 0.0.1（測試版，只有空畫面）　｜　更新日期：2026-11-14
+> 上線版本：Android 0.0.2（技術驗證版，測試畫面）　｜　更新日期：2026-11-14
 
 ## 這個功能做什麼
 
-MultiView 的 Android 手機／平板版。目前是第一個測試版，打開只有一個顯示版本號的畫面，用來確認「編譯 → 安裝到手機 → 覆蓋安裝」這條路走得通。多格播放等功能會在之後的版本陸續加入（規格見 `doc/specs/android-app.md`）。
+MultiView 的 Android 手機／平板版。目前是技術驗證版，打開是測試畫面：同時播放多格原生播放器（m3u8）或多格 YouTube 內嵌播放器，確認能不能同時出聲、各自調音量（步驟見 `tests/manual/android-app.md`）。多格播放等功能會在之後的版本陸續加入（規格見 `doc/specs/android-app.md`）。
 
 ## 誰可以使用
 
@@ -17,7 +17,7 @@ MultiView 的 Android 手機／平板版。目前是第一個測試版，打開�
 1. 用手機的瀏覽器到 [Releases](https://github.com/MindGoGo/MultiView/releases)，找標題是「MultiView Android 版本號」的版本，下載 `MultiView-Android-版本號.apk`。
 2. 點下載好的檔案安裝。第一次會問要不要允許瀏覽器（或檔案管理）「安裝不明應用程式」，允許後回來繼續安裝。
 3. Xiaomi HyperOS 可能會跳出安全掃描或要求登入小米帳號才能安裝，照畫面指示繼續即可。
-4. 打開 MultiView，黑底顯示「MultiView Android 版本號」。
+4. 打開 MultiView，上方顯示「MultiView Android 版本號」。
 
 ### 更新
 

@@ -1,55 +1,31 @@
 package local.multiview.android
 
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
-import local.multiview.core.AppInfo
+import local.multiview.android.lab.LabController
+import local.multiview.android.lab.LabScreen
 
 /**
- * 第一個測試版（R145）：只有顯示版本號的畫面，用來確認「編譯 → 安裝 → 覆蓋安裝」走得通。
+ * 技術驗證版（R146、R147）：多格原生播放器、多格 YouTube 內嵌播放器的測試畫面。
+ * 正式的主畫面在第 4 步（R149）取代這個畫面。
  */
 class MainActivity : ComponentActivity() {
+    private val controller = LabController()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent { PlaceholderScreen() }
+        // 播放中不自動關螢幕（R149）
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        setContent { LabScreen(controller) }
     }
-}
 
-@Composable
-private fun PlaceholderScreen() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .safeDrawingPadding(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "MultiView",
-                color = Color.White,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = AppInfo.versionLabel(BuildConfig.VERSION_NAME),
-                color = Color.White.copy(alpha = 0.6f),
-                fontSize = 14.sp,
-            )
-        }
+    override fun onStop() {
+        super.onStop()
+        // 背景播放是 R154 的範圍；技術驗證版切到背景時全部暫停
+        controller.pauseAll()
     }
 }
