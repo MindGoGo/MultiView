@@ -121,22 +121,6 @@ def versions(_argument: str = '') -> str:
     return _json(out)
 
 
-def js_selftest(_argument: str = '') -> str:
-    """確認 JS 執行環境能用：算一個簡單的式子，再載入 yt-dlp 的解題程式。"""
-    out = {}
-    try:
-        out['simple'] = eval_js('console.log(JSON.stringify({sum: 1 + 2, text: "ok"}))').strip()
-    except Exception as error:  # noqa: BLE001
-        out['simple_error'] = str(error)
-    try:
-        import yt_dlp_ejs.yt.solver as solver
-        script = f'{solver.lib()}\nObject.assign(globalThis, lib);\n{solver.core()}\nconsole.log(typeof jsc);\n'
-        out['solver'] = eval_js(script).strip()
-    except Exception as error:  # noqa: BLE001
-        out['solver_error'] = str(error)
-    return _json(out)
-
-
 class _Logger:
     """收集 yt-dlp 的訊息，連同結果一起回傳給 App 顯示。"""
 

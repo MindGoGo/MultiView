@@ -12,7 +12,6 @@ struct SettingsView: View {
     @State private var pendingSettings: Settings?
     @State private var importMessage: String?
     @State private var confirmsClearData = false
-    @State private var showsYtDlpTest = false
 
     private var version: String? {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -50,9 +49,6 @@ struct SettingsView: View {
                         model.checkYtDlpUpdate()
                     }
                     .disabled(model.ytdlpUpdating)
-                    Button("yt-dlp 測試") {
-                        showsYtDlpTest = true
-                    }
                 }
 
                 Section("廣告阻擋") {
@@ -136,9 +132,6 @@ struct SettingsView: View {
                 Task { await model.clearWebsiteData() }
             }
             Button("取消", role: .cancel) {}
-        }
-        .sheet(isPresented: $showsYtDlpTest) {
-            YtDlpTestView(url: model.firstYouTubeURL ?? "")
         }
     }
 

@@ -230,11 +230,6 @@ final class AppModel {
         scheduleSave()
     }
 
-    /// 格子裡第一個 YouTube 影片的網址（yt-dlp 測試畫面預先填入）。
-    var firstYouTubeURL: String? {
-        slots.compactMap { $0 }.first { $0.parsed.kind == .youtube }?.url
-    }
-
     func isVisible(_ index: Int) -> Bool {
         SlotRules.isVisible(index, layout: displayedLayout, solo: solo)
     }
