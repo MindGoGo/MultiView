@@ -216,13 +216,17 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
 
     /// 影片模式還沒找到影片時，用黑色蓋住網頁（桌面版 R13：找到主要影片前整頁都是黑色），
     /// 不會先看到縮小的整個網頁。
+    ///
+    /// 寬版面（網頁縮放）只在找影片的期間使用：找到影片後，注入的程式把影片設成填滿畫面寬度，
+    /// 縮放中的畫面寬度是格子的兩倍，影片只會露出一半（2026-11-14 實測），所以恢復成原本的大小。
     private func updateCover() {
-        container.covered = mode == .video && !found && !failed
+        let searching = mode == .video && !found && !failed
+        container.covered = searching
+        container.scalesUp = searching
     }
 
     private func applyModeToView() {
         updateCover()
-        container.scalesUp = mode == .video
         // 整頁模式：網頁照原本的樣子，可以左緣右滑回上一頁；影片模式：點擊由格子攔下
         webView.isUserInteractionEnabled = mode == .page
         webView.allowsBackForwardNavigationGestures = mode == .page
