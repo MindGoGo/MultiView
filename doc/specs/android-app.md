@@ -263,7 +263,7 @@
 ## 12. 未決事項
 
 - [x] 裝置：POCO F6 Pro（1TB），Xiaomi HyperOS 3.0.303.0（以 Android 16 為基礎）（2026-11-14）。測試以這支手機為準；最低支援版本維持 Android 8.0（API 26），目標版本用 Android 16（API 36）。HyperOS 有比較積極的省電與背景限制，R154 的背景播放要特別測（可能要請使用者把 MultiView 的省電設定改成「無限制」）。
-- [ ] APK 的簽章金鑰：由使用者在自己的 Windows 電腦用 `keytool` 產生（PKCS12，金鑰庫與金鑰用同一個密碼），存成 GitHub 的 Actions Secrets，名稱固定為 `ANDROID_KEYSTORE_BASE64`（金鑰檔的 base64）、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`（`multiview`）、`ANDROID_KEY_PASSWORD`（和金鑰庫密碼相同）。開發環境不經手金鑰內容。workflow 在沒有這些 Secrets 時（例如分支的測試）只編譯 debug 版，不簽發佈用的 APK。使用者 2026-11-14 收到步驟，還沒回報完成。
+- [x] APK 的簽章金鑰：由使用者在自己的 Windows 電腦用 `keytool` 產生（PKCS12，金鑰庫與金鑰用同一個密碼），存成 GitHub 的 Actions Secrets，名稱固定為 `ANDROID_KEYSTORE_BASE64`（金鑰檔的 base64）、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`（`multiview`）、`ANDROID_KEY_PASSWORD`（和金鑰庫密碼相同）。開發環境不經手金鑰內容。workflow 在沒有這些 Secrets 時（例如分支的測試）只編譯 debug 版，不簽發佈用的 APK。使用者 2026-11-14 回報已經建立好這四個 Secrets（金鑰檔與密碼由使用者自行備份）。
 - [ ] 更新方式：Obtainium 或直接下載 APK。
 - [ ] yt-dlp 的 JS 執行環境：QuickJS 或 WebView（R148 驗證後決定）。
 - [ ] 共用檔案要不要搬到 `shared/`。
@@ -274,3 +274,4 @@
 |---|---|---|
 | 2026-11-14 | 初版草稿 | 使用者要求準備 Android 版的文件；iOS 版 0.0.27 已穩定 |
 | 2026-11-14 | 記錄裝置（POCO F6 Pro、HyperOS 3）與簽章金鑰的 Secrets 名稱 | 使用者回覆未決事項 |
+| 2026-11-14 | 簽章金鑰的 Secrets 已建立 | 使用者回報 |
