@@ -1,0 +1,149 @@
+# iOS 版的測試、編譯、發佈（規格 ios-app R119）
+# - 推送到分支而且有改到 ios/：跑 MultiViewCore 的單元測試，並在模擬器上編譯一次
+# - 推送 ios-v<版本號> 標籤：另外產生沒有簽章的 IPA，放到 GitHub Releases，並更新 SideStore 來源
+name: iOS
+
+on:
+  push:
+    branches: ['**']
+    tags: ['ios-v*']
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+      # iOS 版重用桌面版的網頁偵測程式與廣告清單
+      - 'electron/webPreload.ts'
+      - 'src/lib/**'
+      - 'resources/easylist.txt'
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 測試與模擬器編譯
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 單元測試（MultiViewCore）
+        run: swift test --package-path ios/MultiViewCore
+
+      - name: 下載 Python 與 yt-dlp
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ios/scripts/fetch-python.sh
+
+      - name: 產生網頁格子的檔案（注入網頁的程式、廣告阻擋規則）
+        run: ios/scripts/build-web.sh
+
+      - name: 產生 Xcode 專案
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: 模擬器編譯
+        run: |
+          cd ios
+          xcodebuild -project MultiView.xcodeproj -scheme MultiView -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO -quiet build
+
+      - name: 檢查 App 裡的 Python
+        run: |
+          cd ios
+          echo "── Python-Apple-support 的版本（固定版本用）──"
+          cat Vendor/python-support.txt
+          APP=build/Build/Products/Debug-iphonesimulator/MultiView.app
+          STDLIB="$(ls -d "$APP"/python/lib/python3.* | head -1)"
+          echo "── App ──"
+          ls "$STDLIB" | wc -l
+          cat "$STDLIB"/lib-dynload/_ssl.*.fwork
+          ls "$APP/Frameworks" | wc -l
+          test -f "$STDLIB/encodings/__init__.py"
+          du -sh "$APP" "$APP/python" "$APP/site-packages" "$APP/Frameworks"
+
+  release:
+    name: 產生 IPA 並發佈
+    if: startsWith(github.ref, 'refs/tags/ios-v')
+    needs: test
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 確認標籤和 project.yml 的版本號一致
+        run: |
+          VERSION="${TAG#ios-v}"
+          PROJECT_VERSION="$(sed -n 's/^ *MARKETING_VERSION: *//p' ios/project.yml | tr -d '"')"
+          if [ "$VERSION" != "$PROJECT_VERSION" ]; then
+            echo "::error::標籤是 $VERSION，但 ios/project.yml 的 MARKETING_VERSION 是 $PROJECT_VERSION"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "IPA=MultiView-iOS-$VERSION.ipa" >> "$GITHUB_ENV"
+
+      - name: 下載 Python 與 yt-dlp
+        run: ios/scripts/fetch-python.sh
+
+      - name: 產生網頁格子的檔案（注入網頁的程式、廣告阻擋規則）
+        run: ios/scripts/build-web.sh
+
+      - name: 產生 Xcode 專案
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: 編譯（實機、不簽章）
+        run: |
+          cd ios
+          xcodebuild -project MultiView.xcodeproj -scheme MultiView -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -quiet build
+
+      - name: 包成 IPA
+        run: |
+          APP=ios/build/Build/Products/Release-iphoneos/MultiView.app
+          test -d "$APP"
+          # 不可以有 App 延伸功能（R119 AC5）：免費 Apple ID 每個延伸功能都會多占一個名額
+          if [ -d "$APP/PlugIns" ] && [ -n "$(ls -A "$APP/PlugIns")" ]; then
+            echo "::error::IPA 裡有 App 延伸功能"
+            exit 1
+          fi
+          mkdir -p package/Payload
+          cp -R "$APP" package/Payload/
+          (cd package && zip -qry "../$IPA" Payload)
+          ls -lh "$IPA"
+
+      - name: 產生 SideStore 來源
+        run: |
+          python3 ios/scripts/make-source.py --repo "$GITHUB_REPOSITORY" --version "$VERSION" \
+            --ipa "$IPA" --notes ios/release-notes.txt --out sidestore-source.json
+          cat sidestore-source.json
+
+      - name: 發佈到 GitHub Releases
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # 標籤是在 GitHub 網頁的 Releases 建立的：Release 已經存在，補上標題、說明和 IPA
+            gh release edit "$TAG" --title "MultiView iOS $VERSION" --notes-file ios/release-notes.txt
+            gh release upload "$TAG" "$IPA" --clobber
+          else
+            # iOS 版不標成「最新版本」，README 的桌面版下載連結不受影響
+            gh release create "$TAG" "$IPA" --title "MultiView iOS $VERSION" \
+              --notes-file ios/release-notes.txt --latest=false --verify-tag
+          fi
+
+      - name: 更新 SideStore 來源（固定的 ios-source 版本）
+        run: |
+          if ! gh release view ios-source >/dev/null 2>&1; then
+            gh release create ios-source --title "SideStore 來源（iOS 版）" --latest=false --target "$GITHUB_SHA" \
+              --notes "SideStore 來源網址：https://github.com/$GITHUB_REPOSITORY/releases/download/ios-source/sidestore-source.json（這個版本的檔案在每次發佈 iOS 版時自動更新，請不要刪除）"
+          fi
+          cp ios/MultiView/Assets.xcassets/AppIcon.appiconset/icon-1024.png icon-1024.png
+          gh release upload ios-source sidestore-source.json icon-1024.png --clobber

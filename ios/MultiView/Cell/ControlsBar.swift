@@ -1,0 +1,424 @@
+import MultiViewCore
+import SwiftUI
+
+/// 每一格下方的操作列（R127）：播放／暫停、喇叭、音量、亮度、更換網址、移除，以及進度條（R129）。
+struct ControlsBar: View {
+    @Environment(AppModel.self) private var model
+    let index: Int
+    let source: CellSource
+    let supportsVolume: Bool
+    /// 這一格貼著畫面邊緣時，按鈕要避開的範圍。
+    var insets = EdgeInsets()
+
+    @State private var showsVolume = false
+    @State private var showsBrightness = false
+    @State private var showsEdit = false
+    @State private var showsMore = false
+
+    var body: some View {
+        VStack(spacing: 4) {
+            if let progress = model.progress[source.id], ProgressRules.view(progress).kind != .live {
+                ProgressBar(progress: progress) { fraction in
+                    model.seek(index, fraction: fraction)
+                }
+            }
+
+            // 格子太窄放不下時，次要按鈕收進「⋯」選單（R127）
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 2) {
+                    playButton
+                    muteButton
+                    if supportsVolume { volumeButton }
+                    brightnessButton
+                    if model.supportsQuality(source) { qualityButton }
+                    Spacer(minLength: 8)
+                    if model.canSwap { moveHandle }
+                    soloButton
+                    if model.supportsPictureInPicture(source) { pictureInPictureButton }
+                    if let mode = model.webMode(of: source) {
+                        webModeButton(mode)
+                        adblockButton
+                    }
+                    favoriteButton
+                    editButton
+                    removeButton
+                }
+                HStack(spacing: 2) {
+                    playButton
+                    muteButton
+                    Spacer(minLength: 0)
+                    if model.canSwap { moveHandle }
+                    soloButton
+                    moreMenu
+                }
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .padding(.leading, insets.leading)
+        .padding(.trailing, insets.trailing)
+        .padding(.bottom, insets.bottom)
+        .background(.ultraThinMaterial)
+        .sheet(isPresented: $showsEdit) {
+            EditURLSheet(index: index, url: source.url)
+                .presentationDetents([.height(230)])
+                .presentationDragIndicator(.visible)
+        }
+        .onChange(of: showsVolume || showsBrightness || showsEdit || showsMore) { _, open in
+            // 彈出視窗開著時，操作列不自動隱藏
+            model.holdControls(open)
+        }
+        .onDisappear {
+            model.holdControls(false)
+        }
+    }
+
+    private var playButton: some View {
+        let showsPause = model.status(of: source).showsPause
+        return BarButton(icon: showsPause ? "pause.fill" : "play.fill", label: showsPause ? "暫停" : "播放") {
+            model.togglePlay(index)
+        }
+    }
+
+    private var muteButton: some View {
+        BarButton(
+            icon: source.muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+            label: source.muted ? "取消靜音" : "靜音",
+            highlighted: !source.muted
+        ) {
+            model.toggleMute(index)
+        }
+    }
+
+    private var volumeButton: some View {
+        BarButton(icon: "slider.horizontal.3", label: "音量") {
+            showsVolume = true
+        }
+        .popover(isPresented: $showsVolume) {
+            SliderPopup(
+                title: "音量",
+                value: Double(source.volume),
+                range: 0...Double(Volume.max),
+                step: 1,
+                resetValue: nil
+            ) { value in
+                model.setVolume(index, value)
+            }
+        }
+    }
+
+    private var brightnessButton: some View {
+        BarButton(icon: "sun.max.fill", label: "亮度", highlighted: source.brightness != Brightness.default) {
+            showsBrightness = true
+        }
+        .popover(isPresented: $showsBrightness) {
+            SliderPopup(
+                title: "亮度",
+                value: Double(source.brightness),
+                range: Double(Brightness.min)...Double(Brightness.max),
+                step: Double(Brightness.step),
+                resetValue: Double(Brightness.default)
+            ) { value in
+                model.setBrightness(index, value)
+            }
+        }
+    }
+
+    /// 「移動」：長按後拖到另一格放開，兩格互換（R125）。
+    private var moveHandle: some View {
+        Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+            .font(.body)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .foregroundStyle(model.swapFrom == index ? Color.accentColor : Color.primary)
+            .accessibilityLabel("移動（長按後拖到另一格）")
+            .gesture(
+                LongPressGesture(minimumDuration: 0.3)
+                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(GridView.coordinateSpace)))
+                    .onChanged { value in
+                        guard case .second(true, let drag) = value else { return }
+                        if model.swapFrom == nil {
+                            model.beginSwap(from: index)
+                        }
+                        if let drag {
+                            model.updateSwap(location: drag.location)
+                        }
+                    }
+                    .onEnded { value in
+                        if case .second(true, let drag?) = value {
+                            model.updateSwap(location: drag.location)
+                            model.endSwap()
+                        } else {
+                            model.cancelSwap()
+                        }
+                    }
+            )
+    }
+
+    /// 單格全螢幕（R20、R129）。
+    private var soloButton: some View {
+        let isSolo = model.solo == index
+        return BarButton(
+            icon: isSolo ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+            label: isSolo ? "離開全螢幕" : "全螢幕",
+            highlighted: isSolo
+        ) {
+            model.toggleSolo(index)
+        }
+    }
+
+    /// 子母畫面（只有原生播放器，R132）。
+    private var pictureInPictureButton: some View {
+        BarButton(icon: "pip.enter", label: "子母畫面") {
+            model.startPictureInPicture(index)
+        }
+    }
+
+    /// 「顯示整個網頁」／「只顯示影片」（R14）。
+    private func webModeButton(_ mode: WebMode) -> some View {
+        BarButton(
+            icon: mode == .page ? "play.rectangle" : "doc.richtext",
+            label: mode == .page ? "只顯示影片" : "顯示整個網頁",
+            highlighted: mode == .page
+        ) {
+            model.toggleWebMode(index)
+        }
+    }
+
+    /// 廣告阻擋的開關（R17、R138）。
+    private var adblockButton: some View {
+        BarButton(
+            icon: source.adblock ? "shield.lefthalf.filled" : "shield.slash",
+            label: source.adblock ? "廣告阻擋：開" : "廣告阻擋：關",
+            highlighted: source.adblock
+        ) {
+            model.toggleAdblock(index)
+        }
+    }
+
+    /// 加入或移出最愛（R22）。
+    private var favoriteButton: some View {
+        let favorite = model.isFavorite(source)
+        return BarButton(icon: favorite ? "star.fill" : "star", label: favorite ? "從最愛移除" : "加入最愛", highlighted: favorite) {
+            model.toggleFavorite(index)
+        }
+    }
+
+    private var editButton: some View {
+        BarButton(icon: "link", label: "更換網址") {
+            beginEdit()
+        }
+    }
+
+    private var removeButton: some View {
+        BarButton(icon: "xmark", label: "移除") {
+            model.removeSource(at: index)
+        }
+    }
+
+    /// 「⋯」：放不下的按鈕（R127）。用系統的浮動選單；選單開著時操作列不自動收起。
+    private var moreMenu: some View {
+        MenuButton(systemImage: "ellipsis", accessibilityLabel: "更多", items: moreItems) { open in
+            showsMore = open
+        }
+        .frame(width: 44, height: 44)
+        .popover(isPresented: $showsVolume) {
+            SliderPopup(title: "音量", value: Double(source.volume), range: 0...Double(Volume.max), step: 1, resetValue: nil) { value in
+                model.setVolume(index, value)
+            }
+        }
+        .popover(isPresented: $showsBrightness) {
+            SliderPopup(
+                title: "亮度",
+                value: Double(source.brightness),
+                range: Double(Brightness.min)...Double(Brightness.max),
+                step: Double(Brightness.step),
+                resetValue: Double(Brightness.default)
+            ) { value in
+                model.setBrightness(index, value)
+            }
+        }
+    }
+
+    /// 畫質的子選單（R131）。
+    private var qualityMenu: MenuItem {
+        MenuItem(
+            title: "畫質：\(source.quality.label)",
+            systemImage: "tv",
+            children: AppModel.qualityOptions.map { quality in
+                MenuItem(title: quality.label, systemImage: "", checked: quality == source.quality) {
+                    model.setQuality(index, quality)
+                }
+            }
+        )
+    }
+
+    /// 畫質按鈕（寬的操作列）。
+    private var qualityButton: some View {
+        MenuButton(systemImage: "tv", accessibilityLabel: "畫質", items: { qualityMenu.children }) { open in
+            showsMore = open
+        }
+        .frame(width: 44, height: 44)
+    }
+
+    /// 「⋯」選單的項目。
+    private func moreItems() -> [MenuItem] {
+        var items: [MenuItem] = []
+        if supportsVolume {
+            items.append(MenuItem(title: "音量", systemImage: "slider.horizontal.3") { showsVolume = true })
+        }
+        items.append(MenuItem(title: "亮度", systemImage: "sun.max.fill") { showsBrightness = true })
+        if model.supportsQuality(source) {
+            items.append(qualityMenu)
+        }
+        if model.supportsPictureInPicture(source) {
+            items.append(MenuItem(title: "子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) })
+        }
+        if let mode = model.webMode(of: source) {
+            items.append(MenuItem(
+                title: mode == .page ? "只顯示影片" : "顯示整個網頁",
+                systemImage: mode == .page ? "play.rectangle" : "doc.richtext"
+            ) { model.toggleWebMode(index) })
+            items.append(MenuItem(
+                title: source.adblock ? "關閉廣告阻擋" : "開啟廣告阻擋",
+                systemImage: source.adblock ? "shield.slash" : "shield.lefthalf.filled"
+            ) { model.toggleAdblock(index) })
+        }
+        let favorite = model.isFavorite(source)
+        items.append(MenuItem(title: favorite ? "從最愛移除" : "加入最愛", systemImage: favorite ? "star.fill" : "star") {
+            model.toggleFavorite(index)
+        })
+        items.append(MenuItem(title: "更換網址", systemImage: "link") { beginEdit() })
+        items.append(MenuItem(title: "移除", systemImage: "xmark", destructive: true) { model.removeSource(at: index) })
+        return items
+    }
+
+    private func beginEdit() {
+        showsEdit = true
+    }
+}
+
+/// 操作列與工具列的圖示按鈕，最小 44pt（R127）。
+struct BarButton: View {
+    let icon: String
+    let label: String
+    var highlighted = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.body)
+                .foregroundStyle(highlighted ? Color.accentColor : Color.primary)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
+/// 按鈕＋彈出滑桿（桌面版 R42；亮度另有「重設」）。
+struct SliderPopup: View {
+    let title: String
+    let range: ClosedRange<Double>
+    let step: Double
+    let resetValue: Double?
+    let onChange: (Double) -> Void
+
+    @State private var value: Double
+
+    init(
+        title: String, value: Double, range: ClosedRange<Double>, step: Double, resetValue: Double?,
+        onChange: @escaping (Double) -> Void
+    ) {
+        self.title = title
+        self.range = range
+        self.step = step
+        self.resetValue = resetValue
+        self.onChange = onChange
+        _value = State(initialValue: value)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("\(title) \(Int(value))%")
+                .font(.callout.monospacedDigit())
+            Slider(value: $value, in: range, step: step)
+                .frame(width: 220)
+            if let resetValue {
+                Button("重設") {
+                    value = resetValue
+                }
+                .disabled(value == resetValue)
+            }
+        }
+        .padding(16)
+        .presentationCompactAdaptation(.popover)
+        .onChange(of: value) { _, newValue in
+            onChange(newValue)
+        }
+    }
+}
+
+/// 進度條：點一下或拖曳跳到那個位置（R19、R129）。
+struct ProgressBar: View {
+    let progress: PlaybackProgress
+    let onSeek: (Double) -> Void
+
+    /// 拖曳中手指所在的比例；放開後才跳轉。
+    @State private var dragFraction: Double?
+
+    var body: some View {
+        let display = ProgressRules.view(progress)
+        let fraction = dragFraction ?? display.fraction
+
+        HStack(spacing: 8) {
+            Text(leadingText(fraction: fraction, display: display))
+                .font(.caption2.monospacedDigit())
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.25))
+                    Capsule().fill(Color.accentColor)
+                        .frame(width: CGFloat(max(0, min(1, fraction))) * geometry.size.width)
+                }
+                .frame(height: 4)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            guard geometry.size.width > 0 else { return }
+                            dragFraction = max(0, min(1, Double(value.location.x / geometry.size.width)))
+                        }
+                        .onEnded { _ in
+                            if let dragFraction {
+                                onSeek(dragFraction)
+                            }
+                            dragFraction = nil
+                        }
+                )
+            }
+            .frame(height: 28)
+
+            Text(trailingText(display: display))
+                .font(.caption2.monospacedDigit())
+        }
+        .padding(.horizontal, 6)
+    }
+
+    private func leadingText(fraction: Double, display: ProgressDisplay) -> String {
+        let seconds = ProgressRules.seekTarget(progress, fraction: fraction)
+        if display.kind == .dvr {
+            // 可回放的直播：顯示距離直播最新位置多久
+            let behind = progress.end - seconds
+            return behind <= ProgressRules.liveEdgeSeconds ? "直播" : ProgressRules.formatBehind(behind)
+        }
+        return ProgressRules.formatTime(seconds)
+    }
+
+    private func trailingText(display: ProgressDisplay) -> String {
+        display.kind == .dvr ? "直播" : ProgressRules.formatTime(progress.end - progress.start)
+    }
+}
