@@ -64,11 +64,11 @@ final class SubscriptionStore {
 
     /// 讀取一個網頁的文字；失敗時回傳 nil。
     func fetchText(_ address: String) async -> String? {
-        await fetch(address).text
+        await fetchPage(address).text
     }
 
     /// 讀取一個網頁的文字；失敗時 text 是 nil，problem 是原因。
-    private func fetch(_ address: String) async -> (text: String?, problem: String?) {
+    private func fetchPage(_ address: String) async -> (text: String?, problem: String?) {
         guard let url = URL(string: address) else { return (nil, "網址錯誤") }
         do {
             let (data, response) = try await session.data(from: url)
@@ -85,7 +85,7 @@ final class SubscriptionStore {
     private func fetchVideos(_ id: String) async -> (videos: [FeedVideo]?, problem: String?) {
         var problems: [String] = []
         for address in YouTubeFeed.feedURLs(channelID: id) {
-            let result = await fetch(address)
+            let result = await fetchPage(address)
             if let text = result.text {
                 if let videos = YouTubeFeed.parseFeed(xml: text) {
                     return (videos, nil)
