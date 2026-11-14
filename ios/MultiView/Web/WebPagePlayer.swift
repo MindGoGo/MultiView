@@ -516,14 +516,19 @@ final class WebPagePlayer: NSObject, CellPlayer, WKNavigationDelegate, WKScriptM
     }
 }
 
-/// 網頁格子的外框：影片模式時網頁至少以 1280×720 排版，再縮小到格子的大小（桌面版 R13）。
-/// 格子很小時（例如 iPhone 的分割畫面），網站會改用手機版的窄版面，影片常常排在畫面外面而找不到；
-/// 用比較大的版面排，影片比較會在畫面裡。整頁模式照格子的大小排版，方便操作。
+/// 網頁格子的外框：影片模式時網頁以比較寬的版面排版（桌面版 R13 是至少 1280×720）。
+/// 格子很小時（例如 iPhone），網站會改用手機版的窄版面，影片常常排在畫面外面而找不到。
+///
+/// 用 WKWebView 的 pageZoom（和 Safari 的縮放相同）：網頁照比較大的版面排版，但只畫格子實際大小的畫面。
+/// 0.0.19 曾經把網頁的畫面做成 1280×720 以上再縮小顯示，在 iPhone 上畫面太大、記憶體不夠，
+/// 網頁程序被系統結束（2026-11-14 實測 news.tvbs.com.tw）。
 final class ScaledWebContainer: UIView {
     static let minWidth: CGFloat = 1280
     static let minHeight: CGFloat = 720
+    /// 最多縮小到這個比例（和 Safari 的縮放下限相同），格子再小也不會排出太大的版面。
+    static let minZoom: CGFloat = 0.5
 
-    private let webView: UIView
+    private let webView: WKWebView
     private let cover = UIView()
 
     /// 用黑色蓋住網頁（網頁照常載入、播放，只是看不到）。
@@ -537,7 +542,7 @@ final class ScaledWebContainer: UIView {
         }
     }
 
-    init(webView: UIView) {
+    init(webView: WKWebView) {
         self.webView = webView
         super.init(frame: .zero)
         backgroundColor = .black
@@ -554,22 +559,20 @@ final class ScaledWebContainer: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 縮小的比例：格子比 1280×720 小時，網頁以 (寬 / 比例) × (高 / 比例) 排版再縮小；格子夠大時為 1。
+    /// 縮小的比例：格子比 1280×720 小時，網頁的版面放大到 (寬 / 比例) × (高 / 比例)；格子夠大時為 1。
     static func scale(for size: CGSize) -> CGFloat {
         guard size.width > 0, size.height > 0 else { return 1 }
-        return min(1, size.width / minWidth, size.height / minHeight)
+        return max(minZoom, min(1, size.width / minWidth, size.height / minHeight))
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        webView.frame = bounds
         cover.frame = bounds
-        let factor = scalesUp ? Self.scale(for: bounds.size) : 1
-        webView.transform = .identity
-        webView.frame = CGRect(x: 0, y: 0, width: bounds.width / factor, height: bounds.height / factor)
-        if factor != 1 {
-            // 以左上角為原點縮小
-            webView.transform = CGAffineTransform(scaleX: factor, y: factor)
-            webView.frame.origin = .zero
+        let zoom = scalesUp ? Self.scale(for: bounds.size) : 1
+        // 改變縮放會讓網頁重新排版；拖曳分隔線時只在差距夠大時才改
+        if abs(webView.pageZoom - zoom) > 0.04 || (zoom == 1 && webView.pageZoom != 1) {
+            webView.pageZoom = zoom
         }
     }
 }
