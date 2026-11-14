@@ -151,6 +151,12 @@ internal class WebUrl private constructor(
             return WebUrl(scheme, host, port, path, uri.rawQuery, uri.rawFragment, userInfo)
         }
 
+        /** 百分比解碼（UTF-8）；不是合法的 UTF-8 時回傳 null（對應 Swift 的 removingPercentEncoding）。 */
+        fun percentDecodeOrNull(text: String): String? {
+            val decoded = percentDecode(text)
+            return if ('\uFFFD' in decoded && '\uFFFD' !in text) null else decoded
+        }
+
         private fun percentDecode(text: String): String {
             if ('%' !in text) return text
             val bytes = java.io.ByteArrayOutputStream()

@@ -291,3 +291,4 @@
 | 2026-11-14 | 第 11 節記錄 0.0.3 的實測結果；R152 確定網頁格子同一時間只有一格有聲音（和 iOS 相同） | 使用者實測 0.0.3 |
 | 2026-11-14 | R148 的第一個做法：Chaquopy（Python 3.13）+ AndroidX JavaScriptEngine 執行 JS，重用 iOS 版的 mv_bridge.py、mv_jsc.py；`android/core` 加入 yt-dlp 串流選擇（照搬 iOS 版 YtDlp.swift 與測試）（0.0.4） | 開發順序第 2 步 |
 | 2026-11-14 | 第 11 節記錄 0.0.4 的實測結果；技術驗證（R146–R148）完成，JS 執行環境定為 AndroidX JavaScriptEngine | 使用者實測 0.0.4 |
+| 2026-11-14 | 開發順序第 3 步完成：`android/core` 移植 iOS 版 MultiViewCore 的全部邏輯與測試（版型、格位與聲音、亮度音量畫質、設定、清單、匯入合併、觀看進度、檔案讀寫、小視窗、訂閱、yt-dlp 更新判斷、分享連結），158 個測試；R150 補上從分享的文字找出第一個網址的規則（`ExternalLink.firstUrl`） | 開發順序第 3 步 |

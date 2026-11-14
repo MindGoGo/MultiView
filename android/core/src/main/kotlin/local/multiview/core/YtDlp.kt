@@ -131,3 +131,102 @@ object YtDlpRules {
         return array(info["entries"]).orEmpty().mapNotNull(::obj).firstOrNull { array(it["formats"]) != null }
     }
 }
+
+/** yt-dlp 的版本與自動更新的判斷（桌面版 R91–R93；Android 版 R156）。 */
+object YtDlpVersion {
+    /** 日期格式的版本號（2026.10.26、2026.10.26.123456）：取出可比較的版本，不是時回傳 null。 */
+    fun parse(text: String): String? {
+        val candidates = text.trim().split(Regex("[^0-9.]+")).filter { it.isNotEmpty() }
+        for (candidate in candidates) {
+            val numbers = candidate.split('.')
+            if (numbers.size !in 3..4 || numbers.any { it.isEmpty() }) continue
+            if (numbers[0].length != 4 || numbers[1].length > 2 || numbers[2].length > 2) continue
+            val out = mutableListOf(numbers[0], numbers[1].padStart(2, '0'), numbers[2].padStart(2, '0'))
+            if (numbers.size == 4) out += numbers[3]
+            return out.joinToString(".")
+        }
+        return null
+    }
+
+    /** a 比 b 新回傳正數、一樣回傳 0、比較舊回傳負數。 */
+    fun compare(a: String, b: String): Int {
+        val left = a.split('.').filter { it.isNotEmpty() }.map { it.toLongOrNull() ?: 0 }
+        val right = b.split('.').filter { it.isNotEmpty() }.map { it.toLongOrNull() ?: 0 }
+        for (index in 0 until maxOf(left.size, right.size)) {
+            val difference = (left.getOrNull(index) ?: 0) - (right.getOrNull(index) ?: 0)
+            if (difference != 0L) return if (difference > 0) 1 else -1
+        }
+        return 0
+    }
+}
+
+/** 更新紀錄 update.json（R156）。 */
+data class YtDlpUpdateRecord(
+    /** 上次自動更新檢查的時間（毫秒）；沒有時為 0。 */
+    val lastCheck: Double = 0.0,
+    /** 上次開啟時的 App 版本；沒有時為空字串。 */
+    val appVersion: String = "",
+) {
+    fun encoded(): String = JsonValues.encode(
+        JsonObject(
+            mapOf(
+                "lastCheck" to JsonValues.num(lastCheck),
+                "appVersion" to kotlinx.serialization.json.JsonPrimitive(appVersion),
+            ),
+        ),
+    )
+
+    companion object {
+        /** 讀不到或格式錯誤時當作從來沒檢查過、App 版本不同。 */
+        fun parse(text: String?): YtDlpUpdateRecord {
+            val root = text?.let { obj(JsonValues.parse(it)) } ?: return YtDlpUpdateRecord()
+            return YtDlpUpdateRecord(number(root["lastCheck"]) ?: 0.0, string(root["appVersion"]) ?: "")
+        }
+    }
+}
+
+object YtDlpUpdateRules {
+    /** 開啟時的自動更新：距離上次檢查超過 24 小時（R92 時機 1）。 */
+    const val AUTO_UPDATE_INTERVAL = 24.0 * 60 * 60 * 1000
+
+    /** 因為解析失敗而觸發的更新，至少間隔這麼久（R92：10 分鐘內不重複）。 */
+    const val FAILURE_UPDATE_INTERVAL = 10.0 * 60 * 1000
+
+    fun shouldAutoUpdate(record: YtDlpUpdateRecord, now: Double): Boolean =
+        now - record.lastCheck >= AUTO_UPDATE_INTERVAL || record.lastCheck > now
+
+    /** 看起來是 yt-dlp 太舊、無法解析 YouTube 頁面的錯誤（R92 時機 2）。 */
+    fun isOutdatedError(message: String): Boolean {
+        val text = message.lowercase()
+        if (notOutdatedPatterns.any { it in text }) return false
+        return outdatedPatterns.any { it in text }
+    }
+
+    /** 從官方的 SHA2-256SUMS 找出某個檔案的雜湊值（小寫十六進位）。 */
+    fun checksum(fileName: String, sums: String): String? {
+        for (line in sums.lines()) {
+            val fields = line.split(' ').filter { it.isNotEmpty() }
+            if (fields.size != 2) continue
+            // 檔名前面可能有表示二進位模式的 *
+            val name = fields[1].removePrefix("*")
+            val hash = fields[0]
+            if (name == fileName && hash.length == 64 && hash.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+                return hash.lowercase()
+            }
+        }
+        return null
+    }
+
+    private val outdatedPatterns = listOf(
+        "unable to extract", "nsig", "n challenge", "failed to extract any player response", "player response",
+        "signature extraction failed", "please report this issue", "confirm you are on the latest version",
+    )
+
+    /** 確定不是 yt-dlp 的問題（影片本身、登入、網路），不需要更新。 */
+    private val notOutdatedPatterns = listOf(
+        "private video", "video unavailable", "has been removed", "not available", "sign in to confirm",
+        "members-only", "age-restricted", "age restricted", "confirm your age", "this live event will begin",
+        "premieres in", "getaddrinfo", "timed out", "unable to download", "unsupported url", "cloudflare",
+        "nodename nor servname", "network is unreachable", "offline",
+    )
+}
