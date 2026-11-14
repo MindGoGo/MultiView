@@ -1,6 +1,8 @@
 # Android 版的測試、編譯、發佈（規格 android-app R145）
 # - 推送到分支而且有改到 android/ 或共用檔案：跑 android/core 的單元測試，編譯 debug 版 APK（放在 Actions 的 Artifacts）
-# - 推送 android-v<版本號> 標籤：另外產生簽章的 APK，放到 GitHub Releases
+# - 自動發佈：測試通過後，如果 android/gradle.properties 的版本號還沒有 android-v<版本號> 的 Release，
+#   自動建立標籤與 Release，放上簽章的 APK（升版本號再推送就會發佈新版）
+# - 也可以手動推送（或在 GitHub 網頁建立）android-v<版本號> 標籤，做法相同
 name: Android
 
 on:
@@ -30,8 +32,34 @@ jobs:
     name: 測試與編譯
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v5
+
+      - name: 判斷要不要發佈
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(sed -n 's/^multiview\.versionName=//p' gradle.properties | tr -d '[:space:]')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            if [ "${GITHUB_REF_NAME#android-v}" != "$VERSION" ]; then
+              echo "::error::標籤是 $GITHUB_REF_NAME，但 android/gradle.properties 的 multiview.versionName 是 $VERSION"
+              exit 1
+            fi
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "推送了標籤 $GITHUB_REF_NAME：發佈 $VERSION"
+          elif gh release view "android-v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null \
+              | grep -qx "MultiView-Android-$VERSION.apk"; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "android-v$VERSION 已經發佈過，這次只測試與編譯（要發佈新版請升 multiview.versionName）"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "android-v$VERSION 還沒有發佈：測試通過後自動發佈"
+          fi
 
       - uses: actions/setup-java@v5
         with:
@@ -61,7 +89,7 @@ jobs:
 
   release:
     name: 產生簽章的 APK 並發佈
-    if: startsWith(github.ref, 'refs/tags/android-v')
+    if: needs.test.outputs.release == 'true'
     needs: test
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -69,20 +97,11 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.test.outputs.version }}
+      TAG: android-v${{ needs.test.outputs.version }}
+      APK: MultiView-Android-${{ needs.test.outputs.version }}.apk
     steps:
       - uses: actions/checkout@v5
-
-      - name: 確認標籤和 gradle.properties 的版本號一致
-        run: |
-          VERSION="${TAG#android-v}"
-          PROJECT_VERSION="$(sed -n 's/^multiview\.versionName=//p' gradle.properties | tr -d '[:space:]')"
-          if [ "$VERSION" != "$PROJECT_VERSION" ]; then
-            echo "::error::標籤是 $VERSION，但 android/gradle.properties 的 multiview.versionName 是 $PROJECT_VERSION"
-            exit 1
-          fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "APK=MultiView-Android-$VERSION.apk" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v5
         with:
@@ -127,9 +146,10 @@ jobs:
             gh release edit "$TAG" --title "MultiView Android $VERSION" --notes-file release-notes.txt --latest=false
             gh release upload "$TAG" "$APK" --clobber
           else
+            # 自動發佈：在這次測試的提交上建立標籤（推送標籤的情況，標籤已經存在，指向同一個提交）。
             # Android 版不標成「最新版本」，README 的桌面版下載連結不受影響
             gh release create "$TAG" "$APK" --title "MultiView Android $VERSION" \
-              --notes-file release-notes.txt --latest=false --verify-tag
+              --notes-file release-notes.txt --latest=false --target "$GITHUB_SHA"
           fi
 
       - name: 刪除金鑰檔

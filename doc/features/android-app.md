@@ -33,8 +33,10 @@ MultiView 的 Android 手機／平板版。目前是第一個測試版，打開�
 ## 給開發者：發佈新版
 
 1. 改 `android/gradle.properties` 的 `multiview.versionName`，並把更新內容寫在 `android/release-notes.txt`。versionCode 由版本號自動算出來（`1.2.3` → `1002003`）。
-2. 推送後，建立標籤 `android-v<版本號>`（例如 `android-v0.0.2`）。在 GitHub 網頁（手機也可以）：Releases →「Draft a new release」→「Choose a tag」輸入標籤名稱並選「Create new tag」→「Target」選要發佈的分支 → 取消勾選「Set as the latest release」→「Publish release」。標題和說明不用填，Actions 會補上。
-3. GitHub Actions（`.github/workflows/android.yml`）會跑測試、用 Secrets 裡的金鑰（`ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`）編譯簽章的 APK，放到那個 Release。
+2. 推送就好，**不用自己建立標籤**。GitHub Actions（`.github/workflows/android.yml`）測試與編譯通過後，發現這個版本號還沒有發佈過，就自動建立標籤 `android-v<版本號>` 與 Release（標題「MultiView Android 版本號」，不標成最新版本），用 Secrets 裡的金鑰（`ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`）編譯簽章的 APK 放上去。
+3. 版本號沒有變的推送只測試與編譯，不發佈。測試沒過也不發佈。
+
+也可以手動建立 `android-v<版本號>` 標籤（例如在 GitHub 網頁的 Releases），效果相同；標籤和 `multiview.versionName` 不一致時 Actions 會報錯。
 
 在電腦上開發時：
 

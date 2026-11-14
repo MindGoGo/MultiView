@@ -30,7 +30,7 @@
 - 使用者用繁體中文溝通，文件、註解、提交訊息都用繁體中文，需求編號寫在提交訊息最後，例如 `[R150]`。
 - 開發環境是雲端的 Linux 容器，**連不到 YouTube**，也沒有實體手機；能做的是寫程式、跑單元測試、在 GitHub Actions 上編譯。實際行為由使用者在自己的裝置上測，回報結果後修改。
 - 每做完一批功能就升一個版本號、推上分支，等 GitHub Actions 編譯通過後請使用者更新測試。實測結果寫回本規格第 11 節。
-- 發佈新版：使用者在 GitHub 網頁的 Releases 建立 `android-v<版本號>` 標籤（開發環境不能推送標籤），GitHub Actions 產生 APK 補到那個 Release。做法和 iOS 版的 `ios-v*` 相同（見 `.github/workflows/ios.yml`）。
+- 發佈新版：**自動**。升 `android/gradle.properties` 的 `multiview.versionName` 並推送，GitHub Actions 測試通過後發現這個版本還沒有發佈，就自己建立 `android-v<版本號>` 標籤與 Release、放上簽章的 APK（開發環境不能推送標籤，所以由 Actions 建立）。使用者不用做任何事，直接下載安裝。也可以手動建立標籤（和 iOS 版的 `ios-v*` 相同）。
 - 分支：開發環境指定的分支（目前是 `claude/beautiful-babbage-1bur72`）；使用者說先不要合併到 `main`。
 
 ## 1. 背景與目標
@@ -76,13 +76,14 @@
   - 程式放在 `android/`，用 Gradle（Kotlin DSL）建置；畫面用 Jetpack Compose；最低支援 Android 8.0（API 26），目標版本 Android 16（API 36）。套件名稱 `local.multiview.android`（debug 版加 `.debug`，可以和正式版同時安裝）。
   - 版本號寫在 `android/gradle.properties` 的 `multiview.versionName`；versionCode 由版本號算出來（`主×1000000 + 次×1000 + 修`），版本號變大 versionCode 就變大。
   - 和畫面無關的邏輯放在獨立的 Kotlin 模組 `android/core/`（純 Kotlin，不依賴 Android），有自己的單元測試，可以在開發環境的 Linux 上直接跑（`./gradlew :core:test`）。開發環境沒有 Android SDK、也連不到 Google 的 Maven，所以找不到 Android SDK 時 Gradle 只載入 `:core`（不載入 Android Gradle Plugin），App 的編譯只在 GitHub Actions 上做。
-  - GitHub Actions（`.github/workflows/android.yml`，Ubuntu）：改到 `android/` 或共用檔案（`electron/webPreload.ts`、`src/lib/**`、`resources/easylist.txt`、`ios/MultiView/YtDlp/mv_bridge.py`、`ios/scripts/easylist-to-webkit.mjs`）時跑單元測試並編譯 debug 版（APK 放在 Actions 的 Artifacts）；推送 `android-v*` 標籤時確認標籤和 `multiview.versionName` 一致，產生簽章的 APK（`MultiView-Android-<版本號>.apk`），用 `apksigner` 確認簽章，補到同名的 Release，不標成最新版本。
+  - GitHub Actions（`.github/workflows/android.yml`，Ubuntu）：改到 `android/` 或共用檔案（`electron/webPreload.ts`、`src/lib/**`、`resources/easylist.txt`、`ios/MultiView/YtDlp/mv_bridge.py`、`ios/scripts/easylist-to-webkit.mjs`）時跑單元測試並編譯 debug 版（APK 放在 Actions 的 Artifacts）；**自動發佈**：測試通過後，如果 `multiview.versionName` 的版本還沒有附 APK 的 `android-v<版本號>` Release，就自動建立標籤（指向這次的提交）與 Release，產生簽章的 APK（`MultiView-Android-<版本號>.apk`），用 `apksigner` 確認簽章後放上去，不標成最新版本；版本號沒變的推送不發佈。手動推送 `android-v*` 標籤也會發佈，但標籤和 `multiview.versionName` 要一致。
   - **簽章**：Android 的 APK 一定要簽章，而且更新時簽章要相同，否則不能覆蓋安裝。簽章金鑰存在 GitHub 的 Secrets（使用者建立，見第 12 節），不放進 repo。
   - **更新**：使用者可以用 Obtainium 之類的 App 追蹤 GitHub Releases 自動提示更新（對應 iOS 版的 SideStore 來源），或直接下載 APK 安裝。
 - 驗收條件：
   - AC1：推送改到 `android/` 的提交 → Actions 的測試與編譯成功。
-  - AC2：建立 `android-v0.0.1` 標籤 → Release 出現 APK，可以在手機上安裝、開啟。
-  - AC3：安裝 0.0.2 → 覆蓋安裝，資料保留。
+  - AC2：推送版本號 0.0.1 → Actions 自動建立 `android-v0.0.1` 的 Release 並附上 APK，可以在手機上安裝、開啟。
+  - AC3：版本號升到 0.0.2 並推送 → 自動發佈；安裝後覆蓋安裝，資料保留。
+  - AC4：推送沒有改版本號的提交 → 只測試與編譯，不發佈。
 
 ### R146：技術驗證：多格原生播放（對應 R120）
 - 描述：4 格 ExoPlayer 同時播放、同時出聲。Android 的音訊焦點（audio focus）預設會讓一個播放器出聲時其他的暫停，所以每個 ExoPlayer 都要設定成**不處理音訊焦點**（`setAudioAttributes(…, handleAudioFocus = false)`），改由 App 自己處理來電等中斷（R153）。記錄 `2×2`、`3×3` 的效能（使用者的裝置）。
@@ -277,3 +278,4 @@
 | 2026-11-14 | 記錄裝置（POCO F6 Pro、HyperOS 3）與簽章金鑰的 Secrets 名稱 | 使用者回覆未決事項 |
 | 2026-11-14 | 簽章金鑰的 Secrets 已建立 | 使用者回報 |
 | 2026-11-14 | 規格確認；R145 補上套件名稱、版本號與 versionCode、沒有 Android SDK 時只建置 `:core`、workflow 監看的共用檔案 | 步驟 1 實作 |
+| 2026-11-14 | R145 改成自動發佈：升版本號推送後，Actions 自動建立標籤與 Release | 使用者要求 |
