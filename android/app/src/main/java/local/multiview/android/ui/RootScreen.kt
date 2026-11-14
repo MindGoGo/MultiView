@@ -3,7 +3,9 @@ package local.multiview.android.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -16,6 +18,8 @@ import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
@@ -62,6 +66,22 @@ fun RootScreen(model: AppModel) {
                 Toolbar(model, PaddingValues(start = safeArea.left, top = safeArea.top, end = safeArea.right))
             }
 
+            // 清單面板：大螢幕在右側（寬 360dp，蓋在影片上方），小螢幕占滿寬度（R158）
+            AnimatedVisibility(
+                visible = model.listPanelOpen,
+                modifier = Modifier.align(Alignment.CenterEnd),
+                enter = slideInHorizontally { it } + fadeIn(),
+                exit = slideOutHorizontally { it } + fadeOut(),
+            ) {
+                // 工具列顯示時從工具列下面開始
+                val top = safeArea.top + if (model.toolbarVisible) 52.dp else 0.dp
+                ListPanel(
+                    model,
+                    PaddingValues(end = safeArea.right, bottom = safeArea.bottom),
+                    modifier = Modifier.padding(top = top).then(if (model.isLarge) Modifier.width(360.dp) else Modifier.fillMaxWidth()),
+                )
+            }
+
             AnimatedVisibility(
                 visible = model.toast != null,
                 modifier = Modifier
@@ -93,6 +113,11 @@ fun RootScreen(model: AppModel) {
                 dismissButton = { TextButton(onClick = { model.pendingReplaceUrl = null }) { Text("取消") } },
             )
         }
+
+        if (model.settingsOpen) SettingsScreen(model)
+
+        // 清單、設定開著時，工具列不自動隱藏
+        if (model.listPanelOpen || model.settingsOpen) HoldControls(model)
 
         KeepScreenOn(model)
     }

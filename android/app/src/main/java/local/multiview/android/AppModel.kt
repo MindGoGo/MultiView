@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
+import android.webkit.CookieManager
+import android.webkit.WebStorage
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -19,6 +21,8 @@ import local.multiview.android.player.NativePlayer
 import local.multiview.android.player.PlayerUpdate
 import local.multiview.android.player.SimpleWebPlayer
 import local.multiview.android.player.YouTubeSourcePlayer
+import local.multiview.android.ytdlp.YtDlp
+import org.json.JSONObject
 import local.multiview.core.AudioRules
 import local.multiview.core.Brightness
 import local.multiview.core.CellSource
@@ -27,6 +31,10 @@ import local.multiview.core.FileStore
 import local.multiview.core.LayoutId
 import local.multiview.core.LayoutMath
 import local.multiview.core.ListError
+import local.multiview.core.ListGroup
+import local.multiview.core.ListKind
+import local.multiview.core.ListTab
+import local.multiview.core.ListsImport
 import local.multiview.core.ListRules
 import local.multiview.core.Lists
 import local.multiview.core.Outcome
@@ -118,6 +126,18 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     var toast by mutableStateOf<String?>(null)
         private set
 
+    /** 清單面板上次的那一邊和分頁（R58）。 */
+    var listTab by mutableStateOf(ListTab())
+        private set
+
+    /** 清單面板、設定畫面是不是開著（R158）。 */
+    var listPanelOpen by mutableStateOf(false)
+    var settingsOpen by mutableStateOf(false)
+
+    /** 目前使用的 yt-dlp 版本；還不知道時為 null。 */
+    var ytdlpVersion by mutableStateOf<String?>(null)
+        private set
+
     /** 沒有空格：等使用者選擇要取代哪一格（R150）。 */
     var pendingReplaceUrl by mutableStateOf<String?>(null)
 
@@ -177,6 +197,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         ratios = settings.ratios
         masterBrightness = settings.brightness
         youtubeMethods = initialMethods(settings.youtubeMethods)
+        listTab = settings.listTab
         // 還原的來源載入後維持暫停（R10 AC1）
         slots = SettingsBridge.restoreSlots(settings.slots)
 
@@ -539,11 +560,112 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         }
     }
 
+    fun changeListTab(tab: ListTab) {
+        if (listTab == tab) return
+        listTab = tab
+        scheduleSave()
+    }
+
+    /** 點清單的一筆：放進第一個顯示中的空格；沒有空格時讓使用者選擇要取代哪一格（R21、R64）。 */
+    fun openFromList(url: String) {
+        val index = SlotRules.firstEmptyVisible(slots, displayedLayout, solo)
+        if (index == null) {
+            pendingReplaceUrl = url
+            return
+        }
+        val message = setSource(url, index)
+        if (message != null) showToast(message) else listPanelOpen = false
+    }
+
+    /** 編輯清單的一筆；失敗時回傳要顯示的訊息（R21）。 */
+    fun editListItem(kind: ListKind, index: Int, url: String, name: String): String? =
+        when (val result = ListRules.editItem(lists, kind, index, url, name)) {
+            is Outcome.Ok -> {
+                lists = result.value
+                saveLists()
+                null
+            }
+            is Outcome.Err -> result.error.message
+        }
+
+    fun deleteListItem(kind: ListKind, index: Int) {
+        lists = ListRules.deleteItem(lists, kind, index)
+        saveLists()
+    }
+
+    fun clearHistory(group: ListGroup) {
+        lists = ListRules.clearHistory(lists, group)
+        saveLists()
+    }
+
+    // 設定（R158）
+
+    /** 改變 YouTube 的播放方式（R88）：YouTube 格子從目前的位置重新載入。 */
+    fun changeYouTubeMethods(methods: YouTubeMethods) {
+        if (methods == youtubeMethods) return
+        youtubeMethods = methods
+        slots = slots.map { source ->
+            if (source == null || source.parsed !is ParsedSource.YouTube || !players.containsKey(source.id)) {
+                source
+            } else {
+                val playing = statuses[source.id]?.showsPause ?: false
+                val position = ProgressRules.resumePosition(progress[source.id]) ?: source.resume
+                releasePlayer(source.id)
+                // 換一個 id：畫面會替它建立新的播放器
+                source.copy(id = SourceId.next(), autoplay = playing, resume = position, record = false)
+            }
+        }
+        activeCell = null
+        scheduleSave()
+    }
+
+    /** 用匯入的設定取代目前的版型、格子、聲音、亮度、播放方式。匯入後所有格子維持暫停。 */
+    fun importSettings(settings: Settings) {
+        exitSolo()
+        players.keys.toList().forEach(::releasePlayer)
+        activeCell = null
+        layout = settings.layout
+        ratios = settings.ratios
+        masterBrightness = settings.brightness
+        youtubeMethods = settings.youtubeMethods
+        listTab = settings.listTab
+        slots = SettingsBridge.restoreSlots(settings.slots)
+        baseSettings = settings.copy(slots = SettingsBridge.saveSlots(slots))
+        saveNow()
+    }
+
+    /** 把匯入的清單合併進目前的清單，回傳新增了幾筆。 */
+    fun importLists(imported: Lists): ListsImport.Summary {
+        val result = ListsImport.merge(lists, imported)
+        lists = result.lists
+        saveLists()
+        return result.summary
+    }
+
+    /** 清除網站資料（Cookie、登入狀態）。 */
+    fun clearWebsiteData() {
+        CookieManager.getInstance().removeAllCookies(null)
+        WebStorage.getInstance().deleteAllData()
+        showToast("已清除網站資料")
+    }
+
+    /** 讀取目前使用的 yt-dlp 版本（要啟動 Python，設定畫面打開時才讀）。 */
+    fun refreshYtDlpVersion() {
+        if (ytdlpVersion != null) return
+        scope.launch {
+            try {
+                ytdlpVersion = JSONObject(YtDlp.versions(appContext)).optString("yt_dlp").ifEmpty { null }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     /** 目前顯示中、可以被取代的格位。 */
     val visibleSlotIndices: List<Int> get() = slots.indices.filter(::isVisible)
 
     fun replaceSlot(index: Int, url: String) {
-        setSource(url, index)?.let(::showToast)
+        val message = setSource(url, index)
+        if (message != null) showToast(message) else listPanelOpen = false
     }
 
     // 聲音（R152）
@@ -835,6 +957,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
             ratios = ratios,
             brightness = masterBrightness,
             youtubeMethods = youtubeMethods,
+            listTab = listTab,
             slots = SettingsBridge.saveSlots(slots, positions),
         )
         baseSettings = settings
