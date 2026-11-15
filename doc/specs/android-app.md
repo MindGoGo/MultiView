@@ -32,7 +32,7 @@
 - 每做完一批功能就升一個版本號、推上分支，等 GitHub Actions 編譯通過後請使用者更新測試。實測結果寫回本規格第 11 節。
 - 發佈新版：**自動**。升 `android/gradle.properties` 的 `multiview.versionName` 並推送，GitHub Actions 測試通過後發現這個版本還沒有發佈，就自己建立 `android-v<版本號>` 標籤與 Release、放上簽章的 APK（開發環境不能推送標籤，所以由 Actions 建立）。使用者不用做任何事，直接下載安裝。**Release 的說明文字讀 `android/release-notes.txt`，升版本號時要一起改**（0.0.14 漏改，說明沿用了 0.0.13 的文字）；已經發佈過的版本再推送不會更新說明，要到 GitHub 網頁的 Releases 編輯。也可以手動建立標籤（和 iOS 版的 `ios-v*` 相同）。
 - **目前的進度（2026-11-15）**：Android 版做到 0.0.18，第 10 節的步驟 1–7 都做了第一版，使用者在 POCO F6 Pro 上測過（結果在第 11 節）。0.0.14 加入其他網站用 yt-dlp 播放（R156 的「其他網站的播放方式」），使用者實測正常。0.0.16 加入字幕（yt-dlp 播放）與進度條的預覽縮圖；字幕讀得到，但顯示有兩個問題，0.0.17 修正，**待實測**（I 組）。0.0.15 加入語音選單（R156）與「用行動數據時不自動更新 yt-dlp」，使用者實測成功（H 組）。手動驗收步驟在 `tests/manual/android-app.md`。發佈是自動的：升 `android/gradle.properties` 的版本號並推送即可。
-- 分支：開發環境指定的分支（0.0.13 以前是 `claude/beautiful-babbage-1bur72`；0.0.14 起是 `claude/pensive-tesla-rfgdz1`，從前者的最後一個提交接續）；使用者說先不要合併到 `main`。
+- **分支：`Phone`**（2026-11-15 起，Android 版與 iOS 版一起在這個分支開發）。開新的工作階段時，開發環境會指定一個新的 `claude/…` 分支：先從 `Phone` 開始（`git checkout -b <指定的分支> origin/Phone`），做完後推送到指定的分支，再合併回 `Phone`（使用者同意的做法）。以前的分支（`claude/beautiful-babbage-1bur72`、`claude/pensive-tesla-rfgdz1`、`claude/focused-cerf-ovpv5r`、`claude/kind-darwin-fm9hki`）的內容都已經在 `Phone` 裡；使用者說先不要合併到 `main`。
 
 ## 1. 背景與目標
 

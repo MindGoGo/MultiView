@@ -8,6 +8,11 @@
 - 使用者的裝置：iPad Pro（M1，128GB）為主要裝置，iPhone 14 Pro（256GB）。
 - 參考：使用者 2026-11-13 的選擇：iPad 為主、iPhone 也能用；只給自己用、用 SideStore 安裝（沒有 Mac）；第一版包含核心多格播放、yt-dlp 播放、網頁模式與廣告阻擋、訂閱清單／最愛／歷史；程式放在同一個 repo 的 `ios/` 資料夾。
 
+## 0. 給接手的工作階段
+
+- **分支：`Phone`**（2026-11-15 起，iOS 版與 Android 版一起在這個分支開發；以前的 `claude/…` 分支內容都已經合併進來）。開新的工作階段時，從 `Phone` 開始，做完後合併回 `Phone`；使用者說先不要合併到 `main`。Android 版的接手說明在 [android-app.md](android-app.md) 第 0 節。
+- 目前的進度：iOS 版 0.0.31（0.0.29 語音選單、0.0.30 字幕與預覽縮圖、0.0.31 yt-dlp 不用 `web_embedded` 用戶端，見 [android-app.md](android-app.md) R156）。發佈要使用者建立 `ios-v<版本號>` 標籤（R119）。
+
 ## 1. 背景與目標
 
 使用者想在 iPad 上使用 MultiView：把畫面切成多格，同時看好幾場直播與影片，集中控制聲音。桌面版是 Electron，iOS 不能跑 Electron，也不能另外執行 yt-dlp 這類程式，所以 iOS 版用 SwiftUI 重新寫一個原生 App，功能和操作盡量跟桌面版一致，把滑鼠、視窗相關的部分改成觸控與 iPad 的多工方式。
