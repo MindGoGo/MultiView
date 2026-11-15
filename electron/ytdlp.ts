@@ -157,6 +157,10 @@ async function run(key: string): Promise<ResolveResult> {
     '--ignore-config',
     '--js-runtimes',
     `node:${process.execPath}`,
+    // 2026-11：YouTube 的測試讓 web_embedded 用戶端拿串流時要 PO token，沒有就 HTTP 403（yt-dlp issue #17989，
+    // 11/14 在 nightly 修正，還沒有正式版）。先不用這個用戶端；之後的正式版本身也把它排到後面，留著不影響
+    '--extractor-args',
+    'youtube:player_client=default,-web_embedded',
     ...extra,
     targetUrl(key)
   ]

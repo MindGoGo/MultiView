@@ -261,6 +261,10 @@ def resolve(argument: str) -> str:
             'color': 'never',
             # 新版 yt-dlp 需要的解題程式和 App 內附的版本不同時，允許從 yt-dlp 的 GitHub 下載（yt-dlp 會檢查雜湊值）
             'remote_components': ['ejs:github'],
+            # 2026-11：YouTube 的測試讓 web_embedded 這個用戶端拿串流時要 PO token，沒有就 HTTP 403，
+            # yt-dlp 2026.10.26 會用到它（yt-dlp issue #17989，11/14 在 nightly 修正，還沒有正式版）。
+            # 先不用這個用戶端；之後的正式版本身也把它排到後面，留著不影響。
+            'extractor_args': {'youtube': {'player_client': ['default', '-web_embedded']}},
         }
         if request.get('cache_dir'):
             options['cachedir'] = request['cache_dir']
