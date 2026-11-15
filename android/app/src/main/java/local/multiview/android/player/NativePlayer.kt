@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.graphics.Color as AndroidColor
+import android.text.SpannableString
+import android.text.style.BackgroundColorSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.FrameLayout
@@ -98,12 +100,14 @@ class NativePlayer(
     private var captionJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val requestHeaders = headers
+    /**
+     * 字幕的文字。大小固定占滿影片範圍、文字靠下置中：換文字時大小不變，不需要重新排版
+     * （0.0.16 實測：大小跟著文字改變時，放在 Compose 畫面裡的播放器不會重新排版，要轉向後才出現）。
+     */
     private val captionView = TextView(context).apply {
         setTextColor(AndroidColor.WHITE)
-        setBackgroundColor(0x99000000.toInt())
-        gravity = Gravity.CENTER
-        setPadding(12, 4, 12, 4)
-        visibility = View.GONE
+        gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        setLineSpacing(0f, 1.1f)
     }
     private val captionTicker = object : Runnable {
         override fun run() {
@@ -190,15 +194,17 @@ class NativePlayer(
 
         playerView.overlayFrameLayout?.addView(
             captionView,
-            FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)
-                .apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL },
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
         )
-        // 字的大小跟著格子：高度的 5%，最小 10sp
-        playerView.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+        // 字的大小跟著格子：高度的 5% 和寬度的 4.5% 取小的（直向時格子很高，只看高度會太大，0.0.16 實測），最小 10sp；
+        // 左右各留 5%，長的句子換行
+        playerView.addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (right - left == oldRight - oldLeft && bottom - top == oldBottom - oldTop) return@addOnLayoutChangeListener
+            val width = view.width
+            val height = view.height
             val minPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 10f, view.resources.displayMetrics)
-            captionView.setTextSize(TypedValue.COMPLEX_UNIT_PX, maxOf(minPx, view.height * 0.05f))
-            (captionView.layoutParams as? FrameLayout.LayoutParams)?.bottomMargin = (view.height * 0.06f).toInt()
-            captionView.maxWidth = (view.width * 0.9f).toInt()
+            captionView.setTextSize(TypedValue.COMPLEX_UNIT_PX, maxOf(minPx, minOf(height * 0.05f, width * 0.045f)))
+            captionView.setPadding((width * 0.05f).toInt(), 0, (width * 0.05f).toInt(), (height * 0.06f).toInt())
         }
         CaptionRules.find(captionTracks, source.captions)?.let { setCaption(it.key) }
     }
@@ -207,7 +213,7 @@ class NativePlayer(
         if (closed) return
         captionJob?.cancel()
         cues = emptyList()
-        captionView.visibility = View.GONE
+        showCaption(null)
         val track = captionTracks.firstOrNull { it.key == key }
         currentCaption = track?.key
         track ?: return
@@ -220,13 +226,18 @@ class NativePlayer(
     }
 
     private fun showCue() {
-        val text = CaptionRules.cueAt(cues, exo.currentPosition / 1000.0)
-        if (text == null) {
-            captionView.visibility = View.GONE
-        } else {
-            if (captionView.text != text) captionView.text = text
-            captionView.visibility = View.VISIBLE
-        }
+        showCaption(CaptionRules.cueAt(cues, exo.currentPosition / 1000.0))
+    }
+
+    private var shownCaption: String? = null
+
+    /** 顯示字幕：只有文字的部分有半透明的黑底。 */
+    private fun showCaption(text: String?) {
+        if (text == shownCaption) return
+        shownCaption = text
+        captionView.text = text?.let {
+            SpannableString(it).apply { setSpan(BackgroundColorSpan(0x99000000.toInt()), 0, it.length, 0) }
+        } ?: ""
     }
 
     /** 讀字幕檔：帶網站要求的 User-Agent、Referer。 */
