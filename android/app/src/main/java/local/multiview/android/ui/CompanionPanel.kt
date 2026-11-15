@@ -140,7 +140,8 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
 
     val webView = WebView(context).apply {
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        setBackgroundColor(AndroidColor.BLACK)
+        // 和面板相同的深灰色：網頁載入前不會先閃一下黑色
+        setBackgroundColor(AndroidColor.rgb(0x0F, 0x0F, 0x0F))
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         // 面板裡的網頁不自動播放影片：不出聲，也不會讓系統暫停格子裡的影片
@@ -269,6 +270,10 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
               'html[dark] :is(' + both + ') { background: #0f0f0f !important; }' +
               SELECTORS[active] + ' { visibility: visible !important; }' +
               inactive + ' { visibility: hidden !important; pointer-events: none !important; }' +
+              // 面板比桌面版的網頁窄：內容不要超出面板的寬度（不用左右滑），文字自動換行（0.0.10 實測）
+              both + ' { overflow-x: hidden !important; }' +
+              ':is(' + both + ') * { max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important;' +
+              ' overflow-wrap: anywhere !important; }' +
               'html:has(' + SELECTORS[active] + ') #masthead-container { display: none !important; }' +
               'body { visibility: hidden !important; }' +
               'html { background: #fff !important; }' +
