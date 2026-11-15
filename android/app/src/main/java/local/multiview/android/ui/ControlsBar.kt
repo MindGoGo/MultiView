@@ -47,7 +47,7 @@ import local.multiview.core.ProgressRules
 import local.multiview.core.Volume
 
 /** 操作列的彈出視窗：一次只開一個。 */
-private enum class Popup { NONE, VOLUME, BRIGHTNESS, QUALITY, MORE, EDIT }
+private enum class Popup { NONE, VOLUME, BRIGHTNESS, QUALITY, AUDIO, MORE, EDIT }
 
 /**
  * 每一格下方的操作列（R151）：播放／暫停、喇叭、音量、亮度、畫質、移動、全螢幕、最愛、更換網址、移除，
@@ -58,6 +58,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
     var popup by remember { mutableStateOf(Popup.NONE) }
     val supportsVolume = player?.supportsVolume ?: false
     val supportsQuality = model.supportsQuality(source)
+    val audioOptions = player?.audioOptions ?: emptyList()
     val favorite = model.isFavorite(source)
     val supportsPip = model.supportsPictureInPicture(source)
     val webMode = model.webModeOf(source)
@@ -82,7 +83,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
 
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             // 全部按鈕需要的寬度（每個 44dp）
-            val wideCount = 7 + listOf(supportsVolume, supportsQuality, model.canSwap, supportsPip).count { it } +
+            val wideCount = 7 + listOf(supportsVolume, supportsQuality, audioOptions.size > 1, model.canSwap, supportsPip).count { it } +
                 if (webMode != null) 2 else 0
             val wide = maxWidth >= (44 * wideCount + 8).dp
 
@@ -113,6 +114,12 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                         Box {
                             BarButton(AppIcons.Quality, "畫質") { popup = Popup.QUALITY }
                             if (popup == Popup.QUALITY) QualityMenu(model, index, source) { popup = Popup.NONE }
+                        }
+                    }
+                    if (wide && audioOptions.size > 1) {
+                        Box {
+                            BarButton(AppIcons.Voice, "語音") { popup = Popup.AUDIO }
+                            if (popup == Popup.AUDIO) AudioMenu(model, index, player) { popup = Popup.NONE }
                         }
                     }
                 }
@@ -153,6 +160,10 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                                 if (supportsVolume) MenuRow(AppIcons.Tune, "音量") { popup = Popup.VOLUME }
                                 MenuRow(AppIcons.Brightness, "亮度") { popup = Popup.BRIGHTNESS }
                                 if (supportsQuality) MenuRow(AppIcons.Quality, "畫質：${source.quality.label}") { popup = Popup.QUALITY }
+                                if (audioOptions.size > 1) {
+                                    val current = audioOptions.firstOrNull { it.index == player?.currentAudio }?.label ?: "自動"
+                                    MenuRow(AppIcons.Voice, "語音：$current") { popup = Popup.AUDIO }
+                                }
                                 if (supportsPip) {
                                     MenuRow(AppIcons.PictureInPicture, "子母畫面") {
                                         popup = Popup.NONE
@@ -188,6 +199,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                             Popup.VOLUME -> VolumePopup(model, index, source) { popup = Popup.NONE }
                             Popup.BRIGHTNESS -> BrightnessPopup(model, index, source) { popup = Popup.NONE }
                             Popup.QUALITY -> QualityMenu(model, index, source) { popup = Popup.NONE }
+                            Popup.AUDIO -> AudioMenu(model, index, player) { popup = Popup.NONE }
                             else -> {}
                         }
                     }
@@ -228,6 +240,23 @@ private fun WebModeButton(model: AppModel, index: Int, mode: WebMode) {
         if (mode == WebMode.PAGE) "只顯示影片" else "顯示整個網頁",
         highlighted = mode == WebMode.PAGE,
     ) { model.toggleWebMode(index) }
+}
+
+/** 語音選單（桌面版 R95）：yt-dlp 播放的 HLS 有兩條以上的聲音軌時，在「⋯」裡。 */
+@Composable
+private fun AudioMenu(model: AppModel, index: Int, player: CellPlayer?, onDismiss: () -> Unit) {
+    DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
+        HoldControls(model)
+        for (option in player?.audioOptions ?: emptyList()) {
+            DropdownMenuItem(
+                text = { Text(option.label + if (option.index == player?.currentAudio) "  ✓" else "") },
+                onClick = {
+                    onDismiss()
+                    model.setAudioTrack(index, option)
+                },
+            )
+        }
+    }
 }
 
 /** 畫質選單（R153）。 */

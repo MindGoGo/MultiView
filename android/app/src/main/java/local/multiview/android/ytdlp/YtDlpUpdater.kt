@@ -1,6 +1,7 @@
 package local.multiview.android.ytdlp
 
 import android.content.Context
+import android.net.ConnectivityManager
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
@@ -99,6 +100,7 @@ object YtDlpUpdater {
     /** 開啟 App 時：距離上次檢查超過 24 小時才檢查（R92 時機 1）。 */
     suspend fun autoUpdateIfNeeded(context: Context): Outcome? {
         if (!YtDlpUpdateRules.shouldAutoUpdate(loadRecord(context), now())) return null
+        if (isMetered(context)) return null
         return update(context)
     }
 
@@ -106,9 +108,16 @@ object YtDlpUpdater {
     suspend fun updateAfterFailure(context: Context, message: String): Outcome? {
         if (!YtDlpUpdateRules.isOutdatedError(message)) return null
         if (now() - lastFailureUpdate < YtDlpUpdateRules.FAILURE_UPDATE_INTERVAL) return null
+        if (isMetered(context)) return null
         lastFailureUpdate = now()
         return update(context)
     }
+
+    /**
+     * 用行動數據等計量網路時，自動更新不下載（對應 iOS 版的低數據模式，R156）；設定畫面的「檢查更新」不受限制。
+     */
+    private fun isMetered(context: Context): Boolean =
+        context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: false
 
     /** 檢查並下載新版。同一時間只進行一個更新，同時的要求共用同一次的結果。 */
     suspend fun update(context: Context): Outcome {

@@ -5,19 +5,28 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import androidx.annotation.OptIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import local.multiview.core.AudioOption
+import local.multiview.core.AudioTrackRules
 import local.multiview.core.CellSource
+import local.multiview.core.RawAudioTrack
+import java.util.Locale
 import local.multiview.core.MediaInfo
 import local.multiview.core.PlayStatus
 import local.multiview.core.ProgressRules
@@ -57,6 +66,19 @@ class NativePlayer(
 
     override val view: View get() = playerView
 
+    // 聲音軌（桌面版 R95）。畫面要跟著更新，所以用 Compose 的狀態保存
+    override var audioOptions by mutableStateOf<List<AudioOption>>(emptyList())
+        private set
+    override var currentAudio by mutableStateOf(-1)
+        private set
+
+    /** 這一格記住的語言（選單選過的）。 */
+    private val savedAudioLang = source.audioLang
+
+    /** 播放器目前的聲音軌：每一條對應的群組與位置。 */
+    private var audioRefs: List<Pair<Tracks.Group, Int>> = emptyList()
+    private var audioRaw: List<RawAudioTrack> = emptyList()
+
     private val ticker = object : Runnable {
         override fun run() {
             if (closed) return
@@ -67,6 +89,8 @@ class NativePlayer(
 
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) = report()
+
+        override fun onTracksChanged(tracks: Tracks) = updateAudioTracks(tracks)
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) liveResyncs = 0
@@ -174,6 +198,39 @@ class NativePlayer(
         exo.removeListener(listener)
         playerView.player = null
         exo.release()
+    }
+
+    override fun setAudioTrack(index: Int) {
+        if (closed) return
+        val (group, track) = audioRefs.getOrNull(index) ?: return
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track))
+            .build()
+    }
+
+    /**
+     * 聲音軌改變：列出選項；第一次拿到這些聲音軌時，依這一格記住的語言 → 系統語言 → 原本的聲音 → 第一條選擇
+     * （YouTube 的主清單沒有標成預設的聲音軌，不選的話可能播到 AI 配音）。
+     */
+    private fun updateAudioTracks(tracks: Tracks) {
+        val refs = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+            .flatMap { group -> (0 until group.length).map { group to it } }
+        val raw = refs.map { (group, i) -> group.getTrackFormat(i).let { RawAudioTrack(it.language, it.label ?: "") } }
+        audioRefs = refs
+        val selected = refs.indexOfFirst { (group, i) -> group.isTrackSelected(i) }
+        if (raw != audioRaw) {
+            audioRaw = raw
+            audioOptions = if (raw.size > 1) AudioTrackRules.options(raw) else emptyList()
+            if (audioOptions.size > 1) {
+                val pick = AudioTrackRules.pick(raw, savedAudioLang, Locale.getDefault().toLanguageTag())
+                if (pick >= 0 && pick != selected) {
+                    setAudioTrack(pick)
+                    currentAudio = AudioTrackRules.currentOption(raw, audioOptions, pick)
+                    return
+                }
+            }
+        }
+        currentAudio = if (selected >= 0) AudioTrackRules.currentOption(raw, audioOptions, selected) else -1
     }
 
     private fun applyVolume() {

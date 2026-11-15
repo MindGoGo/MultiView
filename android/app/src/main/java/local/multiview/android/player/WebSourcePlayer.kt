@@ -64,6 +64,13 @@ class WebSourcePlayer(
     /** 還沒有裡面的播放器：yt-dlp 解析中。 */
     override val isResolving get() = inner == null && !closed
     override val supportsQuality get() = inner?.supportsQuality ?: false
+    override val audioOptions get() = inner?.audioOptions ?: emptyList()
+    override val currentAudio get() = inner?.currentAudio ?: -1
+
+    override fun setAudioTrack(index: Int) {
+        audioOptions.firstOrNull { it.index == index }?.let { source = source.copy(audioLang = it.lang) }
+        inner?.setAudioTrack(index)
+    }
 
     /** 正在顯示網頁時的網頁播放器；用 yt-dlp 播放或解析中時為 null。 */
     val webPage: WebPagePlayer? get() = inner as? WebPagePlayer

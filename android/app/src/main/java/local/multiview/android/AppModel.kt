@@ -27,6 +27,7 @@ import local.multiview.android.player.YouTubeSourcePlayer
 import local.multiview.android.ytdlp.YtDlp
 import local.multiview.android.ytdlp.YtDlpUpdater
 import org.json.JSONObject
+import local.multiview.core.AudioOption
 import local.multiview.core.AudioRules
 import local.multiview.core.Brightness
 import local.multiview.core.CellSource
@@ -1097,6 +1098,16 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         slots = SlotRules.set(slots, index, source.copy(quality = quality))
         players[source.id]?.setQuality(quality)
         showToast("畫質：${quality.label}")
+        keepControlsVisible()
+        scheduleSave()
+    }
+
+    /** 語音選單（桌面版 R95）：改用這一條聲音軌，並記住它的語言（跟著來源保存）。 */
+    fun setAudioTrack(index: Int, option: AudioOption) {
+        val source = slots.getOrNull(index) ?: return
+        slots = SlotRules.set(slots, index, source.copy(audioLang = option.lang.ifEmpty { null }))
+        players[source.id]?.setAudioTrack(option.index)
+        showToast("語音：${option.label}")
         keepControlsVisible()
         scheduleSave()
     }

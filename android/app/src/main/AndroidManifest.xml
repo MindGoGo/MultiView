@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 用行動數據時不自動下載 yt-dlp 更新（R156） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 背景播放（R154）：前景服務、播放時不讓 CPU 與網路休眠 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />

@@ -1,6 +1,7 @@
 package local.multiview.android.player
 
 import android.view.View
+import local.multiview.core.AudioOption
 import local.multiview.core.PlayStatus
 import local.multiview.core.PlaybackProgress
 import local.multiview.core.Quality
@@ -58,4 +59,13 @@ interface CellPlayer {
 
     /** 畫質：自動，或最高畫面高度。 */
     fun setQuality(quality: Quality) {}
+
+    /** 聲音軌（語音）的選項（yt-dlp 播放的 HLS 有兩條以上時，桌面版 R95）；沒有時是空的。 */
+    val audioOptions: List<AudioOption> get() = emptyList()
+
+    /** 目前的聲音軌是 [audioOptions] 裡 index 是多少的那一項；不知道時為 -1。 */
+    val currentAudio: Int get() = -1
+
+    /** 改用這一條聲音軌（[AudioOption.index]）。 */
+    fun setAudioTrack(index: Int) {}
 }
