@@ -8,7 +8,9 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.Looper
 import android.util.Rational
+import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
@@ -96,6 +98,22 @@ class MainActivity : ComponentActivity(), AppModel.Host {
             }
         }
         if (savedInstanceState == null) handleIntent(intent)
+        warmUpWebView()
+    }
+
+    /**
+     * 先把瀏覽器引擎載入好。App 裡第一次建立 WebView 時要載入整個引擎，會卡住畫面幾百毫秒；
+     * 如果等到打開 YouTube 小視窗才載入，整個畫面會先黑一下（0.0.10 實測）。
+     * 等畫面先顯示出來、主執行緒有空時才做。
+     */
+    private fun warmUpWebView() {
+        Looper.myQueue().addIdleHandler {
+            try {
+                WebView(this).destroy()
+            } catch (_: Exception) {
+            }
+            false
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
