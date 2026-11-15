@@ -166,6 +166,7 @@
   - 回到主畫面或關螢幕時，原生播放器中有聲音、正在播放的格子繼續播聲音（`MediaSessionService` 前景服務與通知），其他格子暫停；回來時恢復。
   - 子母畫面：只有一格有聲音而且是原生播放器時，回到主畫面自動進入子母畫面（`setAutoEnterEnabled`，Android 12 以上）。Android 的子母畫面是整個 Activity 縮小，畫面要切換成只顯示那一格。
   - 通知與鎖定畫面顯示正在播放的影片名稱，可以播放／暫停。
+  - 實作（0.0.9，待實測）：播放器留在 App 裡，另外用一個前景服務（`PlaybackService`，類型 `mediaPlayback`）加系統的 `MediaSession` 讓 App 在背景繼續執行；有聲音的原生播放器開始播放時啟動（Android 12 以上不允許在背景才啟動前景服務），沒有的時候停止。子母畫面被關掉時全部暫停，回到 App 時恢復。
 - 驗收條件：同 R132。
 
 ### R155：保存與還原（對應 R134）
@@ -185,6 +186,7 @@
   - **注入網頁的程式重用桌面版的 `electron/webPreload.ts`**，和 iOS 版相同的做法：寫一個 Android 版的 shim（對應 `ios/web/electron-shim.ts`）取代 `ipcRenderer`，訊息走 `addJavascriptInterface`（或 `WebMessageListener`），App 用 `evaluateJavascript("__multiViewReceive(…)")` 送狀態；用 esbuild 打包（`ios/scripts/build-web.sh` 的做法）。注意 Android WebView 的注入要在每個框架執行：用 AndroidX WebKit 的 `addDocumentStartJavaScript`（可以指定所有框架）。
   - 影片模式、整頁模式、找不到影片時按網站的播放鈕、15 秒後切整頁、YouTube 網站頁面點影片換成那部影片、其他網站用 yt-dlp：和 iOS 版相同。
   - **iOS 版踩過的坑（直接照最終做法）**：
+    0. **Android 版的做法（0.0.10，待實測）**：寬版面用注入的程式把 `<meta name="viewport">` 改成 `width=1280`（WebView 設定 `useWideViewPort`、`loadWithOverviewMode`，整個網頁縮到剛好放進格子，只畫格子實際大小的畫面），找到影片後還原。WebView 不能把整個網頁靜音，所以注入的程式在每個框架定時把影片、聲音元素設成靜音。返回鍵：整頁模式的網頁回上一頁。
     1. 找影片時，網頁要用比較寬的版面排版（桌面版是至少 1280×720），否則手機上網站用窄版面，影片在畫面外找不到。但**不能把網頁畫成很大一張再縮小**（iOS 0.0.19 這樣做，記憶體不夠，網頁程序被系統結束）。iOS 版最後用網頁縮放（`pageZoom`，最小 50%）；Android 用 WebView 的 `setInitialScale`、`settings.useWideViewPort`／`loadWithOverviewMode` 或 `zoomBy` 做到同樣的效果，要實測。
     2. **寬版面只在找影片的期間使用**，找到影片後恢復原本的大小，否則注入的程式把影片設成「填滿畫面寬度」時，寬度是縮放後的寬度，影片只露出一半（iOS 0.0.22）。
     3. 找到影片前用黑色蓋住網頁，中間顯示讀取動畫（iOS 0.0.20）。
@@ -204,7 +206,7 @@
 - 描述：
   - 登入狀態：WebView 的 Cookie 保存在 App 裡（`CookieManager`）；設定可以清除網站資料。
   - YouTube 小視窗：右側面板（小螢幕占滿寬度），分頁「搜尋、推薦、留言、聊天室」；跟著最後點過的 YouTube 格子；面板裡的網頁不自動播放。注入的程式照抄 `ios/MultiView/Panels/CompanionPanel.swift` 裡的 JS（只顯示推薦區或留言區、攔下影片連結）。
-  - 最愛、歷史：清單面板（YouTube／其他網站、最愛／歷史），點一筆放進空格，往左滑編輯、刪除；操作列的星號加入最愛。
+  - 最愛、歷史：清單面板（YouTube／其他網站、最愛／歷史），點一筆放進空格，每一筆右邊的「⋯」選單編輯、刪除（不用往左滑：面板本身會左右滑動進出，手勢容易衝突）；操作列的星號加入最愛。
   - 訂閱：加入頻道（貼頻道或影片網址）、從 Google Takeout 的 `subscriptions.csv` 匯入、最新影片、直播中的標示。**YouTube 的 RSS 摘要對 App 回傳 404（2026-11-14 實測）**，最新影片要用 yt-dlp 讀頻道的影片頁（`mv_bridge.py` 的 `channel_videos`），一次一個頻道，展開的頻道優先。直播狀態讀頻道的 `/live` 頁（這個可以用）。
   - 設定畫面：播放方式、yt-dlp 版本與更新、廣告阻擋的狀態、匯入桌面版的 `settings.json`／`lists.json`（Android 的檔案選擇器）、清除網站資料、版本號。
 - 驗收條件：同 R139–R144。
@@ -297,3 +299,4 @@
 | 2026-11-14 | 開發順序第 4 步的第一版（0.0.5）：正式的主畫面取代測試畫面（R149–R153、R155；R154 背景播放之後做）。R150 補充：網址在小視窗輸入。網頁來源暫時以整頁顯示（R157 之前）。音訊焦點：有聲音的網頁格子在播放時由 WebView 自己處理，App 不另外要焦點（避免互相暫停） | 開發順序第 4 步 |
 | 2026-11-14 | 第 11 節記錄 0.0.5 的實測結果；0.0.6 修正工具列滑動時消失、全螢幕不自動轉橫向 | 使用者實測 0.0.5 |
 | 2026-11-14 | R149 的旋轉按鈕改成開關（按一下固定、再按一下取消）；記錄分享選單測試成功 | 使用者實測 0.0.5 |
+| 2026-11-15 | 0.0.8–0.0.10：清單面板與設定（R158）、背景播放與子母畫面（R154）、yt-dlp 自動更新（R156）、網頁來源與廣告阻擋（R157，廣告比對每個請求約 0.03 毫秒）、YouTube 小視窗與訂閱（R158）。這些都還沒在實機測過，測試步驟在 `tests/manual/android-app.md`。還沒做：其他網站用 yt-dlp 播放（R156 的 webMethod）、字幕 | 使用者要求先往後做，之後一起測 |
