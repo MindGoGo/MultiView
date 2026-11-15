@@ -20,19 +20,18 @@ import {
   type ResolveResult,
   type UpdateOutcome,
   type UpdateRecord,
-  type YtDlpStatus
+  type YtDlpChannel,
+  type YtDlpStatus,
+  latestReleaseApi
 } from '../src/lib/ytdlp'
 import { createResolver } from '../src/lib/ytdlpResolver'
 
-/** 更新管道（計畫 D4a）：YouTube 改版的修正如果常常要等很久才進 stable，改成 'nightly' */
-const UPDATE_CHANNEL = 'stable'
 const RESOLVE_TIMEOUT_MS = 30_000
 const UPDATE_TIMEOUT_MS = 120_000
 /** 直播的 JSON 可能很大 */
 const MAX_BUFFER = 32 * 1024 * 1024
 /** 設定選單查詢最新版：距離上次成功查詢不到 1 小時就沿用（R93） */
 const LATEST_CHECK_INTERVAL_MS = 60 * 60 * 1000
-const LATEST_RELEASE_API = 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest'
 
 const bundledPath = () =>
   app.isPackaged
@@ -101,7 +100,7 @@ function writeRecord(record: UpdateRecord) {
   }
 }
 
-const status: YtDlpStatus = { state: 'checking', version: null, latest: null }
+const status: YtDlpStatus = { state: 'checking', version: null, latest: null, channel: 'stable' }
 let lastLatestCheck = -Infinity
 let notify: (s: YtDlpStatus) => void = () => undefined
 
@@ -111,7 +110,7 @@ function setStatus(next: Partial<YtDlpStatus>) {
 }
 
 /** 回到一般的狀態（不是正在檢查、正在更新） */
-const settle = () => setStatus({ state: statusOf(status.version, status.latest) })
+const settle = () => setStatus({ state: statusOf(status.version, status.latest, status.channel) })
 
 /** 準備使用者的 yt-dlp（R91）：不存在或無法執行就複製；程式換了版本時，內附的比較新就覆蓋 */
 async function prepare(): Promise<void> {
@@ -133,6 +132,7 @@ async function prepare(): Promise<void> {
   }
   writeRecord({ ...readRecord(), appVersion: app.getVersion() })
   status.version = version
+  status.channel = readRecord().channel
   settle()
 }
 
@@ -212,7 +212,8 @@ async function waitUntilServed(url: string, headers?: Record<string, string>) {
 async function rawUpdate(): Promise<{ result: UpdateOutcome; version: string | null }> {
   if (!status.version) return { result: 'failed', version: null }
   setStatus({ state: 'updating' })
-  const r = await exec(['--update-to', UPDATE_CHANNEL], UPDATE_TIMEOUT_MS)
+  // 更新來源（R160）：yt-dlp 自己的 --update-to；切換來源時會換成那個來源的最新版（包括從最新版換回比較舊的正式版）
+  const r = await exec(['--update-to', status.channel], UPDATE_TIMEOUT_MS)
   const out = parseUpdateOutput(`${r.stdout}\n${r.stderr}`, r.code)
   if (out.result !== 'failed') {
     const version = out.version ?? (await versionOf(userPath())) ?? status.version
@@ -235,7 +236,7 @@ async function checkLatest(): Promise<void> {
   setStatus({ state: 'checking' })
   let latest: string | null = null
   try {
-    const r = await net.fetch(LATEST_RELEASE_API, { headers: { Accept: 'application/vnd.github+json' } })
+    const r = await net.fetch(latestReleaseApi(status.channel), { headers: { Accept: 'application/vnd.github+json' } })
     if (r.ok) {
       const tag = ((await r.json()) as { tag_name?: unknown }).tag_name
       latest = typeof tag === 'string' ? parseVersion(tag) : null
@@ -255,6 +256,16 @@ export const ytdlp = {
   /** 其他網站（R103）：只接受 http、https 的網址 */
   resolveUrl: (url: string, refresh: boolean) => resolver.resolve(webKey(url), { refresh }),
   update: () => resolver.update(),
+  /** 改變更新來源（R160）：記下來，馬上換成那個來源的最新版 */
+  async setChannel(channel: YtDlpChannel) {
+    await ready
+    if (channel === status.channel) return { result: 'latest' as UpdateOutcome, version: status.version }
+    writeRecord({ ...readRecord(), channel })
+    status.latest = null
+    lastLatestCheck = -Infinity
+    setStatus({ channel })
+    return resolver.update()
+  },
   getStatus: (): YtDlpStatus => ({ ...status }),
   checkLatest,
   onStatus(cb: (s: YtDlpStatus) => void) {

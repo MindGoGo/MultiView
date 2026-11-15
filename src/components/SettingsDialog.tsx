@@ -1,6 +1,15 @@
 // 設定視窗（R96）：置中的視窗，左側分類、右側每一列是標題＋說明＋控制項。改了立即生效。
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ytdlpRow, updateToast, type PlayMethod, type WebMethod, type YouTubeMethods, type YtDlpStatus } from '../lib/ytdlp'
+import {
+  ytdlpRow,
+  updateToast,
+  YTDLP_CHANNELS,
+  type PlayMethod,
+  type WebMethod,
+  type YouTubeMethods,
+  type YtDlpChannel,
+  type YtDlpStatus
+} from '../lib/ytdlp'
 import { CloseIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
 
 export type SettingsCategory = 'youtube' | 'web' | 'ytdlp' | 'about'
@@ -181,6 +190,8 @@ function YtDlpSection({ onToast }: { onToast(message: string): void }) {
   }, [])
   const row = status && ytdlpRow(status)
   const update = () => void window.multiview.ytdlpUpdate().then((r) => onToast(updateToast(r.result, r.version)))
+  const changeChannel = (channel: YtDlpChannel) =>
+    void window.multiview.ytdlpSetChannel(channel).then((r) => onToast(updateToast(r.result, r.version)))
   return (
     <section>
       <h2 className="set-heading">yt-dlp</h2>
@@ -201,6 +212,14 @@ function YtDlpSection({ onToast }: { onToast(message: string): void }) {
           <button className="set-button" disabled={!row.button.enabled} onClick={update}>
             {row.button.label}
           </button>
+        )}
+      </Row>
+      <Row
+        title="更新來源"
+        desc="正式版：yt-dlp 的正式發佈。最新版：每天建置的版本，YouTube 改版時通常先在這裡修好。切換後馬上換成那個版本。"
+      >
+        {status && (
+          <Choice label="更新來源" value={status.channel} options={YTDLP_CHANNELS} onChange={changeChannel} />
         )}
       </Row>
       <Row

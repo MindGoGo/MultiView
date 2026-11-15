@@ -66,7 +66,7 @@ describe('讀取動畫（R99）', () => {
 })
 
 describe('設定視窗的 yt-dlp 版本列（R96、R93）', () => {
-  const s = { version: '2026.10.21', latest: '2026.10.26' }
+  const s = { version: '2026.10.21', latest: '2026.10.26', channel: 'stable' as const }
   it('有新版：可以按「更新到 <版本>」', () => {
     expect(ytdlpRow({ ...s, state: 'available' })).toEqual({
       version: '2026.10.21',
@@ -75,10 +75,10 @@ describe('設定視窗的 yt-dlp 版本列（R96、R93）', () => {
     })
   })
   it('已是最新版、正在檢查、正在更新、找不到：按鈕停用；無法檢查：可以按', () => {
-    expect(ytdlpRow({ ...s, state: 'latest' }).button.enabled).toBe(false)
-    expect(ytdlpRow({ ...s, state: 'checking' }).button).toEqual({ label: '正在檢查…', enabled: false })
-    expect(ytdlpRow({ ...s, state: 'updating' }).button).toEqual({ label: '正在更新…', enabled: false })
-    expect(ytdlpRow({ ...s, state: 'missing', version: null })).toMatchObject({ version: '—', button: { enabled: false } })
-    expect(ytdlpRow({ ...s, state: 'unknown' }).button).toEqual({ label: '檢查更新', enabled: true })
+    expect(ytdlpRow({ ...s, state: 'latest', channel: 'stable' }).button.enabled).toBe(false)
+    expect(ytdlpRow({ ...s, state: 'checking', channel: 'stable' }).button).toEqual({ label: '正在檢查…', enabled: false })
+    expect(ytdlpRow({ ...s, state: 'updating', channel: 'stable' }).button).toEqual({ label: '正在更新…', enabled: false })
+    expect(ytdlpRow({ ...s, state: 'missing', channel: 'stable', version: null })).toMatchObject({ version: '—', button: { enabled: false } })
+    expect(ytdlpRow({ ...s, state: 'unknown', channel: 'stable' }).button).toEqual({ label: '檢查更新', enabled: true })
   })
 })

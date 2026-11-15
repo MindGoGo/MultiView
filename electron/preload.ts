@@ -4,7 +4,7 @@ import type { WebMode } from '../src/players/webTypes'
 import type { Lists } from '../src/lib/lists'
 import type { FeedVideo } from '../src/lib/youtubeFeed'
 import type { CompanionAction, CompanionLink, CompanionTab } from '../src/lib/companion'
-import type { ResolveResult, UpdateOutcome, YtDlpStatus } from '../src/lib/ytdlp'
+import type { ResolveResult, UpdateOutcome, YtDlpChannel, YtDlpStatus } from '../src/lib/ytdlp'
 
 export interface CursorPos {
   x: number
@@ -78,6 +78,9 @@ const api = {
   ytdlpUpdate: (): Promise<{ result: UpdateOutcome; version: string | null }> => ipcRenderer.invoke('ytdlp:update'),
   /** 設定選單的 yt-dlp 狀態（R93） */
   ytdlpStatus: (): Promise<YtDlpStatus> => ipcRenderer.invoke('ytdlp:status'),
+  /** 改變 yt-dlp 的更新來源並馬上更新（R160） */
+  ytdlpSetChannel: (channel: YtDlpChannel): Promise<{ result: UpdateOutcome; version: string | null }> =>
+    ipcRenderer.invoke('ytdlp:setChannel', channel),
   /** 打開設定選單時查詢最新版（1 小時內查過就不查，R93） */
   ytdlpCheck: () => ipcRenderer.send('ytdlp:check'),
   onYtdlpStatus: (cb: (s: YtDlpStatus) => void) => {

@@ -207,18 +207,38 @@ export function compareVersion(a: string, b: string): number {
 }
 
 /** 更新紀錄 update.json（R91、R92） */
+/**
+ * yt-dlp 的更新來源（R160）：正式版（stable），或每天建置的最新版（nightly，YouTube 改版時通常先在這裡修好）。
+ * 對應 yt-dlp 的 `--update-to stable`、`--update-to nightly`。
+ */
+export type YtDlpChannel = 'stable' | 'nightly'
+
+export const YTDLP_CHANNELS: { value: YtDlpChannel; label: string }[] = [
+  { value: 'stable', label: '正式版' },
+  { value: 'nightly', label: '最新版' }
+]
+
+/** 查詢這個來源最新版本的 GitHub API */
+export function latestReleaseApi(channel: YtDlpChannel): string {
+  const repo = channel === 'nightly' ? 'yt-dlp/yt-dlp-nightly-builds' : 'yt-dlp/yt-dlp'
+  return `https://api.github.com/repos/${repo}/releases/latest`
+}
+
 export interface UpdateRecord {
   /** 上次自動更新檢查的時間（毫秒）；沒有時為 0 */
   lastCheck: number
   /** 上次開啟時的程式版本；沒有時為空字串 */
   appVersion: string
+  /** 更新來源（R160）；沒有時是正式版 */
+  channel: YtDlpChannel
 }
 
 export function normalizeUpdateRecord(raw: unknown): UpdateRecord {
   const obj = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
   return {
     lastCheck: typeof obj.lastCheck === 'number' && Number.isFinite(obj.lastCheck) ? obj.lastCheck : 0,
-    appVersion: typeof obj.appVersion === 'string' ? obj.appVersion : ''
+    appVersion: typeof obj.appVersion === 'string' ? obj.appVersion : '',
+    channel: obj.channel === 'nightly' ? 'nightly' : 'stable'
   }
 }
 
@@ -235,14 +255,21 @@ export interface YtDlpStatus {
   state: YtDlpState
   /** 使用者的 yt-dlp 的版本；還不知道時為 null */
   version: string | null
-  /** GitHub 上最新的穩定版；還不知道時為 null */
+  /** GitHub 上這個更新來源的最新版；還不知道時為 null */
   latest: string | null
+  /** 更新來源（R160） */
+  channel: YtDlpChannel
 }
 
 /** 由版本與查詢結果決定狀態（不含正在檢查、正在更新） */
-export function statusOf(version: string | null, latest: string | null): YtDlpState {
+/**
+ * channel：正式版時，目前用的是最新版的版本（版本號有第四段）而且和正式版不同，也算「有新版」
+ * （從最新版切回正式版，R160）
+ */
+export function statusOf(version: string | null, latest: string | null, channel: YtDlpChannel = 'stable'): YtDlpState {
   if (!version) return 'missing'
   if (!latest) return 'unknown'
+  if (channel === 'stable' && version.split('.').length >= 4 && latest !== version) return 'available'
   return compareVersion(latest, version) > 0 ? 'available' : 'latest'
 }
 

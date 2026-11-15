@@ -8,6 +8,7 @@ import {
   isVideoId,
   needsResolve,
   normalizeMethods,
+  latestReleaseApi,
   normalizeUpdateRecord,
   parseUpdateOutput,
   parseVersion,
@@ -175,18 +176,19 @@ describe('更新的輸出與版本（R92、R93）', () => {
     expect(compareVersion('2026.10.26.1', '2026.10.26')).toBeGreaterThan(0)
   })
   it('更新紀錄：讀不到或格式錯誤時當作從來沒檢查過、程式版本不同', () => {
-    expect(normalizeUpdateRecord(null)).toEqual({ lastCheck: 0, appVersion: '' })
-    expect(normalizeUpdateRecord({ lastCheck: 'x', appVersion: 1 })).toEqual({ lastCheck: 0, appVersion: '' })
-    expect(normalizeUpdateRecord({ lastCheck: 5, appVersion: '0.7.0' })).toEqual({ lastCheck: 5, appVersion: '0.7.0' })
+    expect(normalizeUpdateRecord(null)).toEqual({ lastCheck: 0, appVersion: '', channel: 'stable' })
+    expect(normalizeUpdateRecord({ lastCheck: 'x', appVersion: 1, channel: 'beta' })).toEqual({ lastCheck: 0, appVersion: '', channel: 'stable' })
+    expect(normalizeUpdateRecord({ lastCheck: 5, appVersion: '0.7.0' })).toEqual({ lastCheck: 5, appVersion: '0.7.0', channel: 'stable' })
+    expect(normalizeUpdateRecord({ lastCheck: 5, appVersion: '0.8.4', channel: 'nightly' }).channel).toBe('nightly')
   })
   it('R92 AC1：開啟時的自動更新，24 小時內不重複', () => {
     const h = 60 * 60 * 1000
-    expect(shouldAutoUpdate({ lastCheck: NOW - 23 * h, appVersion: '' }, NOW)).toBe(false)
-    expect(shouldAutoUpdate({ lastCheck: NOW - 25 * h, appVersion: '' }, NOW)).toBe(true)
-    expect(shouldAutoUpdate({ lastCheck: NOW - AUTO_UPDATE_INTERVAL_MS, appVersion: '' }, NOW)).toBe(true)
+    expect(shouldAutoUpdate({ lastCheck: NOW - 23 * h, appVersion: '', channel: 'stable' }, NOW)).toBe(false)
+    expect(shouldAutoUpdate({ lastCheck: NOW - 25 * h, appVersion: '', channel: 'stable' }, NOW)).toBe(true)
+    expect(shouldAutoUpdate({ lastCheck: NOW - AUTO_UPDATE_INTERVAL_MS, appVersion: '', channel: 'stable' }, NOW)).toBe(true)
     expect(shouldAutoUpdate(normalizeUpdateRecord(null), NOW)).toBe(true)
     // 時間在未來（電腦時間被改過）也檢查
-    expect(shouldAutoUpdate({ lastCheck: NOW + h, appVersion: '' }, NOW)).toBe(true)
+    expect(shouldAutoUpdate({ lastCheck: NOW + h, appVersion: '', channel: 'stable' }, NOW)).toBe(true)
   })
 })
 
@@ -196,17 +198,23 @@ describe('設定選單的 yt-dlp 狀態（R93）', () => {
     expect(statusOf('2026.10.26', null)).toBe('unknown')
     expect(statusOf('2026.10.21', '2026.10.26')).toBe('available')
     expect(statusOf('2026.10.26', '2026.10.26')).toBe('latest')
+    // 更新來源（R160）：最新版只看版本新舊；正式版時目前是最新版的版本就算有新版（切回正式版）
+    expect(statusOf('2026.10.26', '2026.11.14.232655', 'nightly')).toBe('available')
+    expect(statusOf('2026.11.14.232655', '2026.11.14.232655', 'nightly')).toBe('latest')
+    expect(statusOf('2026.11.14.232655', '2026.10.26', 'stable')).toBe('available')
+    expect(latestReleaseApi('nightly')).toBe('https://api.github.com/repos/yt-dlp/yt-dlp-nightly-builds/releases/latest')
+    expect(latestReleaseApi('stable')).toBe('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest')
     // 使用者的比 GitHub 的新（例如 nightly）也算最新版
     expect(statusOf('2026.10.27', '2026.10.26')).toBe('latest')
   })
   it('每種狀態的文字與能不能點擊', () => {
     const v = { version: '2026.10.21', latest: '2026.10.26' }
-    expect(statusLabel({ ...v, state: 'latest', version: '2026.10.26' })).toEqual({ label: 'yt-dlp 2026.10.26（已是最新版）', clickable: false })
-    expect(statusLabel({ ...v, state: 'available' })).toEqual({ label: 'yt-dlp 2026.10.21：有新版 2026.10.26，點這裡更新', clickable: true })
-    expect(statusLabel({ ...v, state: 'checking' })).toEqual({ label: 'yt-dlp 2026.10.21（正在檢查更新…）', clickable: false })
-    expect(statusLabel({ ...v, state: 'unknown' })).toEqual({ label: 'yt-dlp 2026.10.21（無法檢查更新）', clickable: true })
-    expect(statusLabel({ ...v, state: 'updating' })).toEqual({ label: 'yt-dlp 正在更新…', clickable: false })
-    expect(statusLabel({ ...v, state: 'missing', version: null })).toEqual({ label: '找不到 yt-dlp', clickable: false })
+    expect(statusLabel({ ...v, state: 'latest', channel: 'stable', version: '2026.10.26' })).toEqual({ label: 'yt-dlp 2026.10.26（已是最新版）', clickable: false })
+    expect(statusLabel({ ...v, state: 'available', channel: 'stable' })).toEqual({ label: 'yt-dlp 2026.10.21：有新版 2026.10.26，點這裡更新', clickable: true })
+    expect(statusLabel({ ...v, state: 'checking', channel: 'stable' })).toEqual({ label: 'yt-dlp 2026.10.21（正在檢查更新…）', clickable: false })
+    expect(statusLabel({ ...v, state: 'unknown', channel: 'stable' })).toEqual({ label: 'yt-dlp 2026.10.21（無法檢查更新）', clickable: true })
+    expect(statusLabel({ ...v, state: 'updating', channel: 'stable' })).toEqual({ label: 'yt-dlp 正在更新…', clickable: false })
+    expect(statusLabel({ ...v, state: 'missing', channel: 'stable', version: null })).toEqual({ label: '找不到 yt-dlp', clickable: false })
   })
   it('手動更新的提示', () => {
     expect(updateToast('updated', '2026.10.26')).toBe('yt-dlp 已更新到 2026.10.26')

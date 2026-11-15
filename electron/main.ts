@@ -413,6 +413,9 @@ ipcMain.handle('ytdlp:resolveUrl', (_, url: unknown, refresh: unknown) =>
     : { ok: false, reason: 'failed' }
 )
 ipcMain.handle('ytdlp:update', () => ytdlp.update())
+ipcMain.handle('ytdlp:setChannel', (_, channel: unknown) =>
+  ytdlp.setChannel(channel === 'nightly' ? 'nightly' : 'stable')
+)
 ipcMain.handle('ytdlp:status', () => ytdlp.getStatus())
 ipcMain.on('ytdlp:check', () => void ytdlp.checkLatest())
 ytdlp.onStatus((s) => win?.webContents.send('ytdlp:status', s))
