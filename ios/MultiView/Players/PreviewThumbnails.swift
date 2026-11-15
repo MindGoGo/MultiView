@@ -79,7 +79,7 @@ enum PreviewThumbnails {
             task = running
         } else {
             task = Task.detached {
-                guard let data = await fetch("https://www.youtube.com/watch?v=\(videoID)"),
+                guard let data = await PreviewThumbnails.fetch("https://www.youtube.com/watch?v=\(videoID)"),
                       let html = String(data: data, encoding: .utf8)
                 else { return .failed }
                 return .found(StoryboardRules.extractSpec(html).flatMap(StoryboardRules.parse))
@@ -104,7 +104,7 @@ enum PreviewThumbnails {
             task = running
         } else {
             task = Task.detached {
-                guard let data = await fetch(address) else { return nil }
+                guard let data = await PreviewThumbnails.fetch(address) else { return nil }
                 return UIImage(data: data)
             }
             sheetTasks[address] = task
