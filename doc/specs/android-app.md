@@ -32,7 +32,7 @@
 - 每做完一批功能就升一個版本號、推上分支，等 GitHub Actions 編譯通過後請使用者更新測試。實測結果寫回本規格第 11 節。
 - 發佈新版：**自動**。升 `android/gradle.properties` 的 `multiview.versionName` 並推送，GitHub Actions 測試通過後發現這個版本還沒有發佈，就自己建立 `android-v<版本號>` 標籤與 Release、放上簽章的 APK（開發環境不能推送標籤，所以由 Actions 建立）。使用者不用做任何事，直接下載安裝。也可以手動建立標籤（和 iOS 版的 `ios-v*` 相同）。
 - **目前的進度（2026-11-15）**：Android 版做到 0.0.14，第 10 節的步驟 1–7 都做了第一版，使用者在 POCO F6 Pro 上測過 0.0.13（結果在第 11 節）。0.0.14 加入其他網站用 yt-dlp 播放（R156 的「其他網站的播放方式」），**還沒實測**（測試步驟在 `tests/manual/android-app.md` 的 G 組）。還沒做：字幕。手動驗收步驟在 `tests/manual/android-app.md`。發佈是自動的：升 `android/gradle.properties` 的版本號並推送即可。
-- 分支：開發環境指定的分支（目前是 `claude/beautiful-babbage-1bur72`）；使用者說先不要合併到 `main`。
+- 分支：開發環境指定的分支（0.0.13 以前是 `claude/beautiful-babbage-1bur72`；0.0.14 起是 `claude/pensive-tesla-rfgdz1`，從前者的最後一個提交接續）；使用者說先不要合併到 `main`。
 
 ## 1. 背景與目標
 
