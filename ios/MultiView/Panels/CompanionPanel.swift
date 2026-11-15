@@ -6,6 +6,11 @@ import WebKit
 /// 內容跟著最後點過的 YouTube 格子。面板裡的網頁不播放影片，不會搶走格子的聲音。
 struct CompanionPanel: View {
     @Environment(AppModel.self) private var model
+    /// 面板是不是開著。關著的時候面板在畫面外，裡面的網頁留著，但不載入新的網頁
+    /// （連結的影片換了，等打開面板才載入）。
+    var open = true
+    /// 載入過聊天室的影片：同一部影片切換分頁時不重新載入。
+    @State private var chatVideo: String?
 
     var body: some View {
         let videoID = model.companionVideoID
@@ -40,22 +45,24 @@ struct CompanionPanel: View {
             ZStack {
                 Color(white: 0.06)
                 // 每個分頁各自一個網頁，切換分頁時保留原本的內容
-                CompanionWebView(page: .search, videoID: nil) { href in
+                CompanionWebView(page: .search, videoID: nil, active: open) { href in
                     model.companionOpenVideo(href, replaceLinkedCell: false)
                 }
                 .opacity(tab == .search ? 1 : 0)
                 .allowsHitTesting(tab == .search)
 
                 if let videoID {
-                    CompanionWebView(page: .watch(section: tab == .comments ? "comments" : "related"), videoID: videoID) { href in
+                    CompanionWebView(page: .watch(section: tab == .comments ? "comments" : "related"), videoID: videoID, active: open) { href in
                         model.companionOpenVideo(href, replaceLinkedCell: true)
                     }
                     .opacity(tab == .related || tab == .comments ? 1 : 0)
                     .allowsHitTesting(tab == .related || tab == .comments)
 
-                    // 聊天室要到那個分頁才載入
-                    if tab == .chat {
-                        CompanionWebView(page: .chat, videoID: videoID) { _ in }
+                    // 聊天室要到那個分頁才載入；同一部影片載入過就留著
+                    if chatVideo == videoID {
+                        CompanionWebView(page: .chat, videoID: videoID, active: open) { _ in }
+                            .opacity(tab == .chat ? 1 : 0)
+                            .allowsHitTesting(tab == .chat)
                     }
                 } else if tab != .search {
                     Text("先點一下 YouTube 的格子")
@@ -65,6 +72,9 @@ struct CompanionPanel: View {
             }
         }
         .background(.regularMaterial)
+        .onChange(of: open && tab == .chat ? videoID : nil, initial: true) { _, video in
+            if let video { chatVideo = video }
+        }
     }
 }
 
@@ -78,6 +88,8 @@ private struct CompanionWebView: UIViewRepresentable {
 
     let page: Page
     let videoID: String?
+    /// 面板開著：關著的時候不載入新的網頁。
+    var active = true
     let onVideo: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -133,7 +145,7 @@ private struct CompanionWebView: UIViewRepresentable {
             coordinator.applySection()
         }
         // 換了影片才重新載入；搜尋分頁只載入一次，之後讓使用者自己逛
-        if coordinator.loaded != address, let url = URL(string: address) {
+        if active, coordinator.loaded != address, let url = URL(string: address) {
             coordinator.loaded = address
             webView.load(URLRequest(url: url))
         }

@@ -5,6 +5,8 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    /// YouTube 小視窗打開過：之後一直留在畫面裡（關掉時移到畫面外），裡面的網頁不用每次重新載入（R140）。
+    @State private var companionCreated = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -22,18 +24,29 @@ struct RootView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            // 清單面板、YouTube 小視窗：大螢幕在右側（寬 360pt，蓋在影片上方），小螢幕占滿寬度（R140、R141）
-            if model.listPanelOpen || model.companionOpen {
+            // YouTube 小視窗：大螢幕在右側（寬 360pt，蓋在影片上方），小螢幕占滿寬度（R140）。
+            // 第一次打開之後一直留著，關掉時只是移到畫面右邊外面：每次打開都重新建立的話，
+            // 裡面的網頁會重新載入，搜尋的內容也不見（2026-11-15 使用者回報）
+            if companionCreated {
+                GeometryReader { proxy in
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        CompanionPanel(open: model.companionOpen)
+                            .frame(maxWidth: model.isLarge ? 360 : .infinity)
+                    }
+                    .offset(x: model.companionOpen ? 0 : proxy.size.width + 40)
+                }
+                .padding(.top, model.toolbarVisible ? 52 : 0)
+                .allowsHitTesting(model.companionOpen)
+                .accessibilityHidden(!model.companionOpen)
+            }
+
+            // 清單面板：位置和 YouTube 小視窗相同，一次只開一個（R141）
+            if model.listPanelOpen {
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
-                    Group {
-                        if model.companionOpen {
-                            CompanionPanel()
-                        } else {
-                            ListPanel()
-                        }
-                    }
-                    .frame(maxWidth: model.isLarge ? 360 : .infinity)
+                    ListPanel()
+                        .frame(maxWidth: model.isLarge ? 360 : .infinity)
                 }
                 .padding(.top, model.toolbarVisible ? 52 : 0)
                 .transition(.move(edge: .trailing))
@@ -74,6 +87,9 @@ struct RootView: View {
             Button("取消", role: .cancel) {
                 model.pendingReplaceURL = nil
             }
+        }
+        .onChange(of: model.companionOpen, initial: true) { _, open in
+            if open { companionCreated = true }
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
