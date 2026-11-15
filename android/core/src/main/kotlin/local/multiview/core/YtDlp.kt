@@ -111,6 +111,12 @@ object YtDlpRules {
         return ResolveResult.Success(stream)
     }
 
+    /**
+     * 其他網站的串流要帶的標頭（R103、桌面版 R110）：Referer 是原本的網頁網址，yt-dlp 有提供時用 yt-dlp 的。
+     */
+    fun webStreamHeaders(pageUrl: String, fromYtDlp: Map<String, String>): Map<String, String> =
+        if (fromYtDlp.keys.any { it.lowercase() == "referer" }) fromYtDlp else fromYtDlp + ("Referer" to pageUrl)
+
     private fun isPlayable(format: JsonObject): Boolean {
         val ext = string(format["ext"]) ?: return true
         return ext.lowercase() in playableExtensions

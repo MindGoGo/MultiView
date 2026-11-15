@@ -41,6 +41,7 @@ import local.multiview.core.ListsCodec
 import local.multiview.core.PlayMethod
 import local.multiview.core.Settings
 import local.multiview.core.SettingsCodec
+import local.multiview.core.WebMethod
 
 /**
  * 設定畫面（桌面版 R96；Android 版 R158）：播放方式、yt-dlp 版本、匯入桌面版資料、清除網站資料、版本號。
@@ -92,6 +93,10 @@ fun SettingsScreen(model: AppModel) {
                 Label("一般影片")
                 Segmented(methodOptions, model.youtubeMethods.vod) { model.changeYouTubeMethods(model.youtubeMethods.copy(vod = it)) }
                 Note("yt-dlp：沒有 YouTube 的按鈕與廣告，可以多格同時出聲。播不了時自動改用內嵌播放器。")
+
+                Section("其他網站的播放方式")
+                Segmented(webMethodOptions, model.webMethod) { model.changeWebMethod(it) }
+                Note("yt-dlp 支援上千個影音網站（例如 Twitch、Dailymotion、新聞台），可以選畫質、多格同時出聲。不支援或需要登入的網站會自動改用網頁。")
 
                 Section("yt-dlp")
                 Label("版本：${model.ytdlpVersion ?: "讀取中…"}")
@@ -161,6 +166,7 @@ fun SettingsScreen(model: AppModel) {
 }
 
 private val methodOptions = listOf(PlayMethod.YTDLP to "yt-dlp", PlayMethod.EMBED to "內嵌播放器")
+private val webMethodOptions = listOf(WebMethod.WEB to "網頁", WebMethod.YTDLP to "yt-dlp")
 
 /** 讀取使用者選的檔案（UTF-8）；讀不到、太大時回傳 null。 */
 private fun readText(context: Context, uri: Uri): String? = try {

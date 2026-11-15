@@ -173,4 +173,17 @@ class YtDlpTest {
         assertEquals("沒有可以播放的格式", error("{\"ok\":true,\"info\":{\"formats\":[]}}"))
         assertEquals("無法讀取 yt-dlp 的結果", error("not json"))
     }
+
+    @Test
+    fun webStreamHeaders() {
+        val page = "https://www.twitch.tv/somebody"
+        assertEquals(mapOf("Referer" to page), YtDlpRules.webStreamHeaders(page, emptyMap()))
+        assertEquals(
+            mapOf("User-Agent" to "UA", "Referer" to page),
+            YtDlpRules.webStreamHeaders(page, mapOf("User-Agent" to "UA")),
+        )
+        // yt-dlp 有提供 Referer 時用 yt-dlp 的（大小寫不拘）
+        val given = mapOf("referer" to "https://player.example/", "User-Agent" to "UA")
+        assertEquals(given, YtDlpRules.webStreamHeaders(page, given))
+    }
 }

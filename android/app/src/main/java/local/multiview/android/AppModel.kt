@@ -22,6 +22,7 @@ import local.multiview.android.player.PlayerUpdate
 import local.multiview.android.player.AdBlocker
 import local.multiview.android.player.WebMode
 import local.multiview.android.player.WebPagePlayer
+import local.multiview.android.player.WebSourcePlayer
 import local.multiview.android.player.YouTubeSourcePlayer
 import local.multiview.android.ytdlp.YtDlp
 import local.multiview.android.ytdlp.YtDlpUpdater
@@ -61,6 +62,7 @@ import local.multiview.core.Slots
 import local.multiview.core.SourceId
 import local.multiview.core.SourceParser
 import local.multiview.core.TrackAxis
+import local.multiview.core.WebMethod
 import local.multiview.core.YouTubeFeed
 import local.multiview.core.YouTubeMethods
 import java.io.File
@@ -103,6 +105,10 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
 
     /** YouTube 直播、一般影片的播放方式（R156）。 */
     var youtubeMethods by mutableStateOf(YouTubeMethods())
+        private set
+
+    /** 其他網站的播放方式（R156；桌面版 R102）：網頁（預設）或 yt-dlp。 */
+    var webMethod by mutableStateOf(WebMethod.WEB)
         private set
 
     /** 最愛、歷史、訂閱頻道（R158）；存在清單檔，和設定檔分開。 */
@@ -240,6 +246,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         ratios = settings.ratios
         masterBrightness = settings.brightness
         youtubeMethods = initialMethods(settings.youtubeMethods)
+        webMethod = settings.webMethod
         listTab = settings.listTab
         // 還原的來源載入後維持暫停（R10 AC1）
         slots = SettingsBridge.restoreSlots(settings.slots)
@@ -506,8 +513,9 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         // 切換廣告阻擋而重新載入時，沿用切換前的顯示方式
         val mode = pendingWebModes.remove(source.id) ?: if (youtubeSite) WebMode.PAGE else WebMode.VIDEO
         val id = source.id
-        return WebPagePlayer(context, url, source, mode, adblock = source.adblock, interceptYouTube = youtubeSite).also { player ->
+        return WebSourcePlayer(context, url, source, mode, interceptYouTube = youtubeSite, method = webMethod).also { player ->
             player.onNotice = ::showToast
+            player.onFallback = { showToast("yt-dlp 無法播放這個網站，已改用網頁播放") }
             player.onYouTubeVideo = { href ->
                 val index = slots.indexOfFirst { it?.id == id }
                 if (index >= 0) setSource(href, index)?.let(::showToast)
@@ -517,12 +525,15 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
 
     // 網頁格子（R157）
 
-    /** 這一格現在顯示的是網頁時，回傳它的顯示方式。 */
-    fun webModeOf(source: CellSource): WebMode? = (players[source.id] as? WebPagePlayer)?.mode
+    /** 這個來源現在顯示的網頁；用 yt-dlp 播放、解析中、不是網頁來源時為 null。 */
+    private fun webPageOf(id: Int?): WebPagePlayer? = (players[id] as? WebSourcePlayer)?.webPage
+
+    /** 這一格現在顯示的是網頁時，回傳它的顯示方式（用 yt-dlp 播放時沒有網頁的按鈕，R103）。 */
+    fun webModeOf(source: CellSource): WebMode? = webPageOf(source.id)?.mode
 
     /** 「顯示整個網頁」／「只顯示影片」（R14）。 */
     fun toggleWebMode(index: Int) {
-        val page = players[slots.getOrNull(index)?.id] as? WebPagePlayer ?: return
+        val page = webPageOf(slots.getOrNull(index)?.id) ?: return
         if (page.mode == WebMode.PAGE) page.requestVideoMode() else page.changeModeByUser(WebMode.PAGE)
         keepControlsVisible()
     }
@@ -554,8 +565,8 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
             companionOpen = false
             return true
         }
-        val index = activeCell ?: solo ?: visibleSlotIndices.singleOrNull { (players[slots[it]?.id] as? WebPagePlayer)?.mode == WebMode.PAGE }
-        val page = players[slots.getOrNull(index ?: -1)?.id] as? WebPagePlayer
+        val index = activeCell ?: solo ?: visibleSlotIndices.singleOrNull { webPageOf(slots[it]?.id)?.mode == WebMode.PAGE }
+        val page = webPageOf(slots.getOrNull(index ?: -1)?.id)
         if (page != null && page.mode == WebMode.PAGE && page.canGoBack) {
             page.goBack()
             return true
@@ -831,6 +842,32 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         scheduleSave()
     }
 
+    /**
+     * 改變其他網站的播放方式（桌面版 R102）：其他網站的格子從目前的位置重新載入。
+     * YouTube 的格子、YouTube 網站頁面（一律用網頁，R57）不受影響。
+     */
+    fun changeWebMethod(method: WebMethod) {
+        if (method == webMethod) return
+        webMethod = method
+        var reloaded = false
+        slots = slots.map { source ->
+            if (source == null || source.parsed !is ParsedSource.Web || SourceParser.isYouTubeSite(source.url) ||
+                !players.containsKey(source.id)
+            ) {
+                source
+            } else {
+                val playing = statuses[source.id]?.showsPause ?: false
+                val position = ProgressRules.resumePosition(progress[source.id]) ?: source.resume
+                releasePlayer(source.id)
+                reloaded = true
+                // 換一個 id：畫面會替它建立新的播放器
+                source.copy(id = SourceId.next(), autoplay = playing, resume = position, record = false)
+            }
+        }
+        if (reloaded) activeCell = null
+        scheduleSave()
+    }
+
     /** 用匯入的設定取代目前的版型、格子、聲音、亮度、播放方式。匯入後所有格子維持暫停。 */
     fun importSettings(settings: Settings) {
         exitSolo()
@@ -840,6 +877,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         ratios = settings.ratios
         masterBrightness = settings.brightness
         youtubeMethods = settings.youtubeMethods
+        webMethod = settings.webMethod
         listTab = settings.listTab
         slots = SettingsBridge.restoreSlots(settings.slots)
         baseSettings = settings.copy(slots = SettingsBridge.saveSlots(slots))
@@ -1310,6 +1348,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
             ratios = ratios,
             brightness = masterBrightness,
             youtubeMethods = youtubeMethods,
+            webMethod = webMethod,
             listTab = listTab,
             slots = SettingsBridge.saveSlots(slots, positions),
         )
