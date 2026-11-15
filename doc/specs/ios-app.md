@@ -563,7 +563,9 @@
 
 ## 12. 未決事項
 
-- [ ] **待辦（2026-11-15，從 Android 版 0.0.15 補回）**：
+- [ ] **待辦（2026-11-15，從 Android 版 0.0.15、0.0.16 補回）**：
+  - 字幕（yt-dlp 播放）：`mv_bridge.py` 已經回傳 `captions`（Android 0.0.16 加的，iOS 不用改 Python）。照 Android 版做：操作列的「字幕」選單、App 自己下載並解析 WebVTT 疊在影片上，選的字幕存在來源的 `captions`（格式同桌面版 R31）。規則與測試對照 `android/core/.../Captions.kt`、`StoryboardCaptionsTest.kt`。（R131 原本寫「YouTube 字幕選單之後再做」。）
+  - 進度條的預覽縮圖（桌面版 R50）：拖曳進度條時顯示時間；YouTube、mp4 的一般影片有縮圖。規則照 `src/lib/storyboard.ts`（Android 版 `android/core/.../Storyboard.kt`），mp4 用 `AVAssetImageGenerator`。
   - 語音（聲音軌）選單（桌面版 R95）：yt-dlp 播放的 HLS 有多條聲音軌時，操作列有「語音」，依「這一格記住的語言 → 系統語言 → 原本的聲音 → 第一條」選擇，選過的語言存在來源的 `audioLang`。目前 iOS 版由 AVPlayer 自己選，可能選到 AI 配音。規則照 `src/lib/audioTracks.ts`（Android 版是 `android/core/.../AudioTracks.kt`）；AVPlayer 用 `AVMediaSelectionGroup`。
   - （「用行動數據／低數據模式時不自動更新 yt-dlp」iOS 版已經有，R136，不用補。）
 - [x] 裝置：iPad Pro M1（128GB）、iPhone 14 Pro（256GB）（2026-11-13）。兩台都能更新到最新的 iPadOS／iOS，最低支援版本維持 17。

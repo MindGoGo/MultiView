@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import local.multiview.android.AppModel
@@ -47,7 +48,7 @@ import local.multiview.core.ProgressRules
 import local.multiview.core.Volume
 
 /** 操作列的彈出視窗：一次只開一個。 */
-private enum class Popup { NONE, VOLUME, BRIGHTNESS, QUALITY, AUDIO, MORE, EDIT }
+private enum class Popup { NONE, VOLUME, BRIGHTNESS, QUALITY, AUDIO, CAPTIONS, MORE, EDIT }
 
 /**
  * 每一格下方的操作列（R151）：播放／暫停、喇叭、音量、亮度、畫質、移動、全螢幕、最愛、更換網址、移除，
@@ -59,6 +60,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
     val supportsVolume = player?.supportsVolume ?: false
     val supportsQuality = model.supportsQuality(source)
     val audioOptions = player?.audioOptions ?: emptyList()
+    val captionTracks = player?.captionTracks ?: emptyList()
     val favorite = model.isFavorite(source)
     val supportsPip = model.supportsPictureInPicture(source)
     val webMode = model.webModeOf(source)
@@ -78,12 +80,12 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
     ) {
         val progress = model.progress[source.id]
         if (progress != null && ProgressRules.view(progress).kind != ProgressKind.LIVE) {
-            ProgressBar(progress) { model.seek(index, it) }
+            ProgressBar(progress, source) { model.seek(index, it) }
         }
 
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             // 全部按鈕需要的寬度（每個 44dp）
-            val wideCount = 7 + listOf(supportsVolume, supportsQuality, audioOptions.size > 1, model.canSwap, supportsPip).count { it } +
+            val wideCount = 7 + listOf(supportsVolume, supportsQuality, audioOptions.size > 1, captionTracks.isNotEmpty(), model.canSwap, supportsPip).count { it } +
                 if (webMode != null) 2 else 0
             val wide = maxWidth >= (44 * wideCount + 8).dp
 
@@ -114,6 +116,12 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                         Box {
                             BarButton(AppIcons.Quality, "畫質") { popup = Popup.QUALITY }
                             if (popup == Popup.QUALITY) QualityMenu(model, index, source) { popup = Popup.NONE }
+                        }
+                    }
+                    if (captionTracks.isNotEmpty()) {
+                        Box {
+                            BarButton(AppIcons.Captions, "字幕", highlighted = player?.currentCaption != null) { popup = Popup.CAPTIONS }
+                            if (popup == Popup.CAPTIONS) CaptionMenu(model, index, player) { popup = Popup.NONE }
                         }
                     }
                     if (wide && audioOptions.size > 1) {
@@ -160,6 +168,10 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                                 if (supportsVolume) MenuRow(AppIcons.Tune, "音量") { popup = Popup.VOLUME }
                                 MenuRow(AppIcons.Brightness, "亮度") { popup = Popup.BRIGHTNESS }
                                 if (supportsQuality) MenuRow(AppIcons.Quality, "畫質：${source.quality.label}") { popup = Popup.QUALITY }
+                                if (captionTracks.isNotEmpty()) {
+                                    val current = captionTracks.firstOrNull { it.key == player?.currentCaption }?.label ?: "關閉"
+                                    MenuRow(AppIcons.Captions, "字幕：$current") { popup = Popup.CAPTIONS }
+                                }
                                 if (audioOptions.size > 1) {
                                     val current = audioOptions.firstOrNull { it.index == player?.currentAudio }?.label ?: "自動"
                                     MenuRow(AppIcons.Voice, "語音：$current") { popup = Popup.AUDIO }
@@ -200,6 +212,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                             Popup.BRIGHTNESS -> BrightnessPopup(model, index, source) { popup = Popup.NONE }
                             Popup.QUALITY -> QualityMenu(model, index, source) { popup = Popup.NONE }
                             Popup.AUDIO -> AudioMenu(model, index, player) { popup = Popup.NONE }
+                            Popup.CAPTIONS -> CaptionMenu(model, index, player) { popup = Popup.NONE }
                             else -> {}
                         }
                     }
@@ -240,6 +253,31 @@ private fun WebModeButton(model: AppModel, index: Int, mode: WebMode) {
         if (mode == WebMode.PAGE) "只顯示影片" else "顯示整個網頁",
         highlighted = mode == WebMode.PAGE,
     ) { model.toggleWebMode(index) }
+}
+
+/** 字幕選單（R156）：「關閉」和 yt-dlp 讀到的字幕。 */
+@Composable
+private fun CaptionMenu(model: AppModel, index: Int, player: CellPlayer?, onDismiss: () -> Unit) {
+    val current = player?.currentCaption
+    DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
+        HoldControls(model)
+        DropdownMenuItem(
+            text = { Text("關閉" + if (current == null) "  ✓" else "") },
+            onClick = {
+                onDismiss()
+                model.setCaption(index, null)
+            },
+        )
+        for (track in player?.captionTracks ?: emptyList()) {
+            DropdownMenuItem(
+                text = { Text(track.label + if (track.key == current) "  ✓" else "") },
+                onClick = {
+                    onDismiss()
+                    model.setCaption(index, track)
+                },
+            )
+        }
+    }
 }
 
 /** 語音選單（桌面版 R95）：yt-dlp 播放的 HLS 有兩條以上的聲音軌時，在「⋯」裡。 */
@@ -328,7 +366,7 @@ private fun MoveHandle(model: AppModel, index: Int) {
 
 /** 進度條：點一下或拖曳跳到那個位置（R153）。拖曳中顯示手指所在的時間，放開後才跳轉。 */
 @Composable
-private fun ProgressBar(progress: PlaybackProgress, onSeek: (Double) -> Unit) {
+private fun ProgressBar(progress: PlaybackProgress, source: CellSource, onSeek: (Double) -> Unit) {
     var dragFraction by remember { mutableStateOf<Double?>(null) }
     val display = ProgressRules.view(progress)
     val fraction = dragFraction ?: display.fraction
@@ -344,6 +382,7 @@ private fun ProgressBar(progress: PlaybackProgress, onSeek: (Double) -> Unit) {
     }
     val trailing = if (display.kind == ProgressKind.DVR) "直播" else ProgressRules.formatTime(progress.end - progress.start)
 
+    var barWidth by remember { mutableStateOf(0) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -354,6 +393,7 @@ private fun ProgressBar(progress: PlaybackProgress, onSeek: (Double) -> Unit) {
             modifier = Modifier
                 .weight(1f)
                 .height(28.dp)
+                .onSizeChanged { barWidth = it.width }
                 .pointerInput(Unit) {
                     detectTapGestures { offset ->
                         if (size.width > 0) currentOnSeek((offset.x / size.width).toDouble().coerceIn(0.0, 1.0))
@@ -384,6 +424,8 @@ private fun ProgressBar(progress: PlaybackProgress, onSeek: (Double) -> Unit) {
                     .height(4.dp)
                     .background(Accent, RoundedCornerShape(2.dp)),
             )
+            // 拖曳時在手指上方顯示那個位置的縮圖與時間（桌面版 R50）
+            dragFraction?.let { ProgressPreview(source, progress, display.kind, seconds, leading, it, barWidth) }
         }
         Text(trailing, color = Color.White, fontSize = 11.sp)
     }

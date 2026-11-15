@@ -29,6 +29,7 @@ import local.multiview.android.ytdlp.YtDlpUpdater
 import org.json.JSONObject
 import local.multiview.core.AudioOption
 import local.multiview.core.AudioRules
+import local.multiview.core.CaptionTrack
 import local.multiview.core.Brightness
 import local.multiview.core.CellSource
 import local.multiview.core.Channel
@@ -1098,6 +1099,16 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         slots = SlotRules.set(slots, index, source.copy(quality = quality))
         players[source.id]?.setQuality(quality)
         showToast("畫質：${quality.label}")
+        keepControlsVisible()
+        scheduleSave()
+    }
+
+    /** 字幕選單（R156；規則同桌面版 R31）：track 為 null 是關閉。選的字幕跟著來源保存。 */
+    fun setCaption(index: Int, track: CaptionTrack?) {
+        val source = slots.getOrNull(index) ?: return
+        slots = SlotRules.set(slots, index, source.copy(captions = track?.key))
+        players[source.id]?.setCaption(track?.key)
+        showToast("字幕：${track?.label ?: "關閉"}")
         keepControlsVisible()
         scheduleSave()
     }

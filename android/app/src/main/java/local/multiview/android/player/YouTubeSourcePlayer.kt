@@ -56,6 +56,13 @@ class YouTubeSourcePlayer(
     override val isResolving get() = inner == null && !closed
     override val supportsQuality get() = inner?.supportsQuality ?: false
     override val audioOptions get() = inner?.audioOptions ?: emptyList()
+    override val captionTracks get() = inner?.captionTracks ?: emptyList()
+    override val currentCaption get() = inner?.currentCaption
+
+    override fun setCaption(key: String?) {
+        source = source.copy(captions = key)
+        inner?.setCaption(key)
+    }
     override val currentAudio get() = inner?.currentAudio ?: -1
 
     override fun setAudioTrack(index: Int) {
@@ -156,6 +163,7 @@ class YouTubeSourcePlayer(
                 stream.url,
                 startingSource(stream.isLive),
                 adaptive = stream.kind == YtStream.Kind.HLS,
+                captionTracks = stream.captions,
                 headers = stream.headers,
             ),
         )

@@ -2,6 +2,7 @@ package local.multiview.android.player
 
 import android.view.View
 import local.multiview.core.AudioOption
+import local.multiview.core.CaptionTrack
 import local.multiview.core.PlayStatus
 import local.multiview.core.PlaybackProgress
 import local.multiview.core.Quality
@@ -68,4 +69,13 @@ interface CellPlayer {
 
     /** 改用這一條聲音軌（[AudioOption.index]）。 */
     fun setAudioTrack(index: Int) {}
+
+    /** 字幕（yt-dlp 播放時，R156）；沒有時是空的。 */
+    val captionTracks: List<CaptionTrack> get() = emptyList()
+
+    /** 目前顯示的字幕的 key；關閉時為 null。 */
+    val currentCaption: String? get() = null
+
+    /** 顯示這一軌字幕（[CaptionTrack.key]），null 是關閉。 */
+    fun setCaption(key: String?) {}
 }

@@ -4,7 +4,21 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.graphics.Color as AndroidColor
+import android.util.TypedValue
+import android.view.Gravity
+import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.annotation.OptIn
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -24,7 +38,10 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import local.multiview.core.AudioOption
 import local.multiview.core.AudioTrackRules
+import local.multiview.core.CaptionRules
+import local.multiview.core.CaptionTrack
 import local.multiview.core.CellSource
+import local.multiview.core.Cue
 import local.multiview.core.RawAudioTrack
 import java.util.Locale
 import local.multiview.core.MediaInfo
@@ -47,6 +64,8 @@ class NativePlayer(
     /** 串流要帶的請求標頭（yt-dlp 解析其他網站時，R103）。 */
     headers: Map<String, String> = emptyMap(),
     override val badge: String? = null,
+    /** yt-dlp 解析出來的字幕（R156）。 */
+    override val captionTracks: List<CaptionTrack> = emptyList(),
 ) : CellPlayer {
     override var onUpdate: ((PlayerUpdate) -> Unit)? = null
     override val supportsVolume = true
@@ -71,6 +90,28 @@ class NativePlayer(
         private set
     override var currentAudio by mutableStateOf(-1)
         private set
+
+    // 字幕（R156）：自己讀 WebVTT、自己顯示（讀不到字幕不會影響播放）
+    override var currentCaption by mutableStateOf<String?>(null)
+        private set
+    private var cues: List<Cue> = emptyList()
+    private var captionJob: Job? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val requestHeaders = headers
+    private val captionView = TextView(context).apply {
+        setTextColor(AndroidColor.WHITE)
+        setBackgroundColor(0x99000000.toInt())
+        gravity = Gravity.CENTER
+        setPadding(12, 4, 12, 4)
+        visibility = View.GONE
+    }
+    private val captionTicker = object : Runnable {
+        override fun run() {
+            if (closed || cues.isEmpty()) return
+            showCue()
+            handler.postDelayed(this, CAPTION_INTERVAL_MS)
+        }
+    }
 
     /** 這一格記住的語言（選單選過的）。 */
     private val savedAudioLang = source.audioLang
@@ -146,6 +187,61 @@ class NativePlayer(
             player = exo
         }
         handler.postDelayed(ticker, REPORT_INTERVAL_MS)
+
+        playerView.overlayFrameLayout?.addView(
+            captionView,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+                .apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL },
+        )
+        // 字的大小跟著格子：高度的 5%，最小 10sp
+        playerView.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+            val minPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 10f, view.resources.displayMetrics)
+            captionView.setTextSize(TypedValue.COMPLEX_UNIT_PX, maxOf(minPx, view.height * 0.05f))
+            (captionView.layoutParams as? FrameLayout.LayoutParams)?.bottomMargin = (view.height * 0.06f).toInt()
+            captionView.maxWidth = (view.width * 0.9f).toInt()
+        }
+        CaptionRules.find(captionTracks, source.captions)?.let { setCaption(it.key) }
+    }
+
+    override fun setCaption(key: String?) {
+        if (closed) return
+        captionJob?.cancel()
+        cues = emptyList()
+        captionView.visibility = View.GONE
+        val track = captionTracks.firstOrNull { it.key == key }
+        currentCaption = track?.key
+        track ?: return
+        captionJob = scope.launch {
+            val text = withContext(Dispatchers.IO) { fetchText(track.url) } ?: return@launch
+            cues = CaptionRules.parseVtt(text)
+            handler.removeCallbacks(captionTicker)
+            handler.post(captionTicker)
+        }
+    }
+
+    private fun showCue() {
+        val text = CaptionRules.cueAt(cues, exo.currentPosition / 1000.0)
+        if (text == null) {
+            captionView.visibility = View.GONE
+        } else {
+            if (captionView.text != text) captionView.text = text
+            captionView.visibility = View.VISIBLE
+        }
+    }
+
+    /** 讀字幕檔：帶網站要求的 User-Agent、Referer。 */
+    private fun fetchText(address: String): String? = try {
+        val connection = URL(address).openConnection() as HttpURLConnection
+        try {
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            requestHeaders.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            if (connection.responseCode != 200) null else connection.inputStream.use { String(it.readBytes(), Charsets.UTF_8) }
+        } finally {
+            connection.disconnect()
+        }
+    } catch (_: Exception) {
+        null
     }
 
     override fun play() {
@@ -194,6 +290,8 @@ class NativePlayer(
         if (closed) return
         closed = true
         handler.removeCallbacks(ticker)
+        handler.removeCallbacks(captionTicker)
+        scope.cancel()
         onUpdate = null
         exo.removeListener(listener)
         playerView.player = null
@@ -273,6 +371,7 @@ class NativePlayer(
 
     private companion object {
         const val REPORT_INTERVAL_MS = 500L
+        const val CAPTION_INTERVAL_MS = 200L
         const val MAX_LIVE_RESYNCS = 3
     }
 }

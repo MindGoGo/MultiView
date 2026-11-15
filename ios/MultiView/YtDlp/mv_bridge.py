@@ -160,6 +160,32 @@ def _slim(info: dict) -> dict:
                           for f in info['formats'] if isinstance(f, dict)]
     if isinstance(info.get('entries'), list):
         out['entries'] = [_slim(entry) for entry in info['entries'] if isinstance(entry, dict)]
+    captions = _captions(info)
+    if captions:
+        out['captions'] = captions
+    return out
+
+
+def _captions(info: dict) -> list:
+    """字幕清單（規格 android-app R156）：人工字幕，加上自動產生的原本語言（YouTube 標成「語言-orig」）。
+
+    自動翻譯成其他語言的不列。每一種只取 WebVTT 格式：[{"lang", "name", "url", "auto"}]。
+    """
+    out = []
+    for auto, field in ((False, 'subtitles'), (True, 'automatic_captions')):
+        subs = info.get(field)
+        if not isinstance(subs, dict):
+            continue
+        for lang, entries in subs.items():
+            if not isinstance(lang, str) or lang == 'live_chat' or not isinstance(entries, list):
+                continue
+            if auto and not lang.endswith('-orig'):
+                continue
+            vtt = next((e for e in entries if isinstance(e, dict) and e.get('ext') == 'vtt' and e.get('url')), None)
+            if vtt is None:
+                continue
+            code = lang[:-len('-orig')] if auto else lang
+            out.append({'lang': code, 'name': vtt.get('name') or code, 'url': vtt['url'], 'auto': auto})
     return out
 
 

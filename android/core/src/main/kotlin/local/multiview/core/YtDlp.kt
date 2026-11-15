@@ -22,6 +22,8 @@ data class YtStream(
     val expiresAt: Double,
     /** 網站要求的請求標頭（其他網站，R103）：只有 Referer、User-Agent。 */
     val headers: Map<String, String> = emptyMap(),
+    /** 影片的字幕（R156）：人工字幕與自動產生的原本語言，WebVTT。 */
+    val captions: List<CaptionTrack> = emptyList(),
 ) {
     enum class Kind { HLS, MP4 }
 }
@@ -74,7 +76,7 @@ object YtDlpRules {
 
         fun isHls(format: JsonObject) = string(format["protocol"]).orEmpty().startsWith("m3u8")
         fun make(kind: YtStream.Kind, format: JsonObject, url: String) =
-            YtStream(kind, url, isLive, title, expiry(url, now), headers(format, info))
+            YtStream(kind, url, isLive, title, expiry(url, now), headers(format, info), CaptionRules.fromYtDlp(info["captions"]))
 
         val hlsStream = formats.firstOrNull { isHls(it) && nonEmptyString(it["manifest_url"]) != null }
             ?.let { make(YtStream.Kind.HLS, it, nonEmptyString(it["manifest_url"])!!) }
