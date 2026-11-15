@@ -9,6 +9,8 @@ pluginManagement {
                 includeGroupByRegex("androidx.*")
             }
         }
+        // Maven Central 的 Google 鏡像：Maven Central 會限流（HTTP 429，2026-11-15 在 Actions 與開發環境都遇到），先走鏡像
+        maven("https://maven-central.storage-download.googleapis.com/maven2/")
         mavenCentral()
         gradlePluginPortal()
     }
@@ -25,6 +27,8 @@ dependencyResolutionManagement {
                 includeGroupByRegex("androidx.*")
             }
         }
+        // Maven Central 的 Google 鏡像：Maven Central 會限流（HTTP 429，2026-11-15 在 Actions 與開發環境都遇到），先走鏡像
+        maven("https://maven-central.storage-download.googleapis.com/maven2/")
         mavenCentral()
     }
 }
