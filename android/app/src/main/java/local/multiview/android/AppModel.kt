@@ -29,6 +29,10 @@ import org.json.JSONObject
 import local.multiview.core.AudioRules
 import local.multiview.core.Brightness
 import local.multiview.core.CellSource
+import local.multiview.core.Channel
+import local.multiview.core.CompanionAction
+import local.multiview.core.CompanionRules
+import local.multiview.core.CompanionTab
 import local.multiview.core.ExternalLink
 import local.multiview.core.FileStore
 import local.multiview.core.LayoutId
@@ -57,6 +61,7 @@ import local.multiview.core.Slots
 import local.multiview.core.SourceId
 import local.multiview.core.SourceParser
 import local.multiview.core.TrackAxis
+import local.multiview.core.YouTubeFeed
 import local.multiview.core.YouTubeMethods
 import java.io.File
 
@@ -143,6 +148,13 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     var listPanelOpen by mutableStateOf(false)
     var settingsOpen by mutableStateOf(false)
 
+    /** YouTube 小視窗（R158）：是不是開著、目前的分頁、連結的格子（最後點過的 YouTube 格子）。 */
+    var companionOpen by mutableStateOf(false)
+        private set
+    var companionTab by mutableStateOf(CompanionTab.SEARCH)
+    var companionCell by mutableStateOf<Int?>(null)
+        private set
+
     /** 目前使用的 yt-dlp 版本；還不知道時為 null。 */
     var ytdlpVersion by mutableStateOf<String?>(null)
         private set
@@ -168,11 +180,14 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     var gridStacked by mutableStateOf(false)
         private set
 
+    /** 訂閱頻道的最新影片與直播狀態（R158）。 */
+    val subscriptions = SubscriptionStore(appContext)
+
     // 內部
 
     private val scope = MainScope()
     private val players = mutableMapOf<Int, CellPlayer>()
-    private val titles = mutableMapOf<Int, String>()
+    private val titles = mutableStateMapOf<Int, String>()
 
     /** 重新載入的網頁格子要沿用的顯示方式（以新來源的 id 為索引）。 */
     private val pendingWebModes = mutableMapOf<Int, WebMode>()
@@ -412,6 +427,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         if (from == null || over == null || from == over) return
         slots = SlotRules.swap(slots, from, over)
         if (activeCell == from) activeCell = over
+        if (companionCell == from) companionCell = over else if (companionCell == over) companionCell = from
         scheduleSave()
     }
 
@@ -533,8 +549,9 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
      * 都沒有的時候回傳 false（由系統處理：離開 App）。
      */
     fun handleBack(): Boolean {
-        if (listPanelOpen) {
+        if (listPanelOpen || companionOpen) {
             listPanelOpen = false
+            companionOpen = false
             return true
         }
         val index = activeCell ?: solo ?: visibleSlotIndices.singleOrNull { (players[slots[it]?.id] as? WebPagePlayer)?.mode == WebMode.PAGE }
@@ -664,6 +681,64 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         }
     }
 
+    // YouTube 小視窗（R158）
+
+    /** 清單面板和 YouTube 小視窗用同一個位置，一次只開一個。 */
+    fun toggleListPanel() {
+        listPanelOpen = !listPanelOpen
+        if (listPanelOpen) companionOpen = false
+        keepControlsVisible()
+    }
+
+    fun toggleCompanion() {
+        if (companionOpen) {
+            companionOpen = false
+        } else {
+            listPanelOpen = false
+            if (companionSource() == null) {
+                // 還沒點過 YouTube 的格子：先連結第一個顯示中的 YouTube 格子
+                companionCell = slots.indices.firstOrNull { isVisible(it) && slots[it]?.parsed is ParsedSource.YouTube }
+            }
+            companionOpen = true
+        }
+        keepControlsVisible()
+    }
+
+    fun closeCompanion() {
+        companionOpen = false
+    }
+
+    /** 連結的格子裡的 YouTube 來源；格子被移除或換成別種來源時為 null。 */
+    private fun companionSource(): CellSource? =
+        slots.getOrNull(companionCell ?: -1)?.takeIf { it.parsed is ParsedSource.YouTube }
+
+    val companionVideoId: String? get() = (companionSource()?.parsed as? ParsedSource.YouTube)?.videoId
+
+    val companionTitle: String? get() = companionSource()?.let { titles[it.id] }
+
+    /**
+     * 在小視窗裡點了影片連結（R79、R80、R82）。
+     * replaceLinkedCell：推薦、留言分頁是換掉連結的格子；搜尋分頁是放進空格（沒有空格時詢問）。
+     */
+    fun companionOpenVideo(href: String, replaceLinkedCell: Boolean) {
+        val action = CompanionRules.linkAction(href, if (replaceLinkedCell) companionVideoId else null) ?: return
+        when (action) {
+            is CompanionAction.Seek -> companionSource()?.let { players[it.id]?.seekTo(action.seconds) }
+            is CompanionAction.Play -> {
+                val cell = companionCell
+                val empty = SlotRules.firstEmptyVisible(slots, displayedLayout, solo)
+                when {
+                    replaceLinkedCell && cell != null && companionSource() != null -> setSource(action.url, cell)?.let(::showToast)
+                    empty != null -> {
+                        val message = setSource(action.url, empty)
+                        if (message != null) showToast(message) else companionCell = empty
+                    }
+                    else -> pendingReplaceUrl = action.url
+                }
+            }
+        }
+    }
+
     fun changeListTab(tab: ListTab) {
         if (listTab == tab) return
         listTab = tab
@@ -700,6 +775,39 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     fun clearHistory(group: ListGroup) {
         lists = ListRules.clearHistory(lists, group)
         saveLists()
+    }
+
+    // 訂閱頻道（R158）
+
+    /** 加入頻道：貼上頻道網址或影片網址（加入那部影片的頻道）。成功回傳 null，失敗回傳要顯示的訊息（R59）。 */
+    suspend fun addChannel(input: String): String? {
+        val notFound = "找不到這個頻道"
+        val lookup = YouTubeFeed.channelLookup(input) ?: return notFound
+        val html = subscriptions.fetchText(lookup.page) ?: return notFound
+        val info = YouTubeFeed.extractChannelInfo(html, lookup.kind) ?: return notFound
+        return when (val result = ListRules.addChannel(lists, info.id, info.name, Channel.pageUrl(info.id), now())) {
+            is Outcome.Ok -> {
+                lists = result.value
+                saveLists()
+                null
+            }
+            is Outcome.Err -> result.error.message
+        }
+    }
+
+    fun removeChannel(id: String) {
+        lists = ListRules.removeChannel(lists, id)
+        subscriptions.forget(id)
+        saveLists()
+    }
+
+    /** 匯入 Google Takeout 的訂閱檔（subscriptions.csv），回傳要顯示的結果（R61）。 */
+    fun importTakeout(text: String): String {
+        val channels = YouTubeFeed.parseTakeoutCsv(text) ?: return "這個檔案不是 YouTube 訂閱清單"
+        val result = ListRules.addChannels(lists, channels, now())
+        lists = result.lists
+        saveLists()
+        return "已匯入 ${result.added} 個頻道（略過 ${result.skipped} 個已訂閱）"
     }
 
     // 設定（R158）
@@ -833,6 +941,8 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
             hideControls()
             return
         }
+        // YouTube 小視窗跟著最後點過的 YouTube 格子
+        if (slots[index]?.parsed is ParsedSource.YouTube) companionCell = index
         val wasPlaying = playingSourceIds()
         slots = AudioRules.focus(slots, index)
         syncAudio()

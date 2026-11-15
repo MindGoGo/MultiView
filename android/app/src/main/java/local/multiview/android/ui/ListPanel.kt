@@ -54,7 +54,9 @@ private class ListRow(val index: Int, val item: ListItem)
 @Composable
 fun ListPanel(model: AppModel, insets: PaddingValues, modifier: Modifier = Modifier) {
     val group = model.listTab.group
-    val kind = if (model.listTab.tab == ListTab.Tab.HISTORY) ListKind.HISTORY else ListKind.FAVORITES
+    // 訂閱只在 YouTube 那一邊（R59）
+    val tab = if (model.listTab.tab == ListTab.Tab.SUBSCRIPTIONS && group != ListGroup.YOUTUBE) ListTab.Tab.FAVORITES else model.listTab.tab
+    val kind = if (tab == ListTab.Tab.HISTORY) ListKind.HISTORY else ListKind.FAVORITES
     val items = if (kind == ListKind.FAVORITES) model.lists.favorites else model.lists.history
     val rows = items.mapIndexed(::ListRow).filter { ListRules.groupOf(it.item.url) == group }
     var editing by remember { mutableStateOf<ListRow?>(null) }
@@ -72,7 +74,7 @@ fun ListPanel(model: AppModel, insets: PaddingValues, modifier: Modifier = Modif
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("清單", color = Color.White, fontSize = 17.sp)
                 Spacer(modifier = Modifier.weight(1f))
-                if (kind == ListKind.HISTORY && rows.isNotEmpty()) {
+                if (tab == ListTab.Tab.HISTORY && rows.isNotEmpty()) {
                     TextButton(onClick = { confirmsClear = true }) { Text("清除") }
                 }
                 BarButton(AppIcons.Close, "關閉清單") { model.listPanelOpen = false }
@@ -80,14 +82,20 @@ fun ListPanel(model: AppModel, insets: PaddingValues, modifier: Modifier = Modif
             Segmented(
                 options = listOf(ListGroup.YOUTUBE to "YouTube", ListGroup.OTHER to "其他網站"),
                 selected = group,
-            ) { model.changeListTab(ListTab(it, if (kind == ListKind.HISTORY) ListTab.Tab.HISTORY else ListTab.Tab.FAVORITES)) }
+            ) { model.changeListTab(ListTab(it, if (it == ListGroup.YOUTUBE || tab != ListTab.Tab.SUBSCRIPTIONS) tab else ListTab.Tab.FAVORITES)) }
             Segmented(
-                options = listOf(ListKind.FAVORITES to "最愛", ListKind.HISTORY to "歷史"),
-                selected = kind,
-            ) { model.changeListTab(ListTab(group, if (it == ListKind.HISTORY) ListTab.Tab.HISTORY else ListTab.Tab.FAVORITES)) }
+                options = listOfNotNull(
+                    (ListTab.Tab.SUBSCRIPTIONS to "訂閱").takeIf { group == ListGroup.YOUTUBE },
+                    ListTab.Tab.FAVORITES to "最愛",
+                    ListTab.Tab.HISTORY to "歷史",
+                ),
+                selected = tab,
+            ) { model.changeListTab(ListTab(group, it)) }
         }
 
-        if (rows.isEmpty()) {
+        if (tab == ListTab.Tab.SUBSCRIPTIONS) {
+            SubscriptionList(model)
+        } else if (rows.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
                 Text(
                     if (kind == ListKind.FAVORITES) "還沒有最愛。\n播放影片時按操作列的星號加入。" else "還沒有歷史紀錄。",

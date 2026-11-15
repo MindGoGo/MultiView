@@ -68,18 +68,20 @@ fun RootScreen(model: AppModel) {
 
             // 清單面板：大螢幕在右側（寬 360dp，蓋在影片上方），小螢幕占滿寬度（R158）
             AnimatedVisibility(
-                visible = model.listPanelOpen,
+                visible = model.listPanelOpen || model.companionOpen,
                 modifier = Modifier.align(Alignment.CenterEnd),
                 enter = slideInHorizontally { it } + fadeIn(),
                 exit = slideOutHorizontally { it } + fadeOut(),
             ) {
                 // 工具列顯示時從工具列下面開始
                 val top = safeArea.top + if (model.toolbarVisible) 52.dp else 0.dp
-                ListPanel(
-                    model,
-                    PaddingValues(end = safeArea.right, bottom = safeArea.bottom),
-                    modifier = Modifier.padding(top = top).then(if (model.isLarge) Modifier.width(360.dp) else Modifier.fillMaxWidth()),
-                )
+                val panelInsets = PaddingValues(end = safeArea.right, bottom = safeArea.bottom)
+                val panelModifier = Modifier.padding(top = top).then(if (model.isLarge) Modifier.width(360.dp) else Modifier.fillMaxWidth())
+                if (model.companionOpen) {
+                    CompanionPanel(model, panelInsets, panelModifier)
+                } else {
+                    ListPanel(model, panelInsets, panelModifier)
+                }
             }
 
             AnimatedVisibility(
@@ -117,7 +119,7 @@ fun RootScreen(model: AppModel) {
         if (model.settingsOpen) SettingsScreen(model)
 
         // 清單、設定開著時，工具列不自動隱藏
-        if (model.listPanelOpen || model.settingsOpen) HoldControls(model)
+        if (model.listPanelOpen || model.companionOpen || model.settingsOpen) HoldControls(model)
 
         KeepScreenOn(model)
     }

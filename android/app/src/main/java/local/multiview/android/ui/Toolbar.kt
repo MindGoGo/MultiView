@@ -113,10 +113,8 @@ fun Toolbar(model: AppModel, insets: PaddingValues) {
                 )
             }
 
-            BarButton(AppIcons.List, "清單", highlighted = model.listPanelOpen) {
-                model.listPanelOpen = !model.listPanelOpen
-                model.keepControlsVisible()
-            }
+            BarButton(AppIcons.VideoOnly, "YouTube 小視窗", highlighted = model.companionOpen) { model.toggleCompanion() }
+            BarButton(AppIcons.List, "清單", highlighted = model.listPanelOpen) { model.toggleListPanel() }
             BarButton(AppIcons.Settings, "設定") { model.settingsOpen = true }
 
             BarButton(AppIcons.ExpandLess, "隱藏工具列") { model.hideControls() }

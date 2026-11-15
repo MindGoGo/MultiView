@@ -64,6 +64,16 @@ object YtDlp {
             .toString(2)
     }
 
+    /** 頻道的最新影片（R158），回傳 mv_bridge.channel_videos 的結果（JSON 文字）。 */
+    suspend fun channelVideos(context: Context, channelId: String, count: Int): String = withContext(dispatcher) {
+        start(context)
+        val request = JSONObject()
+            .put("channel_id", channelId)
+            .put("count", count)
+            .put("cache_dir", File(context.cacheDir, "yt-dlp").absolutePath)
+        Python.getInstance().getModule("mv_bridge").callAttr("channel_videos", request.toString()).toString()
+    }
+
     /** 解析一個網址，回傳 mv_bridge.resolve 的結果（JSON 文字）。 */
     suspend fun resolve(context: Context, url: String): String = withContext(dispatcher) {
         start(context)
