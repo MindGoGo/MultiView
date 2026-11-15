@@ -26,6 +26,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -52,9 +55,22 @@ import org.json.JSONObject
  * 內容跟著最後點過的 YouTube 格子。面板裡的網頁不播放影片，不會搶走格子的聲音。
  */
 @Composable
-fun CompanionPanel(model: AppModel, insets: PaddingValues, modifier: Modifier = Modifier) {
+fun CompanionPanel(
+    model: AppModel,
+    insets: PaddingValues,
+    modifier: Modifier = Modifier,
+    /**
+     * 面板是不是開著。關掉時面板只是移到畫面外，裡面的網頁留著：再打開時不用重新載入，
+     * 也不會先看到黑色的畫面（0.0.12 實測：每次打開都重新建立網頁，整個畫面先黑一下）。
+     * 關著的時候不載入新的網頁。
+     */
+    open: Boolean = true,
+) {
     val videoId = model.companionVideoId
     val tab = model.companionTab
+    // 聊天室要到那個分頁才載入；同一部影片載入過就留著，切換分頁時不重新載入
+    var chatVideo by remember { mutableStateOf<String?>(null) }
+    if (open && tab == CompanionTab.CHAT && videoId != null && chatVideo != videoId) chatVideo = videoId
 
     Column(
         modifier = modifier
@@ -80,8 +96,10 @@ fun CompanionPanel(model: AppModel, insets: PaddingValues, modifier: Modifier = 
         }
 
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F0F0F)), contentAlignment = Alignment.Center) {
-            // 每個分頁各自一個網頁，切換分頁時保留原本的內容。看不到的分頁縮到畫面外，不擋住點擊
-            CompanionWeb(CompanionPage.SEARCH, null, null, visible = tab == CompanionTab.SEARCH) { href ->
+            // 網頁還沒顯示出來時看到的是這行字，不是黑色的畫面
+            Text("載入中…", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
+            // 每個分頁各自一個網頁，切換分頁時保留原本的內容
+            CompanionWeb(CompanionPage.SEARCH, null, null, visible = tab == CompanionTab.SEARCH, active = open) { href ->
                 model.companionOpenVideo(href, replaceLinkedCell = false)
             }
             if (videoId != null) {
@@ -91,11 +109,19 @@ fun CompanionPanel(model: AppModel, insets: PaddingValues, modifier: Modifier = 
                     videoId,
                     if (tab == CompanionTab.COMMENTS) "comments" else "related",
                     visible = watchVisible,
+                    active = open,
                 ) { href -> model.companionOpenVideo(href, replaceLinkedCell = true) }
-                // 聊天室要到那個分頁才載入
-                if (tab == CompanionTab.CHAT) CompanionWeb(CompanionPage.CHAT, videoId, null, visible = true) { }
+                if (chatVideo == videoId) {
+                    CompanionWeb(CompanionPage.CHAT, videoId, null, visible = tab == CompanionTab.CHAT, active = open) { }
+                }
             } else if (tab != CompanionTab.SEARCH) {
-                Text("先點一下 YouTube 的格子", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                Text(
+                    "先點一下 YouTube 的格子",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 14.sp,
+                    modifier = Modifier.fillMaxSize().background(Color(0xFF0F0F0F)).padding(top = 48.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
             }
         }
     }
@@ -108,7 +134,15 @@ private const val BRIDGE = "MultiViewCompanion"
 /** 小視窗裡的一個網頁。 */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun CompanionWeb(page: CompanionPage, videoId: String?, section: String?, visible: Boolean, onVideo: (String) -> Unit) {
+private fun CompanionWeb(
+    page: CompanionPage,
+    videoId: String?,
+    section: String?,
+    visible: Boolean,
+    /** 面板開著：關著的時候不載入新的網頁（連結的影片換了，等打開面板才載入）。 */
+    active: Boolean,
+    onVideo: (String) -> Unit,
+) {
     val context = LocalContext.current
     val currentOnVideo = rememberUpdatedState(onVideo)
     val holder = remember(page) { CompanionWebHolder(context, page) { currentOnVideo.value(it) } }
@@ -120,12 +154,12 @@ private fun CompanionWeb(page: CompanionPage, videoId: String?, section: String?
         CompanionPage.CHAT -> videoId?.let(CompanionRules::liveChatUrl).orEmpty()
     }
     AndroidView(
-        // 看不到的分頁：透明而且不收點擊（縮成 0 會讓網頁重新排版，所以只改透明度）
-        modifier = Modifier.fillMaxSize().alpha(if (visible) 1f else 0f),
+        modifier = Modifier.fillMaxSize(),
         factory = { holder.webView },
-        update = { view ->
-            view.visibility = if (visible) android.view.View.VISIBLE else android.view.View.INVISIBLE
-            holder.show(address, section)
+        update = {
+            // 看不到的分頁藏起來（網頁留著，不重新排版）
+            holder.visible = visible
+            if (active) holder.show(address, section)
         },
     )
 }
@@ -137,6 +171,23 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
     private var loaded = ""
     private var section: String? = null
     private var destroyed = false
+
+    /** 網頁已經開始顯示內容。還沒顯示時把網頁藏起來，看到的是後面的「載入中…」，不是黑色的畫面。 */
+    private var painted = false
+
+    /** 這個分頁是不是目前的分頁。 */
+    var visible = true
+        set(value) {
+            field = value
+            updateVisibility()
+        }
+
+    private fun updateVisibility() {
+        if (destroyed) return
+        webView.visibility = if (visible) android.view.View.VISIBLE else android.view.View.INVISIBLE
+        // 還沒顯示內容時用透明的（不能藏起來：藏起來的網頁可能不會回報「開始顯示」）
+        webView.alpha = if (painted) 1f else 0f
+    }
 
     val webView = WebView(context).apply {
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -150,8 +201,11 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
         val base = settings.userAgentString.replace("; wv", "").replace(Regex("""Version/\d+\.\d+ """), "")
         // 搜尋用手機版的 YouTube；推薦、留言、聊天室用桌面版的網頁（樣式是針對桌面版寫的）
         settings.userAgentString = if (page == CompanionPage.SEARCH) base else CompanionRules.DESKTOP_USER_AGENT
-        // 版面的寬度就是面板的寬度（桌面版的網頁不要縮成整頁的縮圖）
-        settings.useWideViewPort = page == CompanionPage.SEARCH
+        // 版面的寬度由網頁的 viewport 決定，整個網頁縮到剛好放進面板。
+        // 推薦、留言（桌面版的網頁）由注入的程式把 viewport 設成 480 寬（和桌面版 MultiView 的小視窗相同）：
+        // 直接用面板的寬度（手機約 400）排版時內容排不下，要左右滑（0.0.10、0.0.12 實測）
+        settings.useWideViewPort = true
+        settings.loadWithOverviewMode = true
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
         addJavascriptInterface(Bridge(), BRIDGE)
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
@@ -166,7 +220,15 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
                 return scheme != "http" && scheme != "https"
             }
 
+            override fun onPageCommitVisible(view: WebView?, url: String?) {
+                painted = true
+                updateVisibility()
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
+                // 沒有收到「開始顯示」時，載入完成也算
+                painted = true
+                updateVisibility()
                 // 比較舊的 WebView 不能在網頁開始時注入：載入完成後補上
                 if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
                     view?.evaluateJavascript(SCRIPT, null)
@@ -192,6 +254,9 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
         }
         if (loaded != address && address.isNotEmpty()) {
             loaded = address
+            // 換了影片：新的網頁顯示出來之前先藏起來
+            painted = false
+            updateVisibility()
             webView.loadUrl(address)
         }
     }
@@ -270,14 +335,28 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
               'html[dark] :is(' + both + ') { background: #0f0f0f !important; }' +
               SELECTORS[active] + ' { visibility: visible !important; }' +
               inactive + ' { visibility: hidden !important; pointer-events: none !important; }' +
-              // 面板比桌面版的網頁窄：內容不要超出面板的寬度（不用左右滑），文字自動換行（0.0.10 實測）
-              both + ' { overflow-x: hidden !important; }' +
-              ':is(' + both + ') * { max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important;' +
-              ' overflow-wrap: anywhere !important; }' +
+              both + ' { overflow-x: hidden !important; overflow-wrap: anywhere !important; }' +
               'html:has(' + SELECTORS[active] + ') #masthead-container { display: none !important; }' +
               'body { visibility: hidden !important; }' +
               'html { background: #fff !important; }' +
               'html[dark] { background: #0f0f0f !important; }';
+          }
+          // 版面的寬度：影片頁（推薦、留言）用 480，和桌面版 MultiView 的小視窗相同；聊天室用面板的寬度
+          var VIEWPORT = location.pathname === '/watch' ? 'width=480' : (location.pathname.indexOf('/live_chat') === 0 ? 'width=device-width, initial-scale=1' : null);
+          function applyViewport() {
+            if (!VIEWPORT || !document.head) return;
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (!meta) {
+              meta = document.createElement('meta');
+              meta.name = 'viewport';
+              document.head.appendChild(meta);
+            }
+            if (meta.content !== VIEWPORT) meta.content = VIEWPORT;
+          }
+          if (VIEWPORT) {
+            applyViewport();
+            new MutationObserver(applyViewport).observe(document.documentElement || document, { childList: true, subtree: false });
+            document.addEventListener('DOMContentLoaded', applyViewport);
           }
           var style = null;
           window.__multiViewApply = function () {

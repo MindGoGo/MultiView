@@ -1,6 +1,7 @@
 package local.multiview.android.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -30,6 +31,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -66,22 +72,40 @@ fun RootScreen(model: AppModel) {
                 Toolbar(model, PaddingValues(start = safeArea.left, top = safeArea.top, end = safeArea.right))
             }
 
+            // 工具列顯示時，面板從工具列下面開始
+            val panelTop = safeArea.top + if (model.toolbarVisible) 52.dp else 0.dp
+            val panelInsets = PaddingValues(end = safeArea.right, bottom = safeArea.bottom)
+            val panelModifier = Modifier.padding(top = panelTop).then(if (model.isLarge) Modifier.width(360.dp) else Modifier.fillMaxWidth())
+
+            // YouTube 小視窗：第一次打開之後就一直留著，關掉時只是移到畫面外。
+            // 裡面的網頁不用每次重新建立、重新載入（0.0.12 實測：每次打開整個畫面先黑一下，搜尋的內容也不見了）
+            var companionCreated by remember { mutableStateOf(false) }
+            if (model.companionOpen) companionCreated = true
+            if (companionCreated) {
+                val shift by animateFloatAsState(if (model.companionOpen) 0f else 1f, label = "companion")
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        // 關掉時整個移到畫面右邊外面（不會擋住點擊）
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            layout(placeable.width, placeable.height) {
+                                placeable.place((placeable.width * shift).toInt() + if (shift >= 1f) 100_000 else 0, 0)
+                            }
+                        },
+                ) {
+                    CompanionPanel(model, panelInsets, panelModifier, open = model.companionOpen)
+                }
+            }
+
             // 清單面板：大螢幕在右側（寬 360dp，蓋在影片上方），小螢幕占滿寬度（R158）
             AnimatedVisibility(
-                visible = model.listPanelOpen || model.companionOpen,
+                visible = model.listPanelOpen,
                 modifier = Modifier.align(Alignment.CenterEnd),
                 enter = slideInHorizontally { it } + fadeIn(),
                 exit = slideOutHorizontally { it } + fadeOut(),
             ) {
-                // 工具列顯示時從工具列下面開始
-                val top = safeArea.top + if (model.toolbarVisible) 52.dp else 0.dp
-                val panelInsets = PaddingValues(end = safeArea.right, bottom = safeArea.bottom)
-                val panelModifier = Modifier.padding(top = top).then(if (model.isLarge) Modifier.width(360.dp) else Modifier.fillMaxWidth())
-                if (model.companionOpen) {
-                    CompanionPanel(model, panelInsets, panelModifier)
-                } else {
-                    ListPanel(model, panelInsets, panelModifier)
-                }
+                ListPanel(model, panelInsets, panelModifier)
             }
 
             AnimatedVisibility(
