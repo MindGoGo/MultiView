@@ -40,6 +40,15 @@ struct SettingsView: View {
 
                 Section("yt-dlp") {
                     LabeledContent("版本", value: model.ytdlpVersion ?? "—")
+                    Picker("更新來源", selection: Binding(get: { model.ytdlpChannel }, set: { model.setYtDlpChannel($0) })) {
+                        ForEach(YtDlpChannel.allCases, id: \.self) { channel in
+                            Text(channel.label).tag(channel)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text("正式版：yt-dlp 的正式發佈。最新版：每天建置的版本，YouTube 改版時通常先在這裡修好。切換後馬上下載，重新開啟 App 後生效。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     if let pending = model.ytdlpPendingVersion {
                         Text("已下載 \(pending)，重新開啟 App 後使用")
                             .font(.footnote)

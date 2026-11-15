@@ -19,10 +19,12 @@ public struct YtStream: Equatable, Sendable {
     public var headers: [String: String]
     /// 影片的字幕（R131）：人工字幕與自動產生的原本語言，WebVTT。
     public var captions: [CaptionTrack]
+    /// 進度條的預覽縮圖（R129）；沒有時為 nil。
+    public var storyboard: SheetStoryboard?
 
     public init(
         kind: Kind, url: String, isLive: Bool, title: String?, expiresAt: Double, headers: [String: String] = [:],
-        captions: [CaptionTrack] = []
+        captions: [CaptionTrack] = [], storyboard: SheetStoryboard? = nil
     ) {
         self.kind = kind
         self.url = url
@@ -31,6 +33,7 @@ public struct YtStream: Equatable, Sendable {
         self.expiresAt = expiresAt
         self.headers = headers
         self.captions = captions
+        self.storyboard = storyboard
     }
 }
 
@@ -81,7 +84,8 @@ public enum YtDlpRules {
             YtStream(
                 kind: kind, url: url, isLive: isLive, title: title,
                 expiresAt: expiry(of: url, now: now), headers: headers(of: format, info: info),
-                captions: CaptionRules.fromYtDlp(info["captions"])
+                captions: CaptionRules.fromYtDlp(info["captions"]),
+                storyboard: SheetStoryboard.fromYtDlp(info["storyboard"])
             )
         }
 
@@ -226,7 +230,45 @@ public struct YtDlpUpdateRecord: Equatable, Sendable {
     }
 }
 
+/// yt-dlp 的更新來源（R136；Android 版 `YtDlpChannel`，2026-11-15 使用者要求）：正式版（yt-dlp/yt-dlp），
+/// 或每天建置的最新版（yt-dlp/yt-dlp-nightly-builds，YouTube 改版時通常先在這裡修好）。兩邊的檔案名稱與 SHA2-256SUMS 相同。
+public enum YtDlpChannel: String, CaseIterable, Sendable {
+    case stable
+    case nightly
+
+    public var label: String {
+        switch self {
+        case .stable: return "正式版"
+        case .nightly: return "最新版"
+        }
+    }
+
+    public var repository: String {
+        switch self {
+        case .stable: return "yt-dlp/yt-dlp"
+        case .nightly: return "yt-dlp/yt-dlp-nightly-builds"
+        }
+    }
+
+    public var latestReleaseAPI: String { "https://api.github.com/repos/\(repository)/releases/latest" }
+
+    public func downloadBase(tag: String) -> String { "https://github.com/\(repository)/releases/download/\(tag)/" }
+
+    public static func parse(_ raw: String?) -> YtDlpChannel { raw.flatMap(YtDlpChannel.init(rawValue:)) ?? .stable }
+}
+
 public enum YtDlpUpdateRules {
+    /// 要不要下載這個來源的最新版：最新版（nightly）只在比目前的新時下載；正式版在比目前的新、
+    /// 或目前用的是最新版的版本（版本號有第四段）時下載（從最新版切回正式版）。
+    public static func shouldDownload(current: String, latest: String, channel: YtDlpChannel) -> Bool {
+        switch channel {
+        case .nightly:
+            return YtDlpVersion.compare(latest, current) > 0
+        case .stable:
+            return YtDlpVersion.compare(latest, current) > 0 || (current.filter { $0 == "." }.count >= 3 && latest != current)
+        }
+    }
+
     /// 開啟時的自動更新：距離上次檢查超過 24 小時（R92 時機 1）。
     public static let autoUpdateInterval: Double = 24 * 60 * 60 * 1000
     /// 因為解析失敗而觸發的更新，至少間隔這麼久（R92：10 分鐘內不重複）。

@@ -25,7 +25,13 @@ actor YtDlpUpdater {
         }
     }
 
-    private static let latestReleaseURL = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
+    private static let channelKey = "ytdlpChannel"
+
+    /// 更新來源：正式版或最新版（R136）。存在 UserDefaults（不是設定檔，桌面版沒有這個欄位）。
+    static var channel: YtDlpChannel {
+        get { YtDlpChannel.parse(UserDefaults.standard.string(forKey: channelKey)) }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: channelKey) }
+    }
     private static let assetName = "yt-dlp"
     private static let sumsName = "SHA2-256SUMS"
 
@@ -129,8 +135,9 @@ actor YtDlpUpdater {
                 return .failed("讀不到目前的版本")
             }
 
-            // 最新的穩定版
-            let release = try await fetch(latestReleaseURL, session: session)
+            // 選的來源（正式版或最新版）的最新版本
+            let channel = Self.channel
+            let release = try await fetch(channel.latestReleaseAPI, session: session)
             let json = (try? JSONSerialization.jsonObject(with: release)) as? [String: Any]
             guard let tag = json?["tag_name"] as? String, let latest = YtDlpVersion.parse(tag) else {
                 return .failed("讀不到最新的版本")
@@ -139,13 +146,13 @@ actor YtDlpUpdater {
             var record = loadRecord()
             record.lastCheck = now
             record.appVersion = appVersion
-            guard YtDlpVersion.compare(latest, current) > 0 else {
+            guard YtDlpUpdateRules.shouldDownload(current: current, latest: latest, channel: channel) else {
                 save(record)
                 return .latest(current)
             }
 
             // 下載並用官方的雜湊值驗證
-            let base = "https://github.com/yt-dlp/yt-dlp/releases/download/\(tag)/"
+            let base = channel.downloadBase(tag: tag)
             let sums = String(data: try await fetch(base + sumsName, session: session), encoding: .utf8) ?? ""
             guard let expected = YtDlpUpdateRules.checksum(for: assetName, in: sums) else {
                 return .failed("找不到雜湊值")

@@ -119,6 +119,7 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
     }
 
     func shutdown() {
+        PreviewThumbnails.setStoryboard(nil, for: source.id)
         closed = true
         resolveTask?.cancel()
         inner?.shutdown()
@@ -153,6 +154,7 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
             return
         }
         usingYtDlp = true
+        PreviewThumbnails.setStoryboard(stream.storyboard, for: source.id)
         install(NativePlayer(
             url: url, source: startingSource(live: stream.isLive), adaptive: stream.kind == .hls,
             captions: stream.captions, captionHeaders: stream.headers

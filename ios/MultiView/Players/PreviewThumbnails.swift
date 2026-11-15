@@ -3,7 +3,9 @@ import MultiViewCore
 import UIKit
 
 /// 進度條的預覽縮圖（桌面版 R50；iOS 版 R129）。對照 Android 版 `player/PreviewThumbnails.kt`。
-/// - YouTube（yt-dlp 或內嵌）：影片網頁裡的縮圖資訊（`playerStoryboardSpecRenderer`），下載那一頁圖片後裁切
+/// - 用 yt-dlp 播放（YouTube、其他網站）：yt-dlp 解析出來的縮圖（`SheetStoryboard`，0.0.31 起；
+///   iOS 0.0.30、Android 0.0.16–0.0.18 只讀 YouTube 網頁，實測都沒有出現）
+/// - YouTube 內嵌播放器：影片網頁裡的縮圖資訊（`playerStoryboardSpecRenderer`），下載那一頁圖片後裁切
 /// - mp4：`AVAssetImageGenerator` 取那個位置附近的畫面，每 2 秒一張
 /// 每部影片的縮圖資訊、圖片都快取起來，拖曳時不重複下載。
 @MainActor
@@ -36,8 +38,16 @@ enum PreviewThumbnails {
         case failed
     }
 
-    /// 這個來源有沒有縮圖：YouTube 與 mp4 才有（m3u8、其他網站只顯示時間）。
+    /// 用 yt-dlp 播放的來源（以來源的 id 為索引）解析出來的縮圖；播放器解析完成時登記、結束時移除。
+    private static var ytdlpStoryboards: [Int: SheetStoryboard] = [:]
+
+    static func setStoryboard(_ storyboard: SheetStoryboard?, for sourceID: Int) {
+        ytdlpStoryboards[sourceID] = storyboard
+    }
+
+    /// 這個來源有沒有縮圖：yt-dlp 有縮圖資料的、YouTube 與 mp4 才有（m3u8、其他網站只顯示時間）。
     static func supports(_ source: CellSource) -> Bool {
+        if ytdlpStoryboards[source.id] != nil { return true }
         switch source.parsed {
         case .youtube, .mp4: return true
         case .hls, .web: return false
@@ -46,6 +56,11 @@ enum PreviewThumbnails {
 
     /// 這個位置的縮圖；沒有或讀不到時回傳 nil。duration 是影片長度（秒）。
     static func image(for source: CellSource, seconds: Double, duration: Double) async -> UIImage? {
+        if let storyboard = ytdlpStoryboards[source.id],
+           let frame = storyboard.frame(seconds: seconds, duration: duration),
+           let image = await crop(frame) {
+            return image
+        }
         switch source.parsed {
         case .youtube(let videoID):
             return await youtube(videoID: videoID, seconds: seconds, duration: duration)
@@ -60,7 +75,11 @@ enum PreviewThumbnails {
 
     private static func youtube(videoID: String, seconds: Double, duration: Double) async -> UIImage? {
         guard let storyboard = await storyboard(videoID: videoID) else { return nil }
-        let frame = StoryboardRules.frame(storyboard, seconds: seconds, duration: duration)
+        return await crop(StoryboardRules.frame(storyboard, seconds: seconds, duration: duration))
+    }
+
+    /// 從整頁的縮圖圖片裁出一張。
+    private static func crop(_ frame: StoryboardFrame) async -> UIImage? {
         let key = "\(frame.url)#\(frame.x),\(frame.y)" as NSString
         if let cached = frames.object(forKey: key) { return cached }
         guard let sheet = await sheet(frame.url)?.cgImage,
@@ -123,6 +142,8 @@ enum PreviewThumbnails {
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue(CompanionRules.desktopUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("zh-TW,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
+        // 有些地區沒有同意 Cookie 時 YouTube 會轉到同意頁面，網頁裡就沒有縮圖資訊
+        request.setValue("SOCS=CAI; CONSENT=YES+", forHTTPHeaderField: "Cookie")
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200
         else { return nil }

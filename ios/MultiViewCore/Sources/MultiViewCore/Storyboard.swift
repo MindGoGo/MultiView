@@ -94,3 +94,72 @@ public enum StoryboardRules {
         )
     }
 }
+
+/// yt-dlp 解析出來的預覽縮圖（mv_bridge 的 storyboard 欄位；Android 版 `SheetStoryboard`）：
+/// 每一張 sheet 是 rows × columns 張縮圖排成的圖片，duration 是這張 sheet 涵蓋的秒數（最後一張可能比較短）。
+public struct SheetStoryboard: Equatable, Sendable {
+    public struct Sheet: Equatable, Sendable {
+        public var url: String
+        public var duration: Double?
+
+        public init(url: String, duration: Double?) {
+            self.url = url
+            self.duration = duration
+        }
+    }
+
+    public var width: Int
+    public var height: Int
+    public var rows: Int
+    public var columns: Int
+    public var sheets: [Sheet]
+
+    public init(width: Int, height: Int, rows: Int, columns: Int, sheets: [Sheet]) {
+        self.width = width
+        self.height = height
+        self.rows = rows
+        self.columns = columns
+        self.sheets = sheets
+    }
+
+    public static func fromYtDlp(_ raw: Any?) -> SheetStoryboard? {
+        guard let root = JSON.object(raw) else { return nil }
+        func int(_ key: String) -> Int? {
+            guard let value = JSON.number(root[key]), value >= 1 else { return nil }
+            return Int(value)
+        }
+        let sheets: [Sheet] = (JSON.array(root["sheets"]) ?? []).compactMap { item in
+            guard let sheet = JSON.object(item), let url = JSON.nonEmptyString(sheet["url"]) else { return nil }
+            let duration = JSON.number(sheet["duration"]).flatMap { $0 > 0 ? $0 : nil }
+            return Sheet(url: url, duration: duration)
+        }
+        guard !sheets.isEmpty, let width = int("width"), let height = int("height"),
+              let rows = int("rows"), let columns = int("columns")
+        else { return nil }
+        return SheetStoryboard(width: width, height: height, rows: rows, columns: columns, sheets: sheets)
+    }
+
+    /// 秒數對應的縮圖；duration 是影片長度（秒）。每張縮圖的間隔用第一張 sheet（一定是滿的）算；
+    /// yt-dlp 沒給 sheet 的長度時用影片長度平均分配。
+    public func frame(seconds: Double, duration: Double) -> StoryboardFrame? {
+        let perSheet = rows * columns
+        let interval: Double
+        if let first = sheets[0].duration {
+            interval = first / Double(perSheet)
+        } else {
+            let even = duration / Double(sheets.count * perSheet)
+            guard even > 0, even.isFinite else { return nil }
+            interval = even
+        }
+        let t = min(max(seconds.isFinite ? seconds : 0, 0), max(duration, 0))
+        let index = max(0, min(Int((t / interval).rounded(.down)), sheets.count * perSheet - 1))
+        let position = index % perSheet
+        return StoryboardFrame(
+            url: sheets[index / perSheet].url,
+            x: (position % columns) * width,
+            y: (position / columns) * height,
+            width: width,
+            height: height
+        )
+    }
+}

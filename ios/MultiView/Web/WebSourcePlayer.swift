@@ -114,6 +114,7 @@ final class WebSourcePlayer: NSObject, CellPlayer {
     }
 
     func shutdown() {
+        PreviewThumbnails.setStoryboard(nil, for: source.id)
         closed = true
         inner?.shutdown()
         inner = nil
@@ -144,6 +145,7 @@ final class WebSourcePlayer: NSObject, CellPlayer {
             return
         }
         usingYtDlp = true
+        PreviewThumbnails.setStoryboard(stream.storyboard, for: source.id)
         var start = startingSource()
         if stream.isLive { start.resume = nil }
         install(NativePlayer(

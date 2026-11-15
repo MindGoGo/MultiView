@@ -112,4 +112,25 @@ final class StoryboardCaptionsTests: XCTestCase {
         let crlf = CaptionRules.parseVtt("WEBVTT\r\n\r\n00:01,500 --> 00:02,000\r\n一\r\n")
         XCTAssertEqual(crlf, [Cue(start: 1.5, end: 2, text: "一")])
     }
+
+    func testSheetStoryboard() throws {
+        let raw = JSON.parse("""
+            {"width":160,"height":90,"rows":5,"columns":5,
+             "sheets":[{"url":"https://s/0.jpg","duration":250.0},{"url":"https://s/1.jpg","duration":250.0},{"url":"https://s/2.jpg","duration":40.0}]}
+            """)
+        let sb = try XCTUnwrap(SheetStoryboard.fromYtDlp(raw))
+        // 每張 10 秒（250 秒 / 25 張）
+        XCTAssertEqual(sb.frame(seconds: 0, duration: 540), StoryboardFrame(url: "https://s/0.jpg", x: 0, y: 0, width: 160, height: 90))
+        XCTAssertEqual(sb.frame(seconds: 65, duration: 540), StoryboardFrame(url: "https://s/0.jpg", x: 160, y: 90, width: 160, height: 90))
+        XCTAssertEqual(sb.frame(seconds: 250, duration: 540)?.url, "https://s/1.jpg")
+        // 超過長度用最後一張 sheet；負的當作 0
+        XCTAssertEqual(sb.frame(seconds: 9999, duration: 540)?.url, "https://s/2.jpg")
+        XCTAssertEqual(sb.frame(seconds: -3, duration: 540)?.x, 0)
+        // 沒有 sheet 的長度：用影片長度平均分配
+        var noDuration = sb
+        noDuration.sheets = sb.sheets.map { SheetStoryboard.Sheet(url: $0.url, duration: nil) }
+        XCTAssertEqual(noDuration.frame(seconds: 300, duration: 750)?.url, "https://s/1.jpg")
+        XCTAssertNil(SheetStoryboard.fromYtDlp(JSON.parse(#"{"width":160,"height":90,"rows":5,"columns":5,"sheets":[]}"#)))
+        XCTAssertNil(SheetStoryboard.fromYtDlp(nil))
+    }
 }

@@ -868,6 +868,17 @@ final class AppModel {
     }
 
     /// 選單的「檢查更新」。
+    /// yt-dlp 的更新來源（R136）：正式版或最新版。
+    private(set) var ytdlpChannel: YtDlpChannel = YtDlpUpdater.channel
+
+    /// 改變 yt-dlp 的更新來源：馬上檢查並下載那個來源的版本，重新開啟 App 後生效。
+    func setYtDlpChannel(_ channel: YtDlpChannel) {
+        guard channel != ytdlpChannel else { return }
+        ytdlpChannel = channel
+        YtDlpUpdater.channel = channel
+        checkYtDlpUpdate()
+    }
+
     func checkYtDlpUpdate() {
         guard !ytdlpUpdating else { return }
         ytdlpUpdating = true

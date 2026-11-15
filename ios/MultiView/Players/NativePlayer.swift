@@ -474,8 +474,9 @@ final class PlayerLayerView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard !captionLabel.isHidden, bounds.width > 0 else { return }
-        // 字的大小跟著格子：高度的 5%，最小 10pt
-        let fontSize = max(10, bounds.height * 0.05)
+        // 字的大小跟著格子：高度的 5% 和寬度的 4.5% 取小的，最小 10pt
+        // （直向時格子很高，只看高度字會太大、長句超出畫面；Android 0.0.17、iOS 0.0.30 實測）
+        let fontSize = max(10, min(bounds.height * 0.05, bounds.width * 0.045))
         if captionLabel.font.pointSize != fontSize {
             captionLabel.font = .systemFont(ofSize: fontSize, weight: .medium)
         }

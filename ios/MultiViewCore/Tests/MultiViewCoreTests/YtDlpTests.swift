@@ -208,4 +208,20 @@ final class YtDlpUpdateTests: XCTestCase {
         XCTAssertNil(YtDlpUpdateRules.checksum(for: "yt-dlp.tar.gz", in: sums))
         XCTAssertNil(YtDlpUpdateRules.checksum(for: "missing", in: sums))
     }
+
+    func testChannel() {
+        XCTAssertEqual(YtDlpChannel.parse(nil), .stable)
+        XCTAssertEqual(YtDlpChannel.parse("nightly"), .nightly)
+        XCTAssertEqual(
+            YtDlpChannel.nightly.downloadBase(tag: "2026.11.14.232655"),
+            "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.11.14.232655/"
+        )
+        // 最新版：只往新的更新
+        XCTAssertTrue(YtDlpUpdateRules.shouldDownload(current: "2026.10.26", latest: "2026.11.14.232655", channel: .nightly))
+        XCTAssertFalse(YtDlpUpdateRules.shouldDownload(current: "2026.11.14.232655", latest: "2026.11.14.232655", channel: .nightly))
+        // 正式版：比較新才下載；目前是最新版的版本時換回正式版（即使正式版比較舊）
+        XCTAssertTrue(YtDlpUpdateRules.shouldDownload(current: "2026.10.26", latest: "2026.11.20", channel: .stable))
+        XCTAssertFalse(YtDlpUpdateRules.shouldDownload(current: "2026.10.26", latest: "2026.10.26", channel: .stable))
+        XCTAssertTrue(YtDlpUpdateRules.shouldDownload(current: "2026.11.14.232655", latest: "2026.10.26", channel: .stable))
+    }
 }
