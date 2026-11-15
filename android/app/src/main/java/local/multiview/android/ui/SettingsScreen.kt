@@ -42,6 +42,7 @@ import local.multiview.core.PlayMethod
 import local.multiview.core.Settings
 import local.multiview.core.SettingsCodec
 import local.multiview.core.WebMethod
+import local.multiview.core.YtDlpChannel
 
 /**
  * 設定畫面（桌面版 R96；Android 版 R158）：播放方式、yt-dlp 版本、匯入桌面版資料、清除網站資料、版本號。
@@ -100,6 +101,9 @@ fun SettingsScreen(model: AppModel) {
 
                 Section("yt-dlp")
                 Label("版本：${model.ytdlpVersion ?: "讀取中…"}")
+                Label("更新來源")
+                Segmented(YtDlpChannel.entries.map { it to it.label }, model.ytdlpChannel) { model.changeYtDlpChannel(it) }
+                Note("正式版：yt-dlp 的正式發佈。最新版：每天建置的版本，YouTube 改版時通常先在這裡修好。切換後馬上下載，重新開啟 App 後生效。")
                 model.ytdlpPendingVersion?.let { Note("已下載 $it，重新開啟 App 後使用") }
                 TextButton(onClick = { model.checkYtDlpUpdate() }, enabled = !model.ytdlpUpdating) {
                     Text(if (model.ytdlpUpdating) "正在檢查更新…" else "檢查更新")

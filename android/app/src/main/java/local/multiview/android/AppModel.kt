@@ -67,6 +67,7 @@ import local.multiview.core.TrackAxis
 import local.multiview.core.WebMethod
 import local.multiview.core.YouTubeFeed
 import local.multiview.core.YouTubeMethods
+import local.multiview.core.YtDlpChannel
 import java.io.File
 
 /**
@@ -171,6 +172,10 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     var ytdlpPendingVersion by mutableStateOf<String?>(null)
         private set
     var ytdlpUpdating by mutableStateOf(false)
+        private set
+
+    /** yt-dlp 的更新來源（R156）：正式版或最新版。 */
+    var ytdlpChannel by mutableStateOf(YtDlpUpdater.channel(appContext))
         private set
 
     /** 沒有空格：等使用者選擇要取代哪一格（R150）。 */
@@ -913,6 +918,14 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
             } catch (_: Exception) {
             }
         }
+    }
+
+    /** 改變 yt-dlp 的更新來源：馬上檢查並下載那個來源的版本，重新開啟 App 後生效。 */
+    fun changeYtDlpChannel(channel: YtDlpChannel) {
+        if (channel == ytdlpChannel) return
+        ytdlpChannel = channel
+        YtDlpUpdater.setChannel(appContext, channel)
+        checkYtDlpUpdate()
     }
 
     /** 設定畫面的「檢查更新」。 */

@@ -70,4 +70,21 @@ class YtDlpUpdateTest {
         assertNull(YtDlpUpdateRules.checksum("yt-dlp.tar.gz", sums))
         assertNull(YtDlpUpdateRules.checksum("missing", sums))
     }
+
+    @Test
+    fun channel() {
+        assertEquals(YtDlpChannel.STABLE, YtDlpChannel.parse(null))
+        assertEquals(YtDlpChannel.NIGHTLY, YtDlpChannel.parse("nightly"))
+        assertEquals(
+            "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.11.14.232655/",
+            YtDlpChannel.NIGHTLY.downloadBase("2026.11.14.232655"),
+        )
+        // 最新版：只往新的更新
+        assertTrue(YtDlpUpdateRules.shouldDownload("2026.10.26", "2026.11.14.232655", YtDlpChannel.NIGHTLY))
+        assertFalse(YtDlpUpdateRules.shouldDownload("2026.11.14.232655", "2026.11.14.232655", YtDlpChannel.NIGHTLY))
+        // 正式版：比較新才下載；目前是最新版的版本時換回正式版（即使正式版比較舊）
+        assertTrue(YtDlpUpdateRules.shouldDownload("2026.10.26", "2026.11.20", YtDlpChannel.STABLE))
+        assertFalse(YtDlpUpdateRules.shouldDownload("2026.10.26", "2026.10.26", YtDlpChannel.STABLE))
+        assertTrue(YtDlpUpdateRules.shouldDownload("2026.11.14.232655", "2026.10.26", YtDlpChannel.STABLE))
+    }
 }

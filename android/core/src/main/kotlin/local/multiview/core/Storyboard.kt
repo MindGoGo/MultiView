@@ -1,5 +1,7 @@
 package local.multiview.core
 
+import kotlinx.serialization.json.JsonElement
+
 /**
  * YouTube 預覽縮圖（桌面版 R50），照搬 src/lib/storyboard.ts。
  * YouTube 網頁裡的縮圖資訊（非公開介面）：`<網址樣板>|<等級 0>|<等級 1>|…`，
@@ -59,5 +61,52 @@ object StoryboardRules {
         val name = info.name.replace("\$M", sheet.toString())
         val url = sb.base.replace("\$L", sb.level.toString()).replace("\$N", name) + "&sigh=" + info.sigh
         return StoryboardFrame(url, (pos % info.cols) * info.width, (pos / info.cols) * info.height, info.width, info.height)
+    }
+}
+
+/**
+ * yt-dlp 解析出來的預覽縮圖（mv_bridge 的 storyboard 欄位）：每一張 sheet 是 rows × columns 張縮圖排成的圖片，
+ * duration 是這張 sheet 涵蓋的秒數（最後一張可能比較短）。
+ */
+data class SheetStoryboard(
+    val width: Int,
+    val height: Int,
+    val rows: Int,
+    val columns: Int,
+    val sheets: List<Sheet>,
+) {
+    data class Sheet(val url: String, val duration: Double?)
+
+    companion object {
+        fun fromYtDlp(raw: JsonElement?): SheetStoryboard? {
+            val root = JsonValues.obj(raw) ?: return null
+            fun int(key: String) = JsonValues.number(root[key])?.toInt()?.takeIf { it > 0 }
+            val sheets = JsonValues.array(root["sheets"]).orEmpty().mapNotNull(JsonValues::obj).mapNotNull { sheet ->
+                JsonValues.nonEmptyString(sheet["url"])?.let { Sheet(it, JsonValues.number(sheet["duration"])?.takeIf { d -> d > 0 }) }
+            }
+            if (sheets.isEmpty()) return null
+            return SheetStoryboard(
+                int("width") ?: return null,
+                int("height") ?: return null,
+                int("rows") ?: return null,
+                int("columns") ?: return null,
+                sheets,
+            )
+        }
+    }
+
+    /**
+     * 秒數對應的縮圖；duration 是影片長度（秒）。每張縮圖的間隔用第一張 sheet（一定是滿的）算；
+     * yt-dlp 沒給 sheet 的長度時用影片長度平均分配。
+     */
+    fun frame(seconds: Double, duration: Double): StoryboardFrame? {
+        val perSheet = rows * columns
+        val interval = sheets[0].duration?.let { it / perSheet }
+            ?: (duration / (sheets.size * perSheet)).takeIf { it > 0 && it.isFinite() }
+            ?: return null
+        val t = seconds.coerceIn(0.0, duration.coerceAtLeast(0.0))
+        val index = minOf(kotlin.math.floor(t / interval).toInt(), sheets.size * perSheet - 1).coerceAtLeast(0)
+        val pos = index % perSheet
+        return StoryboardFrame(sheets[index / perSheet].url, (pos % columns) * width, (pos / columns) * height, width, height)
     }
 }

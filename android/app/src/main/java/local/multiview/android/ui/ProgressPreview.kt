@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import local.multiview.android.player.CellPlayer
 import local.multiview.android.player.PreviewThumbnails
 import local.multiview.core.CellSource
 import local.multiview.core.ParsedSource
@@ -42,6 +43,7 @@ private val PreviewWidth = 160.dp
 @Composable
 fun ProgressPreview(
     source: CellSource,
+    player: CellPlayer?,
     progress: PlaybackProgress,
     kind: ProgressKind,
     seconds: Double,
@@ -56,9 +58,11 @@ fun ProgressPreview(
     // 每 2 秒換一張，拖曳時不要每一點都讀取
     val bucket = (seconds / 2).toLong()
     var image by remember { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(source.id, bucket, canShowImage) {
+    LaunchedEffect(source.id, bucket, canShowImage, player?.storyboard) {
         if (!canShowImage) return@LaunchedEffect
-        val next = when (val parsed = source.parsed) {
+        // 用 yt-dlp 播放時用 yt-dlp 解析出來的縮圖；內嵌播放器才另外讀 YouTube 的網頁
+        val storyboard = player?.storyboard
+        val next = storyboard?.let { PreviewThumbnails.sheet(it, seconds, duration) } ?: when (val parsed = source.parsed) {
             is ParsedSource.YouTube -> PreviewThumbnails.youtube(parsed.videoId, seconds, duration)
             is ParsedSource.Mp4 -> PreviewThumbnails.mp4(parsed.url, seconds)
             else -> null

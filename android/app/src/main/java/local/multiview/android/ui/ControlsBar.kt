@@ -80,7 +80,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
     ) {
         val progress = model.progress[source.id]
         if (progress != null && ProgressRules.view(progress).kind != ProgressKind.LIVE) {
-            ProgressBar(progress, source) { model.seek(index, it) }
+            ProgressBar(progress, source, player) { model.seek(index, it) }
         }
 
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -366,7 +366,7 @@ private fun MoveHandle(model: AppModel, index: Int) {
 
 /** 進度條：點一下或拖曳跳到那個位置（R153）。拖曳中顯示手指所在的時間，放開後才跳轉。 */
 @Composable
-private fun ProgressBar(progress: PlaybackProgress, source: CellSource, onSeek: (Double) -> Unit) {
+private fun ProgressBar(progress: PlaybackProgress, source: CellSource, player: CellPlayer?, onSeek: (Double) -> Unit) {
     var dragFraction by remember { mutableStateOf<Double?>(null) }
     val display = ProgressRules.view(progress)
     val fraction = dragFraction ?: display.fraction
@@ -425,7 +425,7 @@ private fun ProgressBar(progress: PlaybackProgress, source: CellSource, onSeek: 
                     .background(Accent, RoundedCornerShape(2.dp)),
             )
             // 拖曳時在手指上方顯示那個位置的縮圖與時間（桌面版 R50）
-            dragFraction?.let { ProgressPreview(source, progress, display.kind, seconds, leading, it, barWidth) }
+            dragFraction?.let { ProgressPreview(source, player, progress, display.kind, seconds, leading, it, barWidth) }
         }
         Text(trailing, color = Color.White, fontSize = 11.sp)
     }

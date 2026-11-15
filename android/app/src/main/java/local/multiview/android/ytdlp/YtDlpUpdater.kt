@@ -8,6 +8,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import local.multiview.android.BuildConfig
+import local.multiview.core.YtDlpChannel
 import local.multiview.core.YtDlpUpdateRecord
 import local.multiview.core.YtDlpUpdateRules
 import local.multiview.core.YtDlpVersion
@@ -41,7 +42,6 @@ object YtDlpUpdater {
             }
     }
 
-    private const val LATEST_RELEASE_URL = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
     private const val ASSET_NAME = "yt-dlp"
     private const val SUMS_NAME = "SHA2-256SUMS"
 
@@ -59,6 +59,16 @@ object YtDlpUpdater {
     private fun recordFile(context: Context) = File(directory(context), "update.json")
 
     private fun now() = System.currentTimeMillis().toDouble()
+
+    private const val KEY_CHANNEL = "ytdlpChannel"
+
+    /** 更新來源：正式版或最新版（R156）。存在 App 的偏好設定（不是設定檔，桌面版沒有這個欄位）。 */
+    fun channel(context: Context): YtDlpChannel =
+        YtDlpChannel.parse(context.getSharedPreferences("app", Context.MODE_PRIVATE).getString(KEY_CHANNEL, null))
+
+    fun setChannel(context: Context, channel: YtDlpChannel) {
+        context.getSharedPreferences("app", Context.MODE_PRIVATE).edit().putString(KEY_CHANNEL, channel.raw).apply()
+    }
 
     private fun loadRecord(context: Context): YtDlpUpdateRecord = YtDlpUpdateRecord.parse(
         try {
@@ -143,19 +153,20 @@ object YtDlpUpdater {
         val current = JSONObject(YtDlp.versions(context)).optString("yt_dlp").let(YtDlpVersion::parse)
             ?: return Outcome.Failed("讀不到目前的版本")
 
+        val channel = channel(context)
         return withContext(Dispatchers.IO) {
-            // 最新的穩定版
-            val tag = JSONObject(String(fetch(LATEST_RELEASE_URL), Charsets.UTF_8)).optString("tag_name")
+            // 選的來源（正式版或最新版）的最新版本
+            val tag = JSONObject(String(fetch(channel.latestReleaseApi), Charsets.UTF_8)).optString("tag_name")
             val latest = YtDlpVersion.parse(tag) ?: return@withContext Outcome.Failed("讀不到最新的版本")
 
             val record = loadRecord(context).copy(lastCheck = now(), appVersion = BuildConfig.VERSION_NAME)
-            if (YtDlpVersion.compare(latest, current) <= 0) {
+            if (!YtDlpUpdateRules.shouldDownload(current, latest, channel)) {
                 save(context, record)
                 return@withContext Outcome.Latest(current)
             }
 
             // 下載並用官方的雜湊值驗證
-            val base = "https://github.com/yt-dlp/yt-dlp/releases/download/$tag/"
+            val base = channel.downloadBase(tag)
             val sums = String(fetch(base + SUMS_NAME), Charsets.UTF_8)
             val expected = YtDlpUpdateRules.checksum(ASSET_NAME, sums) ?: return@withContext Outcome.Failed("找不到雜湊值")
             val archive = fetch(base + ASSET_NAME)

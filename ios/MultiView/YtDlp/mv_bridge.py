@@ -163,7 +163,34 @@ def _slim(info: dict) -> dict:
     captions = _captions(info)
     if captions:
         out['captions'] = captions
+    storyboard = _storyboard(info)
+    if storyboard:
+        out['storyboard'] = storyboard
     return out
+
+
+def _storyboard(info: dict):
+    """進度條的預覽縮圖（規格 android-app R153）：yt-dlp 的 storyboard 格式中，寬度不超過 320 的最大的一個。
+
+    回傳 {"width", "height", "rows", "columns", "sheets": [{"url", "duration"}]}；每一張 sheet 是一張由
+    rows × columns 張縮圖排成的圖片。沒有時回傳 None。
+    """
+    best = None
+    for f in info.get('formats') or []:
+        if not isinstance(f, dict) or f.get('format_note') != 'storyboard':
+            continue
+        width, height, rows, columns = (f.get(key) for key in ('width', 'height', 'rows', 'columns'))
+        fragments = f.get('fragments')
+        if not all(isinstance(v, int) and v > 0 for v in (width, height, rows, columns)):
+            continue
+        if not isinstance(fragments, list) or not fragments or width > 320:
+            continue
+        if best is None or width > best['width']:
+            sheets = [{'url': fr['url'], 'duration': fr.get('duration')} for fr in fragments
+                      if isinstance(fr, dict) and fr.get('url')]
+            if sheets:
+                best = {'width': width, 'height': height, 'rows': rows, 'columns': columns, 'sheets': sheets}
+    return best
 
 
 def _captions(info: dict) -> list:

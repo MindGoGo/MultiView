@@ -9,7 +9,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import local.multiview.core.CompanionRules
+import local.multiview.core.SheetStoryboard
 import local.multiview.core.Storyboard
+import local.multiview.core.StoryboardFrame
 import local.multiview.core.StoryboardRules
 import java.net.HttpURLConnection
 import java.net.URL
@@ -38,7 +40,14 @@ object PreviewThumbnails {
             if (html == null) return null
             StoryboardRules.extractSpec(html)?.let(StoryboardRules::parse).also { storyboards[videoId] = it }
         } ?: return null
-        val frame = StoryboardRules.frame(sb, seconds, duration)
+        return crop(StoryboardRules.frame(sb, seconds, duration))
+    }
+
+    /** yt-dlp 解析出來的縮圖（YouTube 等用 yt-dlp 播放的影片）。 */
+    suspend fun sheet(sb: SheetStoryboard, seconds: Double, duration: Double): Bitmap? =
+        sb.frame(seconds, duration)?.let { crop(it) }
+
+    private suspend fun crop(frame: StoryboardFrame): Bitmap? {
         val sheet = sheets.get(frame.url) ?: withContext(Dispatchers.IO) {
             fetch(frame.url)?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
         }?.also { sheets.put(frame.url, it) } ?: return null
@@ -84,6 +93,8 @@ object PreviewThumbnails {
                 connection.readTimeout = 15_000
                 connection.setRequestProperty("User-Agent", CompanionRules.DESKTOP_USER_AGENT)
                 connection.setRequestProperty("Accept-Language", "zh-TW,zh;q=0.9,en;q=0.8")
+                // 有些地區沒有同意 Cookie 時 YouTube 會轉到同意頁面，網頁裡就沒有縮圖資訊
+                connection.setRequestProperty("Cookie", "SOCS=CAI; CONSENT=YES+")
                 if (connection.responseCode != 200) null else connection.inputStream.use { it.readBytes() }
             } finally {
                 connection.disconnect()

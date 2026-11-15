@@ -44,6 +44,7 @@ import local.multiview.core.CaptionRules
 import local.multiview.core.CaptionTrack
 import local.multiview.core.CellSource
 import local.multiview.core.Cue
+import local.multiview.core.SheetStoryboard
 import local.multiview.core.RawAudioTrack
 import java.util.Locale
 import local.multiview.core.MediaInfo
@@ -68,6 +69,8 @@ class NativePlayer(
     override val badge: String? = null,
     /** yt-dlp 解析出來的字幕（R156）。 */
     override val captionTracks: List<CaptionTrack> = emptyList(),
+    /** yt-dlp 解析出來的預覽縮圖（R153）。 */
+    override val storyboard: SheetStoryboard? = null,
 ) : CellPlayer {
     override var onUpdate: ((PlayerUpdate) -> Unit)? = null
     override val supportsVolume = true

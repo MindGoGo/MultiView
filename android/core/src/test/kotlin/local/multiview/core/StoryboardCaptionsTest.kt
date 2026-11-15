@@ -96,4 +96,25 @@ late
         assertEquals("Hello & world", CaptionRules.cueAt(cues, 2.0))
         assertNull(CaptionRules.cueAt(cues, 7.0))
     }
+
+    @Test
+    fun sheetStoryboard() {
+        val raw = JsonValues.parse(
+            """{"width":160,"height":90,"rows":5,"columns":5,
+               "sheets":[{"url":"https://s/0.jpg","duration":250.0},{"url":"https://s/1.jpg","duration":250.0},{"url":"https://s/2.jpg","duration":40.0}]}""",
+        )
+        val sb = SheetStoryboard.fromYtDlp(raw)!!
+        // 每張 10 秒（250 秒 / 25 張）
+        assertEquals(StoryboardFrame("https://s/0.jpg", 0, 0, 160, 90), sb.frame(0.0, 540.0))
+        assertEquals(StoryboardFrame("https://s/0.jpg", 160, 90, 160, 90), sb.frame(65.0, 540.0))
+        assertEquals(StoryboardFrame("https://s/1.jpg", 0, 0, 160, 90), sb.frame(250.0, 540.0))
+        // 超過長度用最後一張 sheet；負的當作 0
+        assertEquals("https://s/2.jpg", sb.frame(9999.0, 540.0)!!.url)
+        assertEquals(0, sb.frame(-3.0, 540.0)!!.x)
+        // 沒有 sheet 的長度：用影片長度平均分配
+        val noDuration = sb.copy(sheets = sb.sheets.map { it.copy(duration = null) })
+        assertEquals("https://s/1.jpg", noDuration.frame(300.0, 750.0)!!.url)
+        assertNull(SheetStoryboard.fromYtDlp(JsonValues.parse("""{"width":160,"height":90,"rows":5,"columns":5,"sheets":[]}""")))
+        assertNull(SheetStoryboard.fromYtDlp(null))
+    }
 }

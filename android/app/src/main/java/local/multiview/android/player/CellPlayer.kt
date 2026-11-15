@@ -3,6 +3,7 @@ package local.multiview.android.player
 import android.view.View
 import local.multiview.core.AudioOption
 import local.multiview.core.CaptionTrack
+import local.multiview.core.SheetStoryboard
 import local.multiview.core.PlayStatus
 import local.multiview.core.PlaybackProgress
 import local.multiview.core.Quality
@@ -75,6 +76,9 @@ interface CellPlayer {
 
     /** 目前顯示的字幕的 key；關閉時為 null。 */
     val currentCaption: String? get() = null
+
+    /** yt-dlp 解析出來的預覽縮圖（R153）；沒有時為 null。 */
+    val storyboard: SheetStoryboard? get() = null
 
     /** 顯示這一軌字幕（[CaptionTrack.key]），null 是關閉。 */
     fun setCaption(key: String?) {}
