@@ -26,6 +26,12 @@ final class NativePlayer: NSObject, CellPlayer {
     private var pendingResume: Double?
     private var ended = false
     private var failure: String?
+    /// 聲音軌（R135、桌面版 R95）：HLS 主清單有多條聲音軌時才有。
+    private var audioGroup: AVMediaSelectionGroup?
+    private var audioTracks: [RawAudioTrack] = []
+    private var audioOptions: [AudioOption] = []
+    /// 這一格記住的語言（來源的 audioLang）；nil 為自動。
+    private var audioLang: String?
 
     /// 能不能選畫質：HLS 才有不同畫質可以選（mp4 只有一種）。
     let supportsQuality: Bool
@@ -47,6 +53,7 @@ final class NativePlayer: NSObject, CellPlayer {
             item = AVPlayerItem(asset: asset)
         }
         pendingResume = source.resume
+        audioLang = source.audioLang
         super.init()
 
         layerView.playerLayer.player = player
@@ -59,6 +66,7 @@ final class NativePlayer: NSObject, CellPlayer {
         // AirPlay 只送聲音，畫面留在裝置上（R132）
         player.allowsExternalPlayback = false
         observe()
+        loadAudioTracks()
         if source.autoplay {
             player.play()
         }
@@ -109,6 +117,52 @@ final class NativePlayer: NSObject, CellPlayer {
             // 寬度用 16:9 換算；直式影片也只看高度不超過
             item.preferredMaximumResolution = CGSize(width: CGFloat(height) * 16 / 9, height: CGFloat(height))
         }
+    }
+
+    // MARK: 聲音軌（R135、桌面版 R95）
+
+    /// 讀取聲音軌，依「這一格記住的語言 → 系統語言 → 原本的聲音 → 第一條」選擇。
+    /// 不選的話 AVPlayer 會自己挑，可能挑到 AI 配音。
+    private func loadAudioTracks() {
+        let asset = item.asset
+        Task { [weak self] in
+            guard let group = try? await asset.loadMediaSelectionGroup(for: .audible) else { return }
+            self?.audioGroupLoaded(group)
+        }
+    }
+
+    private func audioGroupLoaded(_ group: AVMediaSelectionGroup) {
+        // 已經移除（shutdown 會把 item 拿掉）
+        guard player.currentItem === item else { return }
+        // LANGUAGE 對應 extendedLanguageTag（沒有時用 locale）；HLS 的 NAME 對應 displayName
+        let tracks = group.options.map { option in
+            RawAudioTrack(lang: option.extendedLanguageTag ?? option.locale?.identifier, name: option.displayName)
+        }
+        guard tracks.count >= 2 else { return }
+        audioGroup = group
+        audioTracks = tracks
+        audioOptions = AudioTrackRules.options(tracks)
+        let index = AudioTrackRules.pick(tracks, saved: audioLang, system: Locale.preferredLanguages.first ?? "")
+        if group.options.indices.contains(index) {
+            item.select(group.options[index], in: group)
+        }
+        report()
+    }
+
+    func setAudioTrack(_ option: AudioOption) {
+        guard let audioGroup, audioGroup.options.indices.contains(option.index) else { return }
+        audioLang = option.lang.isEmpty ? nil : option.lang
+        item.select(audioGroup.options[option.index], in: audioGroup)
+        report()
+    }
+
+    /// 聲音軌選單：不同的聲音軌有兩條以上才顯示。
+    private func audioMenu() -> AudioMenu? {
+        guard let audioGroup, audioOptions.count >= 2 else { return nil }
+        let selected = item.currentMediaSelection.selectedMediaOption(in: audioGroup)
+            .flatMap { audioGroup.options.firstIndex(of: $0) } ?? -1
+        let current = AudioTrackRules.currentOption(audioTracks, audioOptions, current: selected)
+        return AudioMenu(options: audioOptions, current: current)
     }
 
     // MARK: 子母畫面與背景播放（R132）
@@ -254,7 +308,9 @@ final class NativePlayer: NSObject, CellPlayer {
                 status = item.status == .readyToPlay ? .paused : .loading
             }
         }
-        onUpdate?(PlayerUpdate(status: status, progress: currentProgress(), title: nil, errorMessage: failure))
+        onUpdate?(PlayerUpdate(
+            status: status, progress: currentProgress(), title: nil, errorMessage: failure, audio: audioMenu()
+        ))
     }
 
     private func currentProgress() -> PlaybackProgress? {

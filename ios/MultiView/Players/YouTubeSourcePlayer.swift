@@ -106,6 +106,12 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
         inner?.setQuality(quality)
     }
 
+    /// 記住選的語言，重新解析時沿用（R135）。
+    func setAudioTrack(_ option: AudioOption) {
+        source.audioLang = option.lang.isEmpty ? nil : option.lang
+        inner?.setAudioTrack(option)
+    }
+
     func shutdown() {
         closed = true
         resolveTask?.cancel()

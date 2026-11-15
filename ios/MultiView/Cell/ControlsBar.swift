@@ -31,6 +31,7 @@ struct ControlsBar: View {
                     if supportsVolume { volumeButton }
                     brightnessButton
                     if model.supportsQuality(source) { qualityButton }
+                    if let audio = model.audioMenu(source) { audioButton(audio) }
                     Spacer(minLength: 8)
                     if model.canSwap { moveHandle }
                     soloButton
@@ -261,6 +262,28 @@ struct ControlsBar: View {
         .frame(width: 44, height: 44)
     }
 
+    /// 語音（聲音軌）的子選單（R135、桌面版 R95）。
+    private func audioMenu(_ audio: AudioMenu) -> MenuItem {
+        let current = audio.options.first { $0.index == audio.current }
+        return MenuItem(
+            title: current.map { "語音：\($0.label)" } ?? "語音",
+            systemImage: "waveform",
+            children: audio.options.map { option in
+                MenuItem(title: option.label, systemImage: "", checked: option.index == audio.current) {
+                    model.setAudioTrack(index, option)
+                }
+            }
+        )
+    }
+
+    /// 語音按鈕（寬的操作列）。
+    private func audioButton(_ audio: AudioMenu) -> some View {
+        MenuButton(systemImage: "waveform", accessibilityLabel: "語音", items: { audioMenu(audio).children }) { open in
+            showsMore = open
+        }
+        .frame(width: 44, height: 44)
+    }
+
     /// 「⋯」選單的項目。
     private func moreItems() -> [MenuItem] {
         var items: [MenuItem] = []
@@ -270,6 +293,9 @@ struct ControlsBar: View {
         items.append(MenuItem(title: "亮度", systemImage: "sun.max.fill") { showsBrightness = true })
         if model.supportsQuality(source) {
             items.append(qualityMenu)
+        }
+        if let audio = model.audioMenu(source) {
+            items.append(audioMenu(audio))
         }
         if model.supportsPictureInPicture(source) {
             items.append(MenuItem(title: "子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) })

@@ -299,10 +299,14 @@
   - 預設值：YouTube 直播與一般影片都用 yt-dlp（R122 實測一般影片拿得到 720p 的 HLS；而且原生播放器才能多格同時出聲，R128）。工具列的齒輪選單可以分別改成內嵌播放器；改變後 YouTube 格子從目前的位置重新載入。
   - 解析中還不知道是直播或一般影片，先解析再依那一組的設定決定；兩組都是內嵌播放器時不解析（R88）。
   - 用 yt-dlp 播放的格子，工具列顯示時在左上角喇叭按鈕旁邊顯示「yt-dlp」小標示（R109）。
+  - 聲音軌（R95，0.0.29）：原生播放器載入後讀取 HLS 的聲音軌（`AVMediaSelectionGroup` 的 `.audible`；LANGUAGE 對應 `extendedLanguageTag`，沒有時用 `locale`；NAME 對應 `displayName`），依「這一格記住的語言 → 系統語言 → 原本的聲音 → 第一條」選擇（同一種語言優先原本的聲音），不讓 AVPlayer 自己挑。規則在 `MultiViewCore` 的 `AudioTrackRules`，照搬桌面版 `src/lib/audioTracks.ts`。
+    - 不同的聲音軌（語言＋種類相同的只算一條）有兩條以上時，寬的操作列有「語音」按鈕，窄的在「⋯」選單裡（和畫質選單相同）；選項是語言名稱加「（原本的聲音）」「（AI 配音）」「（配音）」，目前用的打勾。
+    - 選了之後換成那條聲音、提示「語音：<名稱>」，語言存在這一格來源的 `audioLang`（`null` 為自動）並保存設定；重新開啟 App、播放中斷後重新解析時沿用。YouTube 與其他網站的 yt-dlp 播放都適用。
 - 驗收條件：
   - AC1：直播選 yt-dlp 後貼上 YouTube 直播 → 顯示讀取動畫，之後用原生播放器播放，小標示顯示 yt-dlp。
   - AC2：貼上已刪除的影片 → 提示「yt-dlp 無法播放，已改用內嵌播放器」，格子顯示內嵌播放器的錯誤。
   - AC3：4 格同時貼上直播 → 解析期間可以正常拖曳分隔線、點其他格子。
+  - AC4：系統語言是繁體中文，用 yt-dlp 播放 `fg1H4WCdkNI`（中文原聲，另有英文 AI 配音）→ 聽到中文原聲；「語音」可以換成英文 AI 配音，重新開啟 App 後仍然是英文。
 
 ### R136：yt-dlp 更新
 - 描述：
@@ -564,9 +568,9 @@
 ## 12. 未決事項
 
 - [ ] **待辦（2026-11-15，從 Android 版 0.0.15、0.0.16 補回）**：
-  - 字幕（yt-dlp 播放）：`mv_bridge.py` 已經回傳 `captions`（Android 0.0.16 加的，iOS 不用改 Python）。照 Android 版做：操作列的「字幕」選單、App 自己下載並解析 WebVTT 疊在影片上，選的字幕存在來源的 `captions`（格式同桌面版 R31）。規則與測試對照 `android/core/.../Captions.kt`、`StoryboardCaptionsTest.kt`。（R131 原本寫「YouTube 字幕選單之後再做」。）
-  - 進度條的預覽縮圖（桌面版 R50）：拖曳進度條時顯示時間；YouTube、mp4 的一般影片有縮圖。規則照 `src/lib/storyboard.ts`（Android 版 `android/core/.../Storyboard.kt`），mp4 用 `AVAssetImageGenerator`。
-  - 語音（聲音軌）選單（桌面版 R95）：yt-dlp 播放的 HLS 有多條聲音軌時，操作列有「語音」，依「這一格記住的語言 → 系統語言 → 原本的聲音 → 第一條」選擇，選過的語言存在來源的 `audioLang`。目前 iOS 版由 AVPlayer 自己選，可能選到 AI 配音。規則照 `src/lib/audioTracks.ts`（Android 版是 `android/core/.../AudioTracks.kt`）；AVPlayer 用 `AVMediaSelectionGroup`。
+  - [ ] 字幕（yt-dlp 播放）：`mv_bridge.py` 已經回傳 `captions`（Android 0.0.16 加的，iOS 不用改 Python）。照 Android 版做：操作列的「字幕」選單、App 自己下載並解析 WebVTT 疊在影片上，選的字幕存在來源的 `captions`（格式同桌面版 R31）。規則與測試對照 `android/core/.../Captions.kt`、`StoryboardCaptionsTest.kt`。（R131 原本寫「YouTube 字幕選單之後再做」。）
+  - [ ] 進度條的預覽縮圖（桌面版 R50）：拖曳進度條時顯示時間；YouTube、mp4 的一般影片有縮圖。規則照 `src/lib/storyboard.ts`（Android 版 `android/core/.../Storyboard.kt`），mp4 用 `AVAssetImageGenerator`。
+  - [x] （0.0.29，R135）語音（聲音軌）選單（桌面版 R95）：yt-dlp 播放的 HLS 有多條聲音軌時，操作列有「語音」，依「這一格記住的語言 → 系統語言 → 原本的聲音 → 第一條」選擇，選過的語言存在來源的 `audioLang`。目前 iOS 版由 AVPlayer 自己選，可能選到 AI 配音。規則照 `src/lib/audioTracks.ts`（Android 版是 `android/core/.../AudioTracks.kt`）；AVPlayer 用 `AVMediaSelectionGroup`。
   - （「用行動數據／低數據模式時不自動更新 yt-dlp」iOS 版已經有，R136，不用補。）
 - [x] 裝置：iPad Pro M1（128GB）、iPhone 14 Pro（256GB）（2026-11-13）。兩台都能更新到最新的 iPadOS／iOS，最低支援版本維持 17。
 - [ ] Apple ID 用免費或付費（US$99/年）：目前以免費帳號加 SideStore 規劃；改付費帳號時，簽章可以用一年，第 8 節的限制大多不再適用。
@@ -607,3 +611,4 @@
 | 2026-11-14 | 第 11 節記錄 0.0.26 的實測結果 | 使用者實測 |
 | 2026-11-14 | 移除設定裡的「yt-dlp 測試」畫面（R122 技術驗證用）；Android 版的規格另見 [android-app](android-app.md) | 使用者要求；0.0.27 |
 | 2026-11-15 | R140：YouTube 小視窗第一次打開後一直留在畫面裡（關掉時移到畫面外），再打開時不重新載入，搜尋的內容與捲動位置保留；關著的時候不載入新的網頁；聊天室同一部影片只載入一次（和 Android 版 0.0.13 相同的做法） | 使用者回報每次打開小視窗都重新載入；0.0.28 |
+| 2026-11-15 | R135 補充聲音軌（R95）的做法：`AVMediaSelectionGroup` 讀取聲音軌、依記住的語言／系統語言／原本的聲音選擇、操作列的「語音」、選過的語言存在 `audioLang`；新增 AC4；第 12 節的待辦完成 | 從 Android 版 0.0.15 補回；0.0.29 |

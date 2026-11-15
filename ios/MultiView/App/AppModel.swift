@@ -36,6 +36,8 @@ final class AppModel {
     private(set) var statuses: [Int: PlayStatus] = [:]
     private(set) var progress: [Int: PlaybackProgress] = [:]
     private(set) var errors: [Int: String] = [:]
+    /// 每個來源的聲音軌選單（R135）；兩條以上的聲音軌才有。
+    private(set) var audioMenus: [Int: AudioMenu] = [:]
     /// 正在顯示操作列的格位（R127）。
     private(set) var activeCell: Int?
     /// 單格全螢幕時放大的格位（R20、R129）；不保存。
@@ -487,6 +489,7 @@ final class AppModel {
         next.volume = old.volume
         next.brightness = old.brightness
         next.adblock = !old.adblock
+        next.audioLang = old.audioLang
         next.backURL = old.backURL
         if let mode = webModes[old.id] {
             pendingWebModes[next.id] = mode
@@ -517,6 +520,7 @@ final class AppModel {
         statuses[id] = nil
         progress[id] = nil
         errors[id] = nil
+        audioMenus[id] = nil
         titles[id] = nil
         everPlayed.remove(id)
         webModes[id] = nil
@@ -534,6 +538,9 @@ final class AppModel {
         }
         if errors[id] != update.errorMessage {
             errors[id] = update.errorMessage
+        }
+        if audioMenus[id] != update.audio {
+            audioMenus[id] = update.audio
         }
         if let title = update.title {
             titles[id] = title
@@ -971,6 +978,23 @@ final class AppModel {
         slots[index] = source
         players[source.id]?.setQuality(quality)
         showToast("畫質：\(quality.label)")
+        keepControlsVisible()
+        scheduleSave()
+    }
+
+    // MARK: 聲音軌（R135、桌面版 R95）
+
+    func audioMenu(_ source: CellSource) -> AudioMenu? {
+        audioMenus[source.id]
+    }
+
+    /// 換聲音軌：記住語言（存在來源的 audioLang），重開 App 或重新解析時沿用。
+    func setAudioTrack(_ index: Int, _ option: AudioOption) {
+        guard slots.indices.contains(index), var source = slots[index] else { return }
+        source.audioLang = option.lang.isEmpty ? nil : option.lang
+        slots[index] = source
+        players[source.id]?.setAudioTrack(option)
+        showToast("語音：\(option.label)")
         keepControlsVisible()
         scheduleSave()
     }
