@@ -34,6 +34,8 @@ struct MenuButton: UIViewRepresentable {
     let systemImage: String
     let accessibilityLabel: String
     let items: () -> [MenuItem]
+    /// 功能開著時用強調色（例如字幕）。
+    var highlighted = false
     let onOpenChange: (Bool) -> Void
 
     func makeUIView(context: Context) -> TrackingMenuButton {
@@ -47,6 +49,8 @@ struct MenuButton: UIViewRepresentable {
 
     func updateUIView(_ button: TrackingMenuButton, context: Context) {
         button.onOpenChange = onOpenChange
+        button.tintColor = highlighted ? UIColor(Color.accentColor) : .label
+        button.setImage(UIImage(systemName: systemImage), for: .normal)
         let build = items
         // 打開時才建立選單，項目的文字（例如「加入最愛」／「從最愛移除」）才會是最新的
         button.menu = UIMenu(children: [

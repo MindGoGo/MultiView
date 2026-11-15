@@ -1,5 +1,6 @@
 import MultiViewCore
 import SwiftUI
+import UIKit
 
 /// 每一格下方的操作列（R127）：播放／暫停、喇叭、音量、亮度、更換網址、移除，以及進度條（R129）。
 struct ControlsBar: View {
@@ -18,7 +19,7 @@ struct ControlsBar: View {
     var body: some View {
         VStack(spacing: 4) {
             if let progress = model.progress[source.id], ProgressRules.view(progress).kind != .live {
-                ProgressBar(progress: progress) { fraction in
+                ProgressBar(progress: progress, source: source) { fraction in
                     model.seek(index, fraction: fraction)
                 }
             }
@@ -31,6 +32,8 @@ struct ControlsBar: View {
                     if supportsVolume { volumeButton }
                     brightnessButton
                     if model.supportsQuality(source) { qualityButton }
+                    if let audio = model.audioMenu(source) { audioButton(audio) }
+                    if let captions = model.captionMenu(source) { captionButton(captions) }
                     Spacer(minLength: 8)
                     if model.canSwap { moveHandle }
                     soloButton
@@ -261,6 +264,60 @@ struct ControlsBar: View {
         .frame(width: 44, height: 44)
     }
 
+    /// 語音（聲音軌）的子選單（R135、桌面版 R95）。
+    private func audioMenu(_ audio: AudioMenu) -> MenuItem {
+        let current = audio.options.first { $0.index == audio.current }
+        return MenuItem(
+            title: current.map { "語音：\($0.label)" } ?? "語音",
+            systemImage: "waveform",
+            children: audio.options.map { option in
+                MenuItem(title: option.label, systemImage: "", checked: option.index == audio.current) {
+                    model.setAudioTrack(index, option)
+                }
+            }
+        )
+    }
+
+    /// 語音按鈕（寬的操作列）。
+    private func audioButton(_ audio: AudioMenu) -> some View {
+        MenuButton(systemImage: "waveform", accessibilityLabel: "語音", items: { audioMenu(audio).children }) { open in
+            showsMore = open
+        }
+        .frame(width: 44, height: 44)
+    }
+
+    /// 字幕的子選單（R131；規則同桌面版 R31）：「關閉」和各軌，目前的打勾。
+    private func captionMenu(_ captions: CaptionMenu) -> MenuItem {
+        let current = captions.tracks.first { $0.key == captions.current }
+        var children = [MenuItem(title: "關閉", systemImage: "", checked: current == nil) {
+            model.setCaption(index, nil)
+        }]
+        children += captions.tracks.map { track in
+            MenuItem(title: track.label, systemImage: "", checked: track.key == current?.key) {
+                model.setCaption(index, track)
+            }
+        }
+        return MenuItem(
+            title: "字幕：\(current?.label ?? "關閉")",
+            systemImage: current == nil ? "captions.bubble" : "captions.bubble.fill",
+            children: children
+        )
+    }
+
+    /// 字幕按鈕（寬的操作列）：開著時用強調色。
+    private func captionButton(_ captions: CaptionMenu) -> some View {
+        let on = captions.tracks.contains { $0.key == captions.current }
+        return MenuButton(
+            systemImage: on ? "captions.bubble.fill" : "captions.bubble",
+            accessibilityLabel: "字幕",
+            items: { captionMenu(captions).children },
+            highlighted: on
+        ) { open in
+            showsMore = open
+        }
+        .frame(width: 44, height: 44)
+    }
+
     /// 「⋯」選單的項目。
     private func moreItems() -> [MenuItem] {
         var items: [MenuItem] = []
@@ -270,6 +327,12 @@ struct ControlsBar: View {
         items.append(MenuItem(title: "亮度", systemImage: "sun.max.fill") { showsBrightness = true })
         if model.supportsQuality(source) {
             items.append(qualityMenu)
+        }
+        if let audio = model.audioMenu(source) {
+            items.append(audioMenu(audio))
+        }
+        if let captions = model.captionMenu(source) {
+            items.append(captionMenu(captions))
         }
         if model.supportsPictureInPicture(source) {
             items.append(MenuItem(title: "子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) })
@@ -362,8 +425,10 @@ struct SliderPopup: View {
 }
 
 /// 進度條：點一下或拖曳跳到那個位置（R19、R129）。
+/// 拖曳中在手指上方顯示那個位置的時間，YouTube、mp4 的一般影片另有預覽縮圖（桌面版 R50）。
 struct ProgressBar: View {
     let progress: PlaybackProgress
+    let source: CellSource
     let onSeek: (Double) -> Void
 
     /// 拖曳中手指所在的比例；放開後才跳轉。
@@ -386,6 +451,19 @@ struct ProgressBar: View {
                 .frame(height: 4)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
+                .overlay(alignment: .topLeading) {
+                    if let dragFraction {
+                        ProgressPreview(
+                            source: source,
+                            kind: display.kind,
+                            seconds: ProgressRules.seekTarget(progress, fraction: dragFraction),
+                            duration: progress.end - progress.start,
+                            time: leadingText(fraction: dragFraction, display: display),
+                            fraction: dragFraction,
+                            barWidth: geometry.size.width
+                        )
+                    }
+                }
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
@@ -420,5 +498,86 @@ struct ProgressBar: View {
 
     private func trailingText(display: ProgressDisplay) -> String {
         display.kind == .dvr ? "直播" : ProgressRules.formatTime(progress.end - progress.start)
+    }
+}
+
+/// 拖曳進度條時手指上方的提示（桌面版 R50）：YouTube、mp4 的一般影片有預覽縮圖，其他只顯示時間。
+/// 提示限制在進度條的範圍內；進度條比縮圖窄時只顯示時間。
+private struct ProgressPreview: View {
+    let source: CellSource
+    let kind: MultiViewCore.ProgressKind
+    let seconds: Double
+    let duration: Double
+    let time: String
+    let fraction: Double
+    let barWidth: CGFloat
+
+    /// 縮圖的寬度（桌面版 R50 是 160px）。
+    static let imageWidth: CGFloat = 160
+
+    @State private var image: UIImage?
+    @State private var size: CGSize = .zero
+
+    private var canShowImage: Bool {
+        kind == .vod && barWidth >= Self.imageWidth && PreviewThumbnails.supports(source)
+    }
+
+    /// 每 2 秒換一張，拖曳時不要每一點都讀取。
+    private var bucket: Int {
+        seconds.isFinite ? Int(max(0, seconds) / 2) : 0
+    }
+
+    var body: some View {
+        VStack(spacing: 2) {
+            if canShowImage, let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: Self.imageWidth)
+                    .background(Color.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+            Text(time)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 4))
+        }
+        .fixedSize()
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: PreviewSizeKey.self, value: proxy.size)
+            }
+        )
+        .onPreferenceChange(PreviewSizeKey.self) { size = $0 }
+        // 畫在進度條上方，不超出進度條的左右範圍
+        .offset(x: offsetX, y: -size.height - 8)
+        .opacity(size == .zero ? 0 : 1)
+        .allowsHitTesting(false)
+        .task(id: PreviewRequest(bucket: bucket, enabled: canShowImage)) {
+            guard canShowImage else { return }
+            if let next = await PreviewThumbnails.image(for: source, seconds: seconds, duration: duration), !Task.isCancelled {
+                image = next
+            }
+        }
+    }
+
+    private var offsetX: CGFloat {
+        let x = CGFloat(fraction) * barWidth - size.width / 2
+        return min(max(0, x), max(0, barWidth - size.width))
+    }
+}
+
+private struct PreviewRequest: Equatable {
+    var bucket: Int
+    var enabled: Bool
+}
+
+private struct PreviewSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
     }
 }

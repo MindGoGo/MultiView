@@ -9,6 +9,22 @@ struct PlayerUpdate {
     var title: String?
     /// 錯誤狀態時顯示的訊息。
     var errorMessage: String?
+    /// 聲音軌選單（R135、桌面版 R95）：兩條以上的聲音軌才有。
+    var audio: AudioMenu? = nil
+    /// 字幕選單（R131）：yt-dlp 播放、影片有字幕時才有。
+    var captions: CaptionMenu? = nil
+}
+
+/// 字幕選單：yt-dlp 讀到的字幕，與目前顯示的那一軌（CaptionTrack.key；關閉時為 nil）。
+struct CaptionMenu: Equatable {
+    var tracks: [CaptionTrack]
+    var current: String?
+}
+
+/// 聲音軌選單：選項與目前用的那一項（AudioOption.index）。
+struct AudioMenu: Equatable {
+    var options: [AudioOption]
+    var current: Int
 }
 
 /// 一格的播放器。每個來源一個，換位、切換版型時沿用同一個，不重新載入（R6 AC1）。
@@ -42,6 +58,12 @@ protocol CellPlayer: AnyObject {
     /// 畫質：自動，或最高畫面高度。
     func setQuality(_ quality: Quality)
 
+    /// 換聲音軌（R135、桌面版 R95）：選項來自 PlayerUpdate.audio。
+    func setAudioTrack(_ option: AudioOption)
+
+    /// 顯示這一軌字幕（CaptionTrack.key，選項來自 PlayerUpdate.captions），nil 是關閉（R131）。
+    func setCaption(_ key: String?)
+
     /// 能不能用子母畫面（只有原生播放器，R132）。
     var supportsPictureInPicture: Bool { get }
     func startPictureInPicture()
@@ -56,6 +78,8 @@ extension CellPlayer {
     var isResolving: Bool { false }
     var supportsQuality: Bool { false }
     func setQuality(_ quality: Quality) {}
+    func setAudioTrack(_ option: AudioOption) {}
+    func setCaption(_ key: String?) {}
     var supportsPictureInPicture: Bool { false }
     func startPictureInPicture() {}
     func setAutomaticPictureInPicture(_ enabled: Bool) {}

@@ -101,6 +101,18 @@ final class WebSourcePlayer: NSObject, CellPlayer {
         inner?.setQuality(quality)
     }
 
+    /// 記住選的語言，重新解析時沿用（R135）。
+    func setAudioTrack(_ option: AudioOption) {
+        source.audioLang = option.lang.isEmpty ? nil : option.lang
+        inner?.setAudioTrack(option)
+    }
+
+    /// 記住選的字幕，重新解析時沿用（R131）。
+    func setCaption(_ key: String?) {
+        source.captions = key
+        inner?.setCaption(key)
+    }
+
     func shutdown() {
         closed = true
         inner?.shutdown()
@@ -135,7 +147,8 @@ final class WebSourcePlayer: NSObject, CellPlayer {
         var start = startingSource()
         if stream.isLive { start.resume = nil }
         install(NativePlayer(
-            url: streamURL, source: start, headers: Self.headers(page: url, fromYtdlp: stream.headers), adaptive: stream.kind == .hls
+            url: streamURL, source: start, headers: Self.headers(page: url, fromYtdlp: stream.headers), adaptive: stream.kind == .hls,
+            captions: stream.captions
         ))
     }
 
