@@ -196,7 +196,7 @@ class AdBlockEngine private constructor(
         }
 
         /** 網址的網域（小寫）；不是 http(s)、ws(s) 這類網址時回傳 null。 */
-        internal fun hostOf(url: String): String? {
+        fun hostOf(url: String): String? {
             val start = url.indexOf("://")
             if (start < 0) return null
             var end = start + 3
