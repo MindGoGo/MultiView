@@ -464,6 +464,8 @@ struct ProgressBar: View {
                             fraction: dragFraction,
                             barWidth: geometry.size.width
                         )
+                        // 高度 0、靠下對齊：提示的下緣貼著進度條上方，往上長（不依賴量到的高度）
+                        .frame(width: geometry.size.width, height: 0, alignment: .bottomLeading)
                     }
                 }
                 .gesture(
@@ -559,15 +561,16 @@ private struct ProgressPreview: View {
             }
         }
         .fixedSize()
+        // 量寬度只用來讓提示不超出進度條的左右範圍；量到之前也照常顯示
+        // （iOS 0.0.30–0.0.32 用量到的大小決定透明度與位置，量不到時整個提示看不到）
         .background(
             GeometryReader { proxy in
-                Color.clear.preference(key: PreviewSizeKey.self, value: proxy.size)
+                Color.clear
+                    .onAppear { size = proxy.size }
+                    .onChange(of: proxy.size) { _, next in size = next }
             }
         )
-        .onPreferenceChange(PreviewSizeKey.self) { size = $0 }
-        // 畫在進度條上方，不超出進度條的左右範圍
-        .offset(x: offsetX, y: -size.height - 8)
-        .opacity(size == .zero ? 0 : 1)
+        .offset(x: offsetX, y: -8)
         .allowsHitTesting(false)
         .task(id: PreviewRequest(bucket: bucket, enabled: canShowImage)) {
             guard canShowImage else {
@@ -596,10 +599,3 @@ private struct PreviewRequest: Equatable {
     var enabled: Bool
 }
 
-private struct PreviewSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
-    }
-}
