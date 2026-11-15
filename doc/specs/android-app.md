@@ -32,7 +32,7 @@
 - 每做完一批功能就升一個版本號、推上分支，等 GitHub Actions 編譯通過後請使用者更新測試。實測結果寫回本規格第 11 節。
 - 發佈新版：**自動**。升 `android/gradle.properties` 的 `multiview.versionName` 並推送，GitHub Actions 測試通過後發現這個版本還沒有發佈，就自己建立 `android-v<版本號>` 標籤與 Release、放上簽章的 APK（開發環境不能推送標籤，所以由 Actions 建立）。使用者不用做任何事，直接下載安裝。**Release 的說明文字讀 `android/release-notes.txt`，升版本號時要一起改**（0.0.14 漏改，說明沿用了 0.0.13 的文字）；已經發佈過的版本再推送不會更新說明，要到 GitHub 網頁的 Releases 編輯。也可以手動建立標籤（和 iOS 版的 `ios-v*` 相同）。
 - **目前的進度（2026-11-15）**：Android 版做到 0.0.18，第 10 節的步驟 1–7 都做了第一版，使用者在 POCO F6 Pro 上測過（結果在第 11 節）。0.0.14 加入其他網站用 yt-dlp 播放（R156 的「其他網站的播放方式」），使用者實測正常。0.0.16 加入字幕（yt-dlp 播放）與進度條的預覽縮圖；字幕讀得到，但顯示有兩個問題，0.0.17 修正，**待實測**（I 組）。0.0.15 加入語音選單（R156）與「用行動數據時不自動更新 yt-dlp」，使用者實測成功（H 組）。手動驗收步驟在 `tests/manual/android-app.md`。發佈是自動的：升 `android/gradle.properties` 的版本號並推送即可。
-- **分支：`Phone`**（2026-11-15 起，Android 版與 iOS 版一起在這個分支開發）。開新的工作階段時，開發環境會指定一個新的 `claude/…` 分支：先從 `Phone` 開始（`git checkout -b <指定的分支> origin/Phone`），做完後推送到指定的分支，再合併回 `Phone`（使用者同意的做法）。以前的分支（`claude/beautiful-babbage-1bur72`、`claude/pensive-tesla-rfgdz1`、`claude/focused-cerf-ovpv5r`、`claude/kind-darwin-fm9hki`）的內容都已經在 `Phone` 裡；使用者說先不要合併到 `main`。
+- **分支：`Phone`**（2026-11-15 起，Android 版與 iOS 版一起在這個分支開發）。開新的工作階段時，開發環境會指定一個新的 `claude/…` 分支：先從 `Phone` 開始（`git checkout -b <指定的分支> origin/Phone`），做完後合併回 `Phone` 並推送 `Phone`（使用者同意的做法；Actions 只在 `Phone` 上跑，所以要推到 `Phone` 才會編譯、發佈）。同一個提交不要同時推到好幾個分支。以前的分支（`claude/beautiful-babbage-1bur72`、`claude/pensive-tesla-rfgdz1`、`claude/focused-cerf-ovpv5r`、`claude/kind-darwin-fm9hki`）的內容都已經在 `Phone` 裡；使用者說先不要合併到 `main`。
 
 ## 1. 背景與目標
 
@@ -77,7 +77,7 @@
   - 程式放在 `android/`，用 Gradle（Kotlin DSL）建置；畫面用 Jetpack Compose；最低支援 Android 8.0（API 26），目標版本 Android 16（API 36）。套件名稱 `local.multiview.android`（debug 版加 `.debug`，可以和正式版同時安裝）。
   - 版本號寫在 `android/gradle.properties` 的 `multiview.versionName`；versionCode 由版本號算出來（`主×1000000 + 次×1000 + 修`），版本號變大 versionCode 就變大。
   - 和畫面無關的邏輯放在獨立的 Kotlin 模組 `android/core/`（純 Kotlin，不依賴 Android），有自己的單元測試，可以在開發環境的 Linux 上直接跑（`./gradlew :core:test`）。開發環境沒有 Android SDK、也連不到 Google 的 Maven，所以找不到 Android SDK 時 Gradle 只載入 `:core`（不載入 Android Gradle Plugin），App 的編譯只在 GitHub Actions 上做。
-  - GitHub Actions（`.github/workflows/android.yml`，Ubuntu）：改到 `android/` 或共用檔案（`electron/webPreload.ts`、`src/lib/**`、`resources/easylist.txt`、`ios/MultiView/YtDlp/mv_bridge.py`、`ios/scripts/easylist-to-webkit.mjs`）時跑單元測試並編譯 debug 版（APK 放在 Actions 的 Artifacts）；**自動發佈**：測試通過後，如果 `multiview.versionName` 的版本還沒有附 APK 的 `android-v<版本號>` Release，就自動建立標籤（指向這次的提交）與 Release，產生簽章的 APK（`MultiView-Android-<版本號>.apk`），用 `apksigner` 確認簽章後放上去，不標成最新版本；版本號沒變的推送不發佈。手動推送 `android-v*` 標籤也會發佈，但標籤和 `multiview.versionName` 要一致。
+  - GitHub Actions（`.github/workflows/android.yml`，Ubuntu）：**只在 `Phone` 分支觸發**（2026-11-15 起；iOS 的 `ios.yml` 也一樣），工作階段的 `claude/…` 分支不觸發，要的話在 Actions 頁面手動執行（Run workflow）。`Phone` 上改到 `android/` 或共用檔案（`electron/webPreload.ts`、`src/lib/**`、`resources/easylist.txt`、`ios/MultiView/YtDlp/mv_bridge.py`、`ios/scripts/easylist-to-webkit.mjs`）時跑單元測試並編譯 debug 版（APK 放在 Actions 的 Artifacts）；**自動發佈**：測試通過後，如果 `multiview.versionName` 的版本還沒有附 APK 的 `android-v<版本號>` Release，就自動建立標籤（指向這次的提交）與 Release，產生簽章的 APK（`MultiView-Android-<版本號>.apk`），用 `apksigner` 確認簽章後放上去，不標成最新版本；版本號沒變的推送不發佈。手動推送 `android-v*` 標籤也會發佈，但標籤和 `multiview.versionName` 要一致。
   - **簽章**：Android 的 APK 一定要簽章，而且更新時簽章要相同，否則不能覆蓋安裝。簽章金鑰存在 GitHub 的 Secrets（使用者建立，見第 12 節），不放進 repo。
   - **更新**：使用者可以用 Obtainium 之類的 App 追蹤 GitHub Releases 自動提示更新（對應 iOS 版的 SideStore 來源），或直接下載 APK 安裝。
 - 驗收條件：
@@ -321,6 +321,7 @@
 | 2026-11-15 | 第 11 節記錄 0.0.10 的實測結果；0.0.11 修正 YouTube 小視窗的留言寬度與載入時的黑畫面 | 使用者實測 0.0.10 |
 | 2026-11-15 | R158：YouTube 小視窗第一次打開後一直留著、不重新載入；推薦與留言以 480 寬排版；記錄 0.0.12 的實測結果 | 使用者實測 0.0.12 |
 | 2026-11-15 | 第 11 節記錄 0.0.13 的實測結果；第 0 節補上目前的進度 | 使用者實測 0.0.13 |
+| 2026-11-15 | 改成 `Phone` 分支；Actions 只在 `Phone` 觸發 | 使用者要求（分支太多、重複觸發） |
 | 2026-11-15 | R156：yt-dlp 解析不用 web_embedded 用戶端（YouTube 2026-11 的改動，0.0.18；桌面版、iOS 版共用同一個修正） | 使用者回報 yt-dlp 播不了 |
 | 2026-11-15 | 第 11 節記錄 0.0.16 的實測結果；0.0.17 修正字幕要轉向才出現、直向時字太大 | 使用者實測 0.0.16 |
 | 2026-11-15 | R153 進度條的預覽縮圖、R156 字幕（0.0.16）；第 2 節的「不包含」改成只有內嵌播放器的字幕 | 使用者要求 |

@@ -4,8 +4,11 @@
 name: iOS
 
 on:
+  workflow_dispatch:
   push:
-    branches: ['**']
+    # 只在 Phone 分支跑（2026-11-15 使用者要求：同一個提交推到好幾個分支時會重複觸發）。
+    # 工作階段的 claude/… 分支不觸發；要手動跑可以用 Actions 頁面的「Run workflow」
+    branches: ['Phone']
     tags: ['ios-v*']
     paths:
       - 'ios/**'
