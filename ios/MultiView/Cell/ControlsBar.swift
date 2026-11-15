@@ -19,7 +19,7 @@ struct ControlsBar: View {
     var body: some View {
         VStack(spacing: 4) {
             if let progress = model.progress[source.id], ProgressRules.view(progress).kind != .live {
-                ProgressBar(progress: progress, source: source) { fraction in
+                ProgressBar(progress: progress, source: source, onDragging: { model.holdControls($0) }) { fraction in
                     model.seek(index, fraction: fraction)
                 }
             }
@@ -429,6 +429,8 @@ struct SliderPopup: View {
 struct ProgressBar: View {
     let progress: PlaybackProgress
     let source: CellSource
+    /// 開始拖曳（true）、放開（false）：拖曳中操作列不自動收起（iOS 0.0.31 實測會收起，Android 沒有這個問題）。
+    let onDragging: (Bool) -> Void
     let onSeek: (Double) -> Void
 
     /// 拖曳中手指所在的比例；放開後才跳轉。
@@ -468,6 +470,7 @@ struct ProgressBar: View {
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             guard geometry.size.width > 0 else { return }
+                            if dragFraction == nil { onDragging(true) }
                             dragFraction = max(0, min(1, Double(value.location.x / geometry.size.width)))
                         }
                         .onEnded { _ in
@@ -475,6 +478,7 @@ struct ProgressBar: View {
                                 onSeek(dragFraction)
                             }
                             dragFraction = nil
+                            onDragging(false)
                         }
                 )
             }
@@ -516,6 +520,8 @@ private struct ProgressPreview: View {
     static let imageWidth: CGFloat = 160
 
     @State private var image: UIImage?
+    /// 讀不到縮圖的原因（暫時顯示，找出 iOS 0.0.31 沒有縮圖的原因用）。
+    @State private var problem: String?
     @State private var size: CGSize = .zero
 
     private var canShowImage: Bool {
@@ -543,6 +549,14 @@ private struct ProgressPreview: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 4))
+            if image == nil, let problem {
+                Text(problem)
+                    .font(.caption2)
+                    .foregroundStyle(.yellow)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 4))
+            }
         }
         .fixedSize()
         .background(
@@ -556,9 +570,17 @@ private struct ProgressPreview: View {
         .opacity(size == .zero ? 0 : 1)
         .allowsHitTesting(false)
         .task(id: PreviewRequest(bucket: bucket, enabled: canShowImage)) {
-            guard canShowImage else { return }
-            if let next = await PreviewThumbnails.image(for: source, seconds: seconds, duration: duration), !Task.isCancelled {
+            guard canShowImage else {
+                problem = "不顯示縮圖：\(kind == .vod ? "" : "不是一般影片 ")\(barWidth < Self.imageWidth ? "進度條太窄 " : "")\(PreviewThumbnails.supports(source) ? "" : "這種來源沒有縮圖")"
+                return
+            }
+            let next = await PreviewThumbnails.image(for: source, seconds: seconds, duration: duration)
+            guard !Task.isCancelled else { return }
+            if let next {
                 image = next
+                problem = nil
+            } else if image == nil {
+                problem = PreviewThumbnails.lastProblem ?? "讀不到縮圖"
             }
         }
     }
