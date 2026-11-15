@@ -17,14 +17,20 @@ public struct YtStream: Equatable, Sendable {
     public var expiresAt: Double
     /// 網站要求的請求標頭（其他網站，R103）：只有 Referer、User-Agent。
     public var headers: [String: String]
+    /// 影片的字幕（R131）：人工字幕與自動產生的原本語言，WebVTT。
+    public var captions: [CaptionTrack]
 
-    public init(kind: Kind, url: String, isLive: Bool, title: String?, expiresAt: Double, headers: [String: String] = [:]) {
+    public init(
+        kind: Kind, url: String, isLive: Bool, title: String?, expiresAt: Double, headers: [String: String] = [:],
+        captions: [CaptionTrack] = []
+    ) {
         self.kind = kind
         self.url = url
         self.isLive = isLive
         self.title = title
         self.expiresAt = expiresAt
         self.headers = headers
+        self.captions = captions
     }
 }
 
@@ -74,7 +80,8 @@ public enum YtDlpRules {
         func make(_ kind: YtStream.Kind, _ format: [String: Any], _ url: String) -> YtStream {
             YtStream(
                 kind: kind, url: url, isLive: isLive, title: title,
-                expiresAt: expiry(of: url, now: now), headers: headers(of: format, info: info)
+                expiresAt: expiry(of: url, now: now), headers: headers(of: format, info: info),
+                captions: CaptionRules.fromYtDlp(info["captions"])
             )
         }
 

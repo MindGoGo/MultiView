@@ -37,6 +37,16 @@ final class YtDlpTests: XCTestCase {
         XCTAssertEqual(stream?.expiresAt, expireSeconds * 1000)
     }
 
+    func testStreamCarriesCaptions() {
+        let captions: [[String: Any]] = [
+            ["lang": "en", "name": "English", "url": "https://x/en.vtt", "auto": false],
+            ["lang": "en", "name": "English", "url": "https://x/asr.vtt", "auto": true]
+        ]
+        let stream = YtDlpRules.pickStream(info: info(vodFormats, ["captions": captions]), now: now)
+        XCTAssertEqual(stream?.captions.map(\.key), ["en", "asr:en"])
+        XCTAssertEqual(YtDlpRules.pickStream(info: info(vodFormats), now: now)?.captions, [])
+    }
+
     func testLiveUsesHLS() {
         let stream = YtDlpRules.pickStream(info: info(vodFormats, ["is_live": true]), now: now)
         XCTAssertEqual(stream?.kind, .hls)

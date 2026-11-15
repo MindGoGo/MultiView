@@ -32,14 +32,29 @@ final class NativePlayer: NSObject, CellPlayer {
     private var audioOptions: [AudioOption] = []
     /// 這一格記住的語言（來源的 audioLang）；nil 為自動。
     private var audioLang: String?
+    /// 字幕（R131）：yt-dlp 讀到的字幕；App 自己下載 WebVTT、自己顯示，讀不到字幕不影響播放。
+    private let captionTracks: [CaptionTrack]
+    /// 下載字幕檔要帶的標頭（yt-dlp 給的 User-Agent、Referer）。
+    private let captionHeaders: [String: String]
+    /// 目前顯示的字幕（CaptionTrack.key）；關閉時為 nil。
+    private var currentCaption: String?
+    private var cues: [Cue] = []
+    private var captionTask: Task<Void, Never>?
+    private var captionObserver: Any?
 
     /// 能不能選畫質：HLS 才有不同畫質可以選（mp4 只有一種）。
     let supportsQuality: Bool
 
     /// headers：串流請求要帶的標頭（其他網站用 yt-dlp 播放時，桌面版 R110）。
     /// adaptive：串流是 HLS，可以選畫質（R131）。
-    init(url: URL, source: CellSource, headers: [String: String] = [:], adaptive: Bool = false) {
+    /// captions：yt-dlp 讀到的字幕；captionHeaders：下載字幕檔要帶的標頭，nil 時用 headers（R131）。
+    init(
+        url: URL, source: CellSource, headers: [String: String] = [:], adaptive: Bool = false,
+        captions: [CaptionTrack] = [], captionHeaders: [String: String]? = nil
+    ) {
         supportsQuality = adaptive
+        captionTracks = captions
+        self.captionHeaders = captionHeaders ?? headers
         let layerView = PlayerLayerView()
         layerView.backgroundColor = .black
         layerView.playerLayer.videoGravity = .resizeAspect
@@ -67,6 +82,10 @@ final class NativePlayer: NSObject, CellPlayer {
         player.allowsExternalPlayback = false
         observe()
         loadAudioTracks()
+        // 這一格選過的字幕：依 R31 的規則找這部影片的同一種語言
+        if let track = CaptionRules.find(captionTracks, key: source.captions) {
+            setCaption(track.key)
+        }
         if source.autoplay {
             player.play()
         }
@@ -165,6 +184,68 @@ final class NativePlayer: NSObject, CellPlayer {
         return AudioMenu(options: audioOptions, current: current)
     }
 
+    // MARK: 字幕（R131）
+
+    func setCaption(_ key: String?) {
+        captionTask?.cancel()
+        captionTask = nil
+        stopCaptionTimer()
+        cues = []
+        layerView.showCaption(nil)
+        let track = captionTracks.first { $0.key == key }
+        currentCaption = track?.key
+        report()
+        guard let track, let url = URL(string: track.url) else { return }
+        let headers = captionHeaders
+        captionTask = Task { [weak self] in
+            guard let cues = await Self.loadCues(url: url, headers: headers), !Task.isCancelled else { return }
+            guard let self, self.currentCaption == track.key, self.player.currentItem != nil else { return }
+            self.cues = cues
+            self.startCaptionTimer()
+        }
+    }
+
+    /// 下載並解析字幕檔；失敗時回傳 nil。
+    private nonisolated static func loadCues(url: URL, headers: [String: String]) async -> [Cue]? {
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        for (name, value) in headers {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let text = String(data: data, encoding: .utf8)
+        else { return nil }
+        return CaptionRules.parseVtt(text)
+    }
+
+    /// 約每 0.2 秒依播放位置更新字幕。
+    private func startCaptionTimer() {
+        stopCaptionTimer()
+        guard !cues.isEmpty else { return }
+        let interval = CMTime(seconds: 0.2, preferredTimescale: 600)
+        captionObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            Task { @MainActor [weak self] in self?.showCue(at: time.seconds) }
+        }
+        showCue(at: player.currentTime().seconds)
+    }
+
+    private func stopCaptionTimer() {
+        if let captionObserver {
+            player.removeTimeObserver(captionObserver)
+        }
+        captionObserver = nil
+    }
+
+    private func showCue(at seconds: Double) {
+        guard seconds.isFinite else { return }
+        layerView.showCaption(CaptionRules.cueAt(cues, seconds: seconds))
+    }
+
+    /// 字幕選單：這部影片有字幕才顯示。
+    private func captionMenu() -> CaptionMenu? {
+        captionTracks.isEmpty ? nil : CaptionMenu(tracks: captionTracks, current: currentCaption)
+    }
+
     // MARK: 子母畫面與背景播放（R132）
 
     var supportsPictureInPicture: Bool {
@@ -239,6 +320,9 @@ final class NativePlayer: NSObject, CellPlayer {
         pictureInPicture?.stopPictureInPicture()
         pictureInPicture = nil
         player.pause()
+        captionTask?.cancel()
+        captionTask = nil
+        stopCaptionTimer()
         if let timeObserver {
             player.removeTimeObserver(timeObserver)
         }
@@ -309,7 +393,8 @@ final class NativePlayer: NSObject, CellPlayer {
             }
         }
         onUpdate?(PlayerUpdate(
-            status: status, progress: currentProgress(), title: nil, errorMessage: failure, audio: audioMenu()
+            status: status, progress: currentProgress(), title: nil, errorMessage: failure, audio: audioMenu(),
+            captions: captionMenu()
         ))
     }
 
@@ -340,12 +425,86 @@ final class NativePlayer: NSObject, CellPlayer {
     }
 }
 
-/// 以 AVPlayerLayer 當作圖層的 view，大小跟著格子改變。
+/// 以 AVPlayerLayer 當作圖層的 view，大小跟著格子改變。字幕疊在影片下方（R131）。
 final class PlayerLayerView: UIView {
     override class var layerClass: AnyClass { AVPlayerLayer.self }
 
     var playerLayer: AVPlayerLayer {
         // layerClass 已經指定成 AVPlayerLayer
         layer as! AVPlayerLayer // swiftlint:disable:this force_cast
+    }
+
+    private let captionLabel: CaptionLabel = {
+        let label = CaptionLabel()
+        label.textColor = .white
+        label.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.layer.cornerRadius = 4
+        label.layer.masksToBounds = true
+        label.isHidden = true
+        label.isUserInteractionEnabled = false
+        return label
+    }()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        addSubview(captionLabel)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        addSubview(captionLabel)
+    }
+
+    /// 顯示字幕；nil 時隱藏。
+    func showCaption(_ text: String?) {
+        guard let text, !text.isEmpty else {
+            captionLabel.isHidden = true
+            return
+        }
+        let wasHidden = captionLabel.isHidden
+        captionLabel.isHidden = false
+        if wasHidden || captionLabel.text != text {
+            captionLabel.text = text
+            setNeedsLayout()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard !captionLabel.isHidden, bounds.width > 0 else { return }
+        // 字的大小跟著格子：高度的 5%，最小 10pt
+        let fontSize = max(10, bounds.height * 0.05)
+        if captionLabel.font.pointSize != fontSize {
+            captionLabel.font = .systemFont(ofSize: fontSize, weight: .medium)
+        }
+        let maxWidth = bounds.width * 0.9
+        let fitted = captionLabel.sizeThatFits(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
+        let width = min(maxWidth, fitted.width)
+        let height = min(bounds.height, fitted.height)
+        captionLabel.frame = CGRect(
+            x: (bounds.width - width) / 2,
+            y: max(0, bounds.height - bounds.height * 0.06 - height),
+            width: width,
+            height: height
+        )
+    }
+}
+
+/// 有內距的字幕文字。
+private final class CaptionLabel: UILabel {
+    private let insets = UIEdgeInsets(top: 2, left: 8, bottom: 2, right: 8)
+
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect.inset(by: insets))
+    }
+
+    override func sizeThatFits(_ size: CGSize) -> CGSize {
+        let inner = super.sizeThatFits(CGSize(
+            width: max(0, size.width - insets.left - insets.right),
+            height: size.height
+        ))
+        return CGSize(width: inner.width + insets.left + insets.right, height: inner.height + insets.top + insets.bottom)
     }
 }

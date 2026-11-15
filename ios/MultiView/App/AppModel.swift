@@ -38,6 +38,8 @@ final class AppModel {
     private(set) var errors: [Int: String] = [:]
     /// 每個來源的聲音軌選單（R135）；兩條以上的聲音軌才有。
     private(set) var audioMenus: [Int: AudioMenu] = [:]
+    /// 每個來源的字幕選單（R131）；yt-dlp 播放、有字幕時才有。
+    private(set) var captionMenus: [Int: CaptionMenu] = [:]
     /// 正在顯示操作列的格位（R127）。
     private(set) var activeCell: Int?
     /// 單格全螢幕時放大的格位（R20、R129）；不保存。
@@ -354,6 +356,8 @@ final class AppModel {
             source.muted = old.muted
             source.volume = old.volume
             source.brightness = old.brightness
+            // 字幕的選擇也沿用，新的影片依 R31 的規則找同一種語言（和桌面版相同）
+            source.captions = old.captions
             releasePlayer(old.id)
         } else {
             // 已經有顯示中的來源有聲音時，新來源靜音（R7 AC1）
@@ -490,6 +494,7 @@ final class AppModel {
         next.brightness = old.brightness
         next.adblock = !old.adblock
         next.audioLang = old.audioLang
+        next.captions = old.captions
         next.backURL = old.backURL
         if let mode = webModes[old.id] {
             pendingWebModes[next.id] = mode
@@ -521,6 +526,7 @@ final class AppModel {
         progress[id] = nil
         errors[id] = nil
         audioMenus[id] = nil
+        captionMenus[id] = nil
         titles[id] = nil
         everPlayed.remove(id)
         webModes[id] = nil
@@ -541,6 +547,9 @@ final class AppModel {
         }
         if audioMenus[id] != update.audio {
             audioMenus[id] = update.audio
+        }
+        if captionMenus[id] != update.captions {
+            captionMenus[id] = update.captions
         }
         if let title = update.title {
             titles[id] = title
@@ -995,6 +1004,23 @@ final class AppModel {
         slots[index] = source
         players[source.id]?.setAudioTrack(option)
         showToast("語音：\(option.label)")
+        keepControlsVisible()
+        scheduleSave()
+    }
+
+    // MARK: 字幕（R131；規則同桌面版 R31）
+
+    func captionMenu(_ source: CellSource) -> CaptionMenu? {
+        captionMenus[source.id]
+    }
+
+    /// 換字幕（track 為 nil 是關閉）：選的字幕存在來源的 captions，重開 App 或換影片時依 R31 的規則沿用。
+    func setCaption(_ index: Int, _ track: CaptionTrack?) {
+        guard slots.indices.contains(index), var source = slots[index] else { return }
+        source.captions = track?.key
+        slots[index] = source
+        players[source.id]?.setCaption(track?.key)
+        showToast("字幕：\(track?.label ?? "關閉")")
         keepControlsVisible()
         scheduleSave()
     }

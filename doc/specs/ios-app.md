@@ -228,7 +228,7 @@
   - 工具列的全部播放／暫停、全部靜音，規則和桌面版 R8 相同。
   - 操作列的播放／暫停（R26）、進度條與時間提示（R19、R50），規則和桌面版相同。
   - 讀取動畫（桌面版 R99）：原創的小生物在格子中央彈跳，下方是「解析中…」（yt-dlp 解析，立即顯示）或「載入中…」（載入、緩衝超過 0.5 秒才顯示）；大小跟著格子，格子太小時不顯示文字；網頁來源不顯示；不攔截點擊。
-  - 中央的半透明播放／暫停鈕（R30）：暫停或播完時一直顯示播放鈕；播放中只有點一下格子、操作列顯示時才顯示暫停鈕。進度條的預覽縮圖（R50）在手指按住進度條拖曳時顯示在手指上方。
+  - 中央的半透明播放／暫停鈕（R30）：暫停或播完時一直顯示播放鈕；播放中只有點一下格子、操作列顯示時才顯示暫停鈕。進度條的預覽縮圖（R50）在手指按住進度條拖曳時顯示在手指上方（0.0.30，做法見 R131）。
   - 雙擊格子的左邊 1/3 倒轉 10 秒、右邊 1/3 快轉 10 秒（觸控影片 App 的慣例，桌面版的 ←／→ 是 5 秒）。直播和沒有進度條的格子不作用。雙擊中間 1/3 等於點一下。
   - 單格全螢幕（R20）：操作列的「全螢幕」按鈕，或兩指在格子上張開。iPhone 直向時進入單格全螢幕會自動轉成橫向（關了自動旋轉也一樣），離開後轉回直向；用旋轉按鈕固定了方向時不自動轉。離開：按「離開全螢幕」或兩指捏合。其他規則和桌面版 R20 相同（其他格暫停、離開後恢復）。
 - 驗收條件：
@@ -244,16 +244,28 @@
   - AC1：把某一格的亮度拖到 50% → 只有那一格變暗，操作列不變暗。
   - AC2：總亮度 80%、某一格 50% → 那一格是 40%。
 
-### R131：畫質與字幕
+### R131：畫質、字幕、進度條的預覽縮圖
 - 描述：
   - **畫質**：原生播放器播 HLS（m3u8 網址、YouTube 與其他網站用 yt-dlp 播放）時，操作列有畫質選單（寬的操作列是電視圖示，窄的在「⋯」裡），選項是自動、1080p、720p、480p、360p，目前的選項打勾。選了之後用 iOS 的 `preferredMaximumResolution` 限制最高畫質，系統只在不超過的畫質之間自動切換；選「自動」時由系統依網路決定。畫質跟著來源保存（和桌面版 R24 相同）。
   - mp4 只有一種畫質、內嵌播放器與網頁格子 iOS 不能指定畫質，這些格子沒有畫質選單。
   - 依 R120 的結果（iPad Pro M1 的 `3×3` 不會卡頓，2026-11-14 使用者實測），格子多時不另外限制畫質。
-  - YouTube 字幕選單（桌面版 R31）之後再做。
+  - **字幕**（桌面版 R31；0.0.30，從 Android 版 0.0.16 補回，待實測）：只有 yt-dlp 播放（YouTube、其他網站）有，內嵌播放器與網頁格子沒有字幕選單。
+    - `mv_bridge.py` 的 `resolve` 回傳 `info.captions`：`[{"lang", "name", "url", "auto"}]`（人工字幕，加上自動產生的原本語言，也就是 yt-dlp 的 `語言-orig`；自動翻譯的不列；只取 WebVTT）。`MultiViewCore` 的 `CaptionRules.fromYtDlp` 轉成字幕清單，放在 `YtStream.captions`：key 是語言代碼，自動產生的前面加 `asr:`（和桌面版 R31 的設定檔格式相同）；標籤是繁體中文的語言名稱，自動產生的加「（自動產生）」；重複的只留第一個。
+    - 有字幕時操作列有「字幕」（CC 圖示，開著時用強調色；窄的操作列在「⋯」裡）。選單是「關閉」和各軌，目前的打勾。選了之後提示「字幕：<名稱>」，存進來源的 `captions` 並保存。
+    - 原生播放器自己下載字幕檔（帶 yt-dlp 給的 User-Agent、Referer）並用 `CaptionRules.parseVtt` 解析：去掉 `<…>` 標籤（YouTube 自動字幕每個字的時間）、YouTube 自動字幕捲動重複的那一行不重複顯示、略過 0.05 秒以下的過渡段。用 `addPeriodicTimeObserver` 約每 0.2 秒依播放位置（`CaptionRules.cueAt`）更新疊在影片下方的文字：白字、半透明黑底，字的大小是格子高度的 5%（最小 10pt），寬度最多是格子的 90%。讀不到字幕不影響播放。
+    - 建立播放器時依來源的 `captions` 用 `CaptionRules.find` 自動開啟：先找完全相同的，再找同一種語言的（優先人工字幕）；都沒有就關閉。更換網址時沿用原本的選擇（和桌面版相同），新的影片依同樣的規則找。外層的 `YouTubeSourcePlayer`、`WebSourcePlayer` 把選擇轉給裡面的原生播放器並記住，重新解析時沿用。
+  - **進度條的預覽縮圖**（桌面版 R50；0.0.30，從 Android 版 0.0.16 補回，待實測）：拖曳進度條時，手指上方顯示那個位置的時間（可回放的直播顯示距離最新位置多久）。
+    - YouTube（yt-dlp 或內嵌）、mp4 的一般影片，時間上方多一張 160pt 寬的縮圖：
+      - YouTube：用桌面版的 User-Agent 下載 `https://www.youtube.com/watch?v=<id>`，取出 `playerStoryboardSpecRenderer`（`MultiViewCore` 的 `StoryboardRules`，照搬 `src/lib/storyboard.ts`：選寬度不超過 320 的最大等級），下載那一頁圖片後裁切。每部影片的縮圖資訊、整頁圖片、裁切好的縮圖都快取；網路錯誤時不記住，下次再試。
+      - mp4：`AVAssetImageGenerator` 取那個位置附近（前後 1 秒內）的畫面，每 2 秒一張並快取。
+    - m3u8、其他網站只顯示時間；進度條比縮圖窄時只顯示時間。提示不超出進度條的左右範圍。
+    - 程式在 `Cell/ControlsBar.swift`（`ProgressPreview`）、`Players/PreviewThumbnails.swift`。
 - 驗收條件：
   - AC1：m3u8 直播格子選 480p → 畫面變成 480p 左右；選「自動」→ 恢復由系統決定。
   - AC2：yt-dlp 播放的 YouTube 格子有畫質選單；內嵌播放器的格子沒有。
   - AC3：選 720p 後關閉 App 再開啟 → 那一格仍然是 720p。
+  - AC4：yt-dlp 播放有字幕的 YouTube 影片（TED `iG9CE55wbtY`），選中文字幕 → 幾秒內影片下方出現中文字幕，跟著影片的時間換；關閉 App 再開啟 → 字幕仍然開著。沒有字幕的影片（`aqz-KE-bpKQ`）沒有「字幕」。
+  - AC5：拖曳 YouTube 一般影片的進度條 → 手指上方出現縮圖和時間；m3u8 只有時間；拖到最左、最右時提示不超出進度條。
 
 ### R132：背景播放、子母畫面、AirPlay
 - 描述：
@@ -567,9 +579,9 @@
 
 ## 12. 未決事項
 
-- [ ] **待辦（2026-11-15，從 Android 版 0.0.15、0.0.16 補回）**：
-  - [ ] 字幕（yt-dlp 播放）：`mv_bridge.py` 已經回傳 `captions`（Android 0.0.16 加的，iOS 不用改 Python）。照 Android 版做：操作列的「字幕」選單、App 自己下載並解析 WebVTT 疊在影片上，選的字幕存在來源的 `captions`（格式同桌面版 R31）。規則與測試對照 `android/core/.../Captions.kt`、`StoryboardCaptionsTest.kt`。（R131 原本寫「YouTube 字幕選單之後再做」。）
-  - [ ] 進度條的預覽縮圖（桌面版 R50）：拖曳進度條時顯示時間；YouTube、mp4 的一般影片有縮圖。規則照 `src/lib/storyboard.ts`（Android 版 `android/core/.../Storyboard.kt`），mp4 用 `AVAssetImageGenerator`。
+- [x] **待辦（2026-11-15，從 Android 版 0.0.15、0.0.16 補回）**：
+  - [x] （0.0.30，R131）字幕（yt-dlp 播放）：`mv_bridge.py` 已經回傳 `captions`（Android 0.0.16 加的，iOS 不用改 Python）。照 Android 版做：操作列的「字幕」選單、App 自己下載並解析 WebVTT 疊在影片上，選的字幕存在來源的 `captions`（格式同桌面版 R31）。規則與測試對照 `android/core/.../Captions.kt`、`StoryboardCaptionsTest.kt`。（R131 原本寫「YouTube 字幕選單之後再做」。）
+  - [x] （0.0.30，R131）進度條的預覽縮圖（桌面版 R50）：拖曳進度條時顯示時間；YouTube、mp4 的一般影片有縮圖。規則照 `src/lib/storyboard.ts`（Android 版 `android/core/.../Storyboard.kt`），mp4 用 `AVAssetImageGenerator`。
   - [x] （0.0.29，R135）語音（聲音軌）選單（桌面版 R95）：yt-dlp 播放的 HLS 有多條聲音軌時，操作列有「語音」，依「這一格記住的語言 → 系統語言 → 原本的聲音 → 第一條」選擇，選過的語言存在來源的 `audioLang`。目前 iOS 版由 AVPlayer 自己選，可能選到 AI 配音。規則照 `src/lib/audioTracks.ts`（Android 版是 `android/core/.../AudioTracks.kt`）；AVPlayer 用 `AVMediaSelectionGroup`。
   - （「用行動數據／低數據模式時不自動更新 yt-dlp」iOS 版已經有，R136，不用補。）
 - [x] 裝置：iPad Pro M1（128GB）、iPhone 14 Pro（256GB）（2026-11-13）。兩台都能更新到最新的 iPadOS／iOS，最低支援版本維持 17。
@@ -612,3 +624,4 @@
 | 2026-11-14 | 移除設定裡的「yt-dlp 測試」畫面（R122 技術驗證用）；Android 版的規格另見 [android-app](android-app.md) | 使用者要求；0.0.27 |
 | 2026-11-15 | R140：YouTube 小視窗第一次打開後一直留在畫面裡（關掉時移到畫面外），再打開時不重新載入，搜尋的內容與捲動位置保留；關著的時候不載入新的網頁；聊天室同一部影片只載入一次（和 Android 版 0.0.13 相同的做法） | 使用者回報每次打開小視窗都重新載入；0.0.28 |
 | 2026-11-15 | R135 補充聲音軌（R95）的做法：`AVMediaSelectionGroup` 讀取聲音軌、依記住的語言／系統語言／原本的聲音選擇、操作列的「語音」、選過的語言存在 `audioLang`；新增 AC4；第 12 節的待辦完成 | 從 Android 版 0.0.15 補回；0.0.29 |
+| 2026-11-15 | R131 補上字幕（yt-dlp 播放：`CaptionRules`、原生播放器自己下載並顯示 WebVTT、操作列的「字幕」、選的字幕存在 `captions`）與進度條的預覽縮圖（YouTube 用 `playerStoryboardSpecRenderer`、mp4 用 `AVAssetImageGenerator`）；新增 AC4、AC5；第 12 節的待辦完成 | 從 Android 版 0.0.16 補回；0.0.30 |

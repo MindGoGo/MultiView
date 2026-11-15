@@ -112,6 +112,12 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
         inner?.setAudioTrack(option)
     }
 
+    /// 記住選的字幕，重新解析時沿用（R131）。
+    func setCaption(_ key: String?) {
+        source.captions = key
+        inner?.setCaption(key)
+    }
+
     func shutdown() {
         closed = true
         resolveTask?.cancel()
@@ -147,7 +153,10 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
             return
         }
         usingYtDlp = true
-        install(NativePlayer(url: url, source: startingSource(live: stream.isLive), adaptive: stream.kind == .hls))
+        install(NativePlayer(
+            url: url, source: startingSource(live: stream.isLive), adaptive: stream.kind == .hls,
+            captions: stream.captions, captionHeaders: stream.headers
+        ))
     }
 
     /// yt-dlp 失敗：改用內嵌播放器，從原本的時間點繼續（R90）。
