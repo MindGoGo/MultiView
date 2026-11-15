@@ -505,7 +505,7 @@ struct ProgressBar: View {
 /// 提示限制在進度條的範圍內；進度條比縮圖窄時只顯示時間。
 private struct ProgressPreview: View {
     let source: CellSource
-    let kind: ProgressKind
+    let kind: MultiViewCore.ProgressKind
     let seconds: Double
     let duration: Double
     let time: String
