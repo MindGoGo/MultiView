@@ -42,6 +42,23 @@ final class NativePlayer: NSObject, CellPlayer {
     private var captionTask: Task<Void, Never>?
     private var captionObserver: Any?
 
+    // SponsorBlock（R161）：和字幕一樣用 addPeriodicTimeObserver 定時檢查播放位置；
+    // 另外在每個片段的開頭放 addBoundaryTimeObserver，背景只播聲音、子母畫面時定時檢查沒有執行的話也會跳（見 checkSponsor）
+    /// 還沒依設定過濾的片段。
+    private var sponsorRaw: [SponsorSegment] = []
+    /// 由 YouTubeSourcePlayer 設定；其他來源（mp4、m3u8、其他網站）一直是關閉。
+    private var sponsorSettings = SponsorBlockSettings(enabled: false)
+    /// 依設定過濾、合併後要跳過的片段。
+    private var sponsorSegments: [SponsorSegment] = []
+    private var skipState = SkipState()
+    private var skipNotice: SkipNotice?
+    private var noticeSerial = 0
+    private var noticeTask: Task<Void, Never>?
+    private var sponsorObserver: Any?
+    private var sponsorBoundaryObserver: Any?
+    /// 從上次的進度開始：片段來了之後，這個位置所在的片段當作使用者自己跳進去的，不跳。
+    private var sponsorResumeAt: Double?
+
     /// 能不能選畫質：HLS 才有不同畫質可以選（mp4 只有一種）。
     let supportsQuality: Bool
 
@@ -68,6 +85,7 @@ final class NativePlayer: NSObject, CellPlayer {
             item = AVPlayerItem(asset: asset)
         }
         pendingResume = source.resume
+        sponsorResumeAt = source.resume.flatMap { $0 > 0 ? $0 : nil }
         audioLang = source.audioLang
         super.init()
 
@@ -113,6 +131,8 @@ final class NativePlayer: NSObject, CellPlayer {
 
     func seek(to seconds: Double) {
         guard seconds.isFinite else { return }
+        // 使用者自己跳進片段裡：不要馬上又被跳走（R161）。自動跳過、取消不經過這裡
+        skipState = skipState.userSeeked(sponsorSegments, time: seconds)
         ended = false
         pendingResume = nil
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
@@ -246,6 +266,112 @@ final class NativePlayer: NSObject, CellPlayer {
         captionTracks.isEmpty ? nil : CaptionMenu(tracks: captionTracks, current: currentCaption)
     }
 
+    // MARK: SponsorBlock（R161）
+
+    /// 拿到這部影片的 SponsorBlock 片段（還沒過濾）。
+    func loadSponsorSegments(_ raw: [SponsorSegment]) {
+        guard player.currentItem != nil else { return }
+        sponsorRaw = raw
+        applySponsor()
+    }
+
+    func setSponsorBlock(_ settings: SponsorBlockSettings) {
+        guard player.currentItem != nil, settings != sponsorSettings else { return }
+        sponsorSettings = settings
+        applySponsor()
+    }
+
+    private func applySponsor() {
+        let segments = SponsorBlockRules.select(sponsorRaw, settings: sponsorSettings)
+        sponsorSegments = segments
+        if segments.isEmpty {
+            clearSkipNotice()
+        }
+        if !sponsorRaw.isEmpty, let resume = sponsorResumeAt {
+            skipState = skipState.userSeeked(segments, time: resume)
+            sponsorResumeAt = nil
+        }
+        stopSponsorTimer()
+        if !segments.isEmpty {
+            let interval = CMTime(seconds: SponsorBlockRules.checkIntervalSeconds, preferredTimescale: 600)
+            sponsorObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.checkSponsor() }
+            }
+            // 每個片段開頭稍後一點（播放經過時觸發一次）：定時檢查之外的保險
+            let times = segments.map { NSValue(time: CMTime(seconds: $0.start + 0.05, preferredTimescale: 600)) }
+            sponsorBoundaryObserver = player.addBoundaryTimeObserver(forTimes: times, queue: .main) { [weak self] in
+                Task { @MainActor [weak self] in self?.checkSponsor() }
+            }
+        }
+        report()
+    }
+
+    private func stopSponsorTimer() {
+        if let sponsorObserver {
+            player.removeTimeObserver(sponsorObserver)
+        }
+        sponsorObserver = nil
+        if let sponsorBoundaryObserver {
+            player.removeTimeObserver(sponsorBoundaryObserver)
+        }
+        sponsorBoundaryObserver = nil
+    }
+
+    /// 播放中進入還沒處理過的片段：跳到片段結尾，顯示提示。暫停時、直播不處理。
+    private func checkSponsor() {
+        guard !sponsorSegments.isEmpty, player.currentItem != nil, item.status == .readyToPlay,
+              player.timeControlStatus != .paused, !item.duration.isIndefinite
+        else { return }
+        let duration = item.duration.isNumeric ? item.duration.seconds : .nan
+        guard let action = SponsorBlockRules.check(
+            sponsorSegments, state: skipState, time: player.currentTime().seconds, duration: duration
+        ) else { return }
+        skipState = skipState.markHandled(action.segment)
+        player.seek(
+            to: CMTime(seconds: action.target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.report() }
+        }
+        noticeSerial += 1
+        showSkipNotice(SkipNotice(segment: action.segment, serial: noticeSerial))
+    }
+
+    private func showSkipNotice(_ notice: SkipNotice) {
+        skipNotice = notice
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(SponsorBlockRules.noticeSeconds))
+            guard !Task.isCancelled, let self, self.skipNotice?.serial == notice.serial else { return }
+            self.clearSkipNotice()
+            self.report()
+        }
+        report()
+    }
+
+    private func clearSkipNotice() {
+        noticeTask?.cancel()
+        noticeTask = nil
+        skipNotice = nil
+    }
+
+    func undoSkip() {
+        guard let notice = skipNotice else { return }
+        clearSkipNotice()
+        guard player.currentItem != nil else { return }
+        // 片段已經標成處理過，跳回開頭後不會再跳。跳到影片結尾而播完了的話，回到開頭後繼續播放
+        let wasEnded = ended
+        ended = false
+        player.seek(
+            to: CMTime(seconds: notice.segment.start, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.report() }
+        }
+        if wasEnded {
+            player.play()
+        }
+        report()
+    }
+
     // MARK: 子母畫面與背景播放（R132）
 
     var supportsPictureInPicture: Bool {
@@ -323,6 +449,11 @@ final class NativePlayer: NSObject, CellPlayer {
         captionTask?.cancel()
         captionTask = nil
         stopCaptionTimer()
+        // SponsorBlock（R161）：定時檢查、片段開頭的觀察器、提示的計時
+        stopSponsorTimer()
+        clearSkipNotice()
+        sponsorSegments = []
+        sponsorRaw = []
         if let timeObserver {
             player.removeTimeObserver(timeObserver)
         }
@@ -394,7 +525,7 @@ final class NativePlayer: NSObject, CellPlayer {
         }
         onUpdate?(PlayerUpdate(
             status: status, progress: currentProgress(), title: nil, errorMessage: failure, audio: audioMenu(),
-            captions: captionMenu()
+            captions: captionMenu(), sponsorSegments: sponsorSegments, skipNotice: skipNotice
         ))
     }
 

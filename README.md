@@ -78,7 +78,7 @@ npm run dist       # 打包成安裝檔，輸出到 release/
 | [EasyList](https://easylist.to/)（`resources/easylist.txt`） | GPLv3 或 CC BY-SA 3.0 |
 | [@ghostery/adblocker](https://github.com/ghostery/adblocker) | MPL-2.0 |
 | [hls.js](https://github.com/video-dev/hls.js) | Apache-2.0 |
-| [SponsorBlock](https://sponsor.ajay.app/) 的片段資料（Android 版跳過業配時從 API 讀取，不內附） | CC BY-NC-SA 4.0 |
+| [SponsorBlock](https://sponsor.ajay.app/) 的片段資料（Android 版、iOS 版跳過業配時從 API 讀取，不內附） | CC BY-NC-SA 4.0 |
 | [Electron](https://www.electronjs.org/)、[React](https://react.dev/) | MIT |
 
 ## 授權

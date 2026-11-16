@@ -96,6 +96,18 @@ struct CellView: View {
                     .allowsHitTesting(false)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            // 右上角：SponsorBlock 自動跳過的提示，附「取消」（R161）。工具列顯示時避開工具列
+            if let notice = model.skipNotice(source) {
+                SkipNoticeView(notice: notice) {
+                    model.undoSkip(index)
+                }
+                .padding(6)
+                .padding(.top, insets.top + (touchesTop && model.toolbarVisible ? Self.toolbarHeight : 0))
+                .padding(.trailing, insets.trailing)
+                .transition(.opacity)
+            }
+        }
         .overlay(alignment: .bottom) {
             if active {
                 ControlsBar(index: index, source: source, supportsVolume: player.supportsVolume, insets: insets)
@@ -108,6 +120,7 @@ struct CellView: View {
         }
         .animation(.easeOut(duration: 0.15), value: active)
         .animation(.easeOut(duration: 0.15), value: skipHint)
+        .animation(.easeOut(duration: 0.15), value: model.skipNotice(source)?.serial)
         .clipped()
     }
 

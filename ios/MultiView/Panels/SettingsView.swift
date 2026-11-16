@@ -2,7 +2,7 @@ import MultiViewCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 設定畫面（桌面版 R96；iOS 版 R143）：播放方式、yt-dlp 版本與更新、匯入桌面版資料、清除網站資料、版本號。
+/// 設定畫面（桌面版 R96；iOS 版 R143）：播放方式、SponsorBlock（R161）、yt-dlp 版本與更新、匯入桌面版資料、清除網站資料、版本號。
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -27,6 +27,8 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+
+                sponsorBlockSection
 
                 Section("其他網站的播放方式") {
                     Picker("其他網站", selection: Binding(get: { model.webMethod }, set: { model.setWebMethod($0) })) {
@@ -154,6 +156,54 @@ struct SettingsView: View {
         case .ready(let loaded, let total, let rules, let version):
             let count = rules > 0 ? "，約 \(rules) 條" : ""
             return "\(loaded)／\(total) 份可以用\(count)（EasyList \(version)）"
+        }
+    }
+
+    /// SponsorBlock（R161）：開關（預設開啟）與要跳過的類別（預設只有業配），改了馬上套用到每一格。
+    private var sponsorBlockSection: some View {
+        let settings = model.sponsorBlock
+        return Section("SponsorBlock（跳過業配）") {
+            Toggle("自動跳過片段", isOn: Binding(
+                get: { model.sponsorBlock.enabled },
+                set: { value in
+                    var next = model.sponsorBlock
+                    next.enabled = value
+                    model.setSponsorBlock(next)
+                }
+            ))
+            if settings.enabled {
+                ForEach(SponsorCategory.allCases, id: \.self) { category in
+                    let checked = settings.categories.contains(category)
+                    Button {
+                        var next = model.sponsorBlock
+                        if checked {
+                            next.categories.remove(category)
+                        } else {
+                            next.categories.insert(category)
+                        }
+                        model.setSponsorBlock(next)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: checked ? "checkmark.square.fill" : "square")
+                                .foregroundStyle(checked ? Color.accentColor : Color.secondary)
+                            Rectangle()
+                                .fill(category.swiftUIColor)
+                                .frame(width: 12, height: 4)
+                            Text(category.label)
+                                .foregroundStyle(Color.primary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(checked ? .isSelected : [])
+                }
+            }
+            Text("用 yt-dlp 播放 YouTube 一般影片時，自動跳過其他觀眾標記的片段，進度條上用色塊標出位置。內嵌播放器、網頁、直播不處理。每部影片只向 SponsorBlock 要一次資料（只有幾 KB，行動數據也照常使用），只送影片 ID 雜湊的前 4 碼。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Text("片段資料來自 SponsorBlock（sponsor.ajay.app），授權 CC BY-NC-SA 4.0。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 

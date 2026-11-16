@@ -21,6 +21,8 @@ final class AppModel {
     private(set) var youtubeMethods: YouTubeMethods
     /// 其他網站的播放方式（R102、R135）：網頁，或先用 yt-dlp。
     private(set) var webMethod: WebMethod
+    /// SponsorBlock（R161）：yt-dlp 播放的 YouTube 一般影片自動跳過業配等片段。
+    private(set) var sponsorBlock: SponsorBlockSettings
     /// 網頁格子目前的顯示方式（R13、R14），以來源的 id 為索引；不保存，重新開啟時從影片模式開始。
     private(set) var webModes: [Int: WebMode] = [:]
     /// 最愛、歷史、訂閱頻道（R141、R142）；存在清單檔，和設定檔分開。
@@ -40,6 +42,9 @@ final class AppModel {
     private(set) var audioMenus: [Int: AudioMenu] = [:]
     /// 每個來源的字幕選單（R131）；yt-dlp 播放、有字幕時才有。
     private(set) var captionMenus: [Int: CaptionMenu] = [:]
+    /// 每個來源的 SponsorBlock 片段（進度條的色塊）與跳過提示（R161）。
+    private(set) var sponsorSegments: [Int: [SponsorSegment]] = [:]
+    private(set) var skipNotices: [Int: SkipNotice] = [:]
     /// 正在顯示操作列的格位（R127）。
     private(set) var activeCell: Int?
     /// 單格全螢幕時放大的格位（R20、R129）；不保存。
@@ -139,6 +144,7 @@ final class AppModel {
         masterBrightness = settings.brightness
         youtubeMethods = AppModel.initialMethods(settings.youtubeMethods)
         webMethod = settings.webMethod
+        sponsorBlock = settings.sponsorBlock
         listTab = settings.listTab
         // 還原的來源載入後維持暫停（R10 AC1）
         slots = SettingsBridge.restoreSlots(settings.slots)
@@ -406,7 +412,7 @@ final class AppModel {
     private func makePlayer(_ source: CellSource) -> CellPlayer {
         switch source.parsed {
         case .youtube(let videoID):
-            let player = YouTubeSourcePlayer(videoID: videoID, source: source, methods: youtubeMethods)
+            let player = YouTubeSourcePlayer(videoID: videoID, source: source, methods: youtubeMethods, sponsorBlock: sponsorBlock)
             player.onFallback = { [weak self] reason in
                 self?.showToast("yt-dlp 無法播放，已改用內嵌播放器")
                 self?.updateYtDlpAfterFailure(reason)
@@ -527,6 +533,8 @@ final class AppModel {
         errors[id] = nil
         audioMenus[id] = nil
         captionMenus[id] = nil
+        sponsorSegments[id] = nil
+        skipNotices[id] = nil
         titles[id] = nil
         everPlayed.remove(id)
         webModes[id] = nil
@@ -550,6 +558,13 @@ final class AppModel {
         }
         if captionMenus[id] != update.captions {
             captionMenus[id] = update.captions
+        }
+        let segments = update.sponsorSegments.isEmpty ? nil : update.sponsorSegments
+        if sponsorSegments[id] != segments {
+            sponsorSegments[id] = segments
+        }
+        if skipNotices[id] != update.skipNotice {
+            skipNotices[id] = update.skipNotice
         }
         if let title = update.title {
             titles[id] = title
@@ -789,6 +804,7 @@ final class AppModel {
         masterBrightness = settings.brightness
         youtubeMethods = settings.youtubeMethods
         webMethod = settings.webMethod
+        sponsorBlock = settings.sponsorBlock
         listTab = settings.listTab
         slots = SettingsBridge.restoreSlots(settings.slots)
         var base = settings
@@ -999,6 +1015,32 @@ final class AppModel {
         players[source.id]?.setQuality(quality)
         showToast("畫質：\(quality.label)")
         keepControlsVisible()
+        scheduleSave()
+    }
+
+    // MARK: SponsorBlock（R161）
+
+    func segments(of source: CellSource) -> [SponsorSegment] {
+        sponsorSegments[source.id] ?? []
+    }
+
+    func skipNotice(_ source: CellSource) -> SkipNotice? {
+        skipNotices[source.id]
+    }
+
+    /// 跳過提示的「取消」：跳回片段開頭，這個片段之後不再跳。
+    func undoSkip(_ index: Int) {
+        guard slots.indices.contains(index), let source = slots[index] else { return }
+        players[source.id]?.undoSkip()
+    }
+
+    /// 改變 SponsorBlock 的設定：每一格馬上套用，不用重新載入。
+    func setSponsorBlock(_ settings: SponsorBlockSettings) {
+        guard settings != sponsorBlock else { return }
+        sponsorBlock = settings
+        for player in players.values {
+            player.setSponsorBlock(settings)
+        }
         scheduleSave()
     }
 
@@ -1368,6 +1410,7 @@ final class AppModel {
         settings.brightness = masterBrightness
         settings.youtubeMethods = youtubeMethods
         settings.webMethod = webMethod
+        settings.sponsorBlock = sponsorBlock
         settings.listTab = listTab
         settings.slots = SettingsBridge.saveSlots(slots, positions: positions)
         baseSettings = settings

@@ -100,6 +100,8 @@ public struct Settings: Equatable, Sendable {
     public var youtubeMethods: YouTubeMethods
     public var webMethod: WebMethod
     public var listTab: ListTab
+    /// SponsorBlock（R161）：預設開啟，只跳過業配。
+    public var sponsorBlock: SponsorBlockSettings
 
     public init(
         layout: LayoutID = .default,
@@ -109,7 +111,8 @@ public struct Settings: Equatable, Sendable {
         autoYoutubeWeb: Bool = false,
         youtubeMethods: YouTubeMethods = YouTubeMethods(),
         webMethod: WebMethod = .web,
-        listTab: ListTab = ListTab()
+        listTab: ListTab = ListTab(),
+        sponsorBlock: SponsorBlockSettings = SponsorBlockSettings()
     ) {
         self.layout = layout
         self.ratios = ratios
@@ -119,6 +122,7 @@ public struct Settings: Equatable, Sendable {
         self.youtubeMethods = youtubeMethods
         self.webMethod = webMethod
         self.listTab = listTab
+        self.sponsorBlock = sponsorBlock
     }
 
     /// 這個版型目前的比例。
@@ -156,7 +160,8 @@ public enum SettingsCodec {
             autoYoutubeWeb: JSON.bool(object["autoYoutubeWeb"]) == true,
             youtubeMethods: normalizeMethods(object["youtubeMethods"]),
             webMethod: JSON.string(object["webMethod"]) == "ytdlp" ? .ytdlp : .web,
-            listTab: normalizeListTab(object["listTab"])
+            listTab: normalizeListTab(object["listTab"]),
+            sponsorBlock: SponsorBlockRules.normalizeSettings(object["sponsorBlock"])
         )
     }
 
@@ -179,7 +184,8 @@ public enum SettingsCodec {
             "autoYoutubeWeb": settings.autoYoutubeWeb,
             "youtubeMethods": ["live": settings.youtubeMethods.live.rawValue, "vod": settings.youtubeMethods.vod.rawValue],
             "webMethod": settings.webMethod.rawValue,
-            "listTab": ["group": settings.listTab.group.rawValue, "tab": settings.listTab.tab.rawValue]
+            "listTab": ["group": settings.listTab.group.rawValue, "tab": settings.listTab.tab.rawValue],
+            "sponsorBlock": SponsorBlockRules.encodeSettings(settings.sponsorBlock)
         ]
         return JSON.encode(object)
     }

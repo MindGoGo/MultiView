@@ -36,10 +36,17 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
     /// 最近一次回報的狀態是不是播放中（重新解析後維持原本的播放或暫停）。
     private var wasPlaying = false
 
+    /// SponsorBlock（R161）：設定、這部影片的片段（還沒過濾；nil 是還沒抓到）、背景的請求。
+    private var sponsorBlock: SponsorBlockSettings
+    private var sponsorRaw: [SponsorSegment]?
+    private var sponsorTask: Task<Void, Never>?
+    /// yt-dlp 解析出來是直播：不抓片段。
+    private var isLive = false
+
     /// 播放中斷時最多重新解析幾次（R90）。
     private static let maxRetries = 3
 
-    init(videoID: String, source: CellSource, methods: YouTubeMethods) {
+    init(videoID: String, source: CellSource, methods: YouTubeMethods, sponsorBlock: SponsorBlockSettings = SponsorBlockSettings()) {
         let container = UIView()
         container.backgroundColor = .black
         container.clipsToBounds = true
@@ -47,12 +54,42 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
         self.videoID = videoID
         self.source = source
         self.methods = methods
+        self.sponsorBlock = sponsorBlock
         super.init()
 
         if methods.needsResolve {
             startResolving()
         } else {
             useEmbed()
+        }
+        // 影片 ID 一開始就知道：和 yt-dlp 解析同時在背景抓片段
+        fetchSponsorSegments()
+    }
+
+    // MARK: SponsorBlock（R161）：只有 yt-dlp 播放的一般影片（內嵌播放器沒有這些）
+
+    func undoSkip() {
+        inner?.undoSkip()
+    }
+
+    func setSponsorBlock(_ settings: SponsorBlockSettings) {
+        sponsorBlock = settings
+        inner?.setSponsorBlock(settings)
+        fetchSponsorSegments()
+    }
+
+    /// 在背景抓 SponsorBlock 的片段：開啟、一般影片用 yt-dlp 播放、不是直播、還沒抓過時才抓。
+    /// 抓不到（失敗、逾時）當作沒有片段，不影響播放。
+    private func fetchSponsorSegments() {
+        guard !closed, sponsorBlock.active, methods.vod == .ytdlp, !isLive else { return }
+        guard sponsorRaw == nil, sponsorTask == nil else { return }
+        let id = videoID
+        sponsorTask = Task { [weak self] in
+            let raw = await SponsorBlockClient.segments(videoID: id)
+            guard !Task.isCancelled, let self, !self.closed else { return }
+            self.sponsorTask = nil
+            self.sponsorRaw = raw
+            (self.inner as? NativePlayer)?.loadSponsorSegments(raw)
         }
     }
 
@@ -122,6 +159,8 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
         PreviewThumbnails.setStoryboard(nil, for: source.id)
         closed = true
         resolveTask?.cancel()
+        sponsorTask?.cancel()
+        sponsorTask = nil
         inner?.shutdown()
         inner = nil
         onUpdate = nil
@@ -155,10 +194,23 @@ final class YouTubeSourcePlayer: NSObject, CellPlayer {
         }
         usingYtDlp = true
         PreviewThumbnails.setStoryboard(stream.storyboard, for: source.id)
-        install(NativePlayer(
+        let native = NativePlayer(
             url: url, source: startingSource(live: stream.isLive), adaptive: stream.kind == .hls,
             captions: stream.captions, captionHeaders: stream.headers
-        ))
+        )
+        install(native)
+        // SponsorBlock（R161）：直播不處理
+        isLive = stream.isLive
+        if isLive {
+            sponsorTask?.cancel()
+            sponsorTask = nil
+        } else {
+            native.setSponsorBlock(sponsorBlock)
+            if let sponsorRaw {
+                native.loadSponsorSegments(sponsorRaw)
+            }
+            fetchSponsorSegments()
+        }
     }
 
     /// yt-dlp 失敗：改用內嵌播放器，從原本的時間點繼續（R90）。

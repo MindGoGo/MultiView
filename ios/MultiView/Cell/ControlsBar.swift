@@ -19,7 +19,10 @@ struct ControlsBar: View {
     var body: some View {
         VStack(spacing: 4) {
             if let progress = model.progress[source.id], ProgressRules.view(progress).kind != .live {
-                ProgressBar(progress: progress, source: source, onDragging: { model.holdControls($0) }) { fraction in
+                ProgressBar(
+                    progress: progress, source: source, segments: model.segments(of: source),
+                    onDragging: { model.holdControls($0) }
+                ) { fraction in
                     model.seek(index, fraction: fraction)
                 }
             }
@@ -429,6 +432,8 @@ struct SliderPopup: View {
 struct ProgressBar: View {
     let progress: PlaybackProgress
     let source: CellSource
+    /// SponsorBlock 的片段（R161）：一般影片的進度條上畫出色塊。
+    var segments: [SponsorSegment] = []
     /// 開始拖曳（true）、放開（false）：拖曳中操作列不自動收起（iOS 0.0.31 實測會收起，Android 沒有這個問題）。
     let onDragging: (Bool) -> Void
     let onSeek: (Double) -> Void
@@ -449,6 +454,17 @@ struct ProgressBar: View {
                     Capsule().fill(.white.opacity(0.25))
                     Capsule().fill(Color.accentColor)
                         .frame(width: CGFloat(max(0, min(1, fraction))) * geometry.size.width)
+                    // SponsorBlock 片段的色塊（R161），畫在已播放的部分上面；最窄 2pt
+                    if display.kind == .vod {
+                        let marks = SponsorBlockRules.marks(segments, duration: progress.end - progress.start)
+                        ForEach(marks.indices, id: \.self) { index in
+                            let mark = marks[index]
+                            Rectangle()
+                                .fill(mark.category.swiftUIColor)
+                                .frame(width: max(2, CGFloat(mark.end - mark.start) * geometry.size.width))
+                                .offset(x: CGFloat(mark.start) * geometry.size.width)
+                        }
+                    }
                 }
                 .frame(height: 4)
                 .frame(maxHeight: .infinity)
@@ -458,6 +474,7 @@ struct ProgressBar: View {
                         ProgressPreview(
                             source: source,
                             kind: display.kind,
+                            segments: segments,
                             seconds: ProgressRules.seekTarget(progress, fraction: dragFraction),
                             duration: progress.end - progress.start,
                             time: leadingText(fraction: dragFraction, display: display),
@@ -512,6 +529,7 @@ struct ProgressBar: View {
 private struct ProgressPreview: View {
     let source: CellSource
     let kind: MultiViewCore.ProgressKind
+    let segments: [SponsorSegment]
     let seconds: Double
     let duration: Double
     let time: String
@@ -542,6 +560,20 @@ private struct ProgressPreview: View {
                     .frame(width: Self.imageWidth)
                     .background(Color.black)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+            // 手指在 SponsorBlock 的片段上：顯示類別，左邊是和進度條一樣顏色的色塊（R161）
+            if kind == .vod, let segment = SponsorBlockRules.segment(at: seconds, in: segments) {
+                HStack(spacing: 4) {
+                    Rectangle()
+                        .fill(segment.category.swiftUIColor)
+                        .frame(width: 10, height: 4)
+                    Text(segment.category.label)
+                        .font(.caption2)
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 4))
             }
             Text(time)
                 .font(.caption.monospacedDigit())

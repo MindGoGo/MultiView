@@ -13,6 +13,16 @@ struct PlayerUpdate {
     var audio: AudioMenu? = nil
     /// 字幕選單（R131）：yt-dlp 播放、影片有字幕時才有。
     var captions: CaptionMenu? = nil
+    /// SponsorBlock 要跳過的片段（yt-dlp 播放的 YouTube 一般影片，R161）；進度條的色塊用。沒有時是空的。
+    var sponsorSegments: [SponsorSegment] = []
+    /// 剛剛自動跳過的片段（格子角落的提示）；沒有時為 nil。
+    var skipNotice: SkipNotice? = nil
+}
+
+/// 跳過提示（R161）：serial 每次跳過都不同（同一個片段取消後再看到也重新計時）。
+struct SkipNotice: Equatable {
+    var segment: SponsorSegment
+    var serial: Int
 }
 
 /// 字幕選單：yt-dlp 讀到的字幕，與目前顯示的那一軌（CaptionTrack.key；關閉時為 nil）。
@@ -72,6 +82,11 @@ protocol CellPlayer: AnyObject {
     /// App 切到背景。keepAudio：這一格有聲音而且正在播放，繼續播聲音；否則暫停。
     func didEnterBackground(keepAudio: Bool)
     func willEnterForeground()
+
+    /// 跳過提示的「取消」：跳回片段開頭，這個片段之後不再跳（R161）。
+    func undoSkip()
+    /// SponsorBlock 的設定改了（R161）。
+    func setSponsorBlock(_ settings: SponsorBlockSettings)
 }
 
 extension CellPlayer {
@@ -86,4 +101,6 @@ extension CellPlayer {
     /// 網頁播放的格子在背景一律暫停（iOS 會暫停背景的網頁）。
     func didEnterBackground(keepAudio: Bool) { pause() }
     func willEnterForeground() {}
+    func undoSkip() {}
+    func setSponsorBlock(_ settings: SponsorBlockSettings) {}
 }

@@ -2,8 +2,8 @@
 
 - 功能代號：`ios-app`
 - Jira：無
-- 狀態：已確認；R119–R144 都已實作並在 iPhone 14 Pro、iPad Pro M1 實測；部分項目之後再做（見各需求）
-- 最後更新：2026-11-13
+- 狀態：已確認；R119–R144 都已實作並在 iPhone 14 Pro、iPad Pro M1 實測；部分項目之後再做（見各需求）。R161（SponsorBlock，和 Android 版共用編號）0.0.35 實作，待實測
+- 最後更新：2026-11-16
 - 前置規格：桌面版的所有規格（R1–R118，最後一份是 [page-mode-overlays](page-mode-overlays.md)）。本規格的需求編號從 R119 開始（R119–R144）。
 - 使用者的裝置：iPad Pro（M1，128GB）為主要裝置，iPhone 14 Pro（256GB）。
 - 參考：使用者 2026-11-13 的選擇：iPad 為主、iPhone 也能用；只給自己用、用 SideStore 安裝（沒有 Mac）；第一版包含核心多格播放、yt-dlp 播放、網頁模式與廣告阻擋、訂閱清單／最愛／歷史；程式放在同一個 repo 的 `ios/` 資料夾。
@@ -11,7 +11,7 @@
 ## 0. 給接手的工作階段
 
 - **分支：`Phone`**（2026-11-15 起，iOS 版與 Android 版一起在這個分支開發；以前的 `claude/…` 分支內容都已經合併進來）。開新的工作階段時，從 `Phone` 開始，做完後合併回 `Phone`；使用者說先不要合併到 `main`。Android 版的接手說明在 [android-app.md](android-app.md) 第 0 節。
-- 目前的進度：iOS 版 0.0.31（0.0.29 語音選單、0.0.30 字幕與預覽縮圖；0.0.31：yt-dlp 不用 `web_embedded` 用戶端、yt-dlp 的更新來源可以選正式版或最新版、預覽縮圖改用 yt-dlp 解析出來的縮圖、直向時字幕的字級修正，做法同 [android-app.md](android-app.md) R153、R156）。0.0.30 實測：直向時字幕的字太大、預覽縮圖沒有出現（2026-11-15）。0.0.31 實測：預覽縮圖仍然沒有（Android 0.0.19 有）、拖曳進度條時操作列會自動收起。0.0.32：拖曳時不收起（`holdControls`）；讀不到縮圖時在提示裡用黃字顯示原因（暫時的，找到原因後拿掉）。0.0.32 實測：沒有縮圖也沒有黃字，推測整個提示都沒顯示（提示用量到的大小決定透明度，量不到就一直透明）。0.0.33：提示不依賴量到的大小，直接貼在進度條上方顯示。0.0.33 實測：縮圖正常（2026-11-16）。0.0.34：拿掉黃字。發佈要使用者建立 `ios-v<版本號>` 標籤（R119）。
+- 目前的進度：iOS 版 0.0.31（0.0.29 語音選單、0.0.30 字幕與預覽縮圖；0.0.31：yt-dlp 不用 `web_embedded` 用戶端、yt-dlp 的更新來源可以選正式版或最新版、預覽縮圖改用 yt-dlp 解析出來的縮圖、直向時字幕的字級修正，做法同 [android-app.md](android-app.md) R153、R156）。0.0.30 實測：直向時字幕的字太大、預覽縮圖沒有出現（2026-11-15）。0.0.31 實測：預覽縮圖仍然沒有（Android 0.0.19 有）、拖曳進度條時操作列會自動收起。0.0.32：拖曳時不收起（`holdControls`）；讀不到縮圖時在提示裡用黃字顯示原因（暫時的，找到原因後拿掉）。0.0.32 實測：沒有縮圖也沒有黃字，推測整個提示都沒顯示（提示用量到的大小決定透明度，量不到就一直透明）。0.0.33：提示不依賴量到的大小，直接貼在進度條上方顯示。0.0.33 實測：縮圖正常（2026-11-16）。0.0.34：拿掉黃字。0.0.35：SponsorBlock（R161，同 Android 版 0.0.20；手動驗收在 `tests/manual/ios-app.md` 的「SponsorBlock」），**待實測**，特別是鎖定螢幕與子母畫面時會不會跳過（R161 AC6、AC7）。發佈要使用者建立 `ios-v<版本號>` 標籤（R119）。
 
 ## 1. 背景與目標
 
@@ -474,6 +474,41 @@
   - AC4：選一個隨便的文字檔 → 顯示「無法讀取這個檔案」，格子和清單都不變。
   - AC5：在確認視窗按「取消」→ 設定不變。
 
+### 第四階段：從 Android 版補上的功能
+
+### R161：SponsorBlock（跳過業配等片段，0.0.35）
+- 背景：和 Android 版的 R161 是同一個需求、同一個編號（規則、範圍、類別、預設值、驗收條件都以 [android-app.md](android-app.md) 的 R161 為準），這一節只寫 iOS 版的做法與 iOS 特有的部分。資料來自 [SponsorBlock](https://sponsor.ajay.app)，授權 CC BY-NC-SA 4.0，README 的第三方元件與設定畫面註明來源。
+- 範圍：只處理 yt-dlp 播放的 YouTube 一般影片（原生播放器）；內嵌播放器、網頁格子與整頁模式、直播、mp4／m3u8／其他網站不處理。不做的項目同 Android 版。
+- 描述：
+  - **規則**：`ios/MultiViewCore/Sources/MultiViewCore/SponsorBlock.swift`，照搬 `android/core/.../SponsorBlock.kt`（`SponsorCategory`、`SponsorSegment`、`SponsorBlockSettings`、`SkipState`、`SkipAction`、`SegmentMark`、`SponsorBlockRules`）；測試 `SponsorBlockTests.swift` 照搬 `SponsorBlockTest.kt` 的每一個案例。影片 ID 的 SHA-256 前 4 碼用 CryptoKit 的 `SHA256`。設定檔的 `sponsorBlock` 欄位在 `SettingsCodec` 讀寫，格式和 Android 版相同（`{"enabled": true, "categories": ["sponsor"]}`），沒有這個欄位時預設開啟、只跳過業配。
+  - **請求**（`Players/SponsorBlockClient.swift`）：`URLSession`（`ephemeral`，連線到讀完全部最多 5 秒，User-Agent `MultiView`），隱私版 API `GET https://sponsor.ajay.app/api/skipSegments/<前 4 碼>?categories=[全部 8 類]`。200 解析、404 是沒有片段、其他狀態碼與錯誤、逾時都當作沒有片段，不影響播放。App 執行期間在記憶體快取（同一部影片好幾格共用同一個請求）；失敗的不留在快取裡，下次建立這部影片的播放器時再試。
+  - **何時抓**（`Players/YouTubeSourcePlayer.swift`）：建立播放器時就在背景抓（開啟、一般影片的播放方式是 yt-dlp 時），和 yt-dlp 解析同時進行；解析出來是一般影片時把片段與設定交給 `NativePlayer`，是直播時取消、不處理。設定從關閉改成開啟時，還沒抓過的才去抓。
+  - **跳過**（`Players/NativePlayer.swift`）：
+    - 用 `addPeriodicTimeObserver` 每 0.25 秒依播放位置檢查（`SponsorBlockRules.check`，和字幕的 0.2 秒、狀態回報的 0.5 秒是各自的觀察器），進入還沒處理過的片段時用精準的 `seek(to:toleranceBefore: .zero, toleranceAfter: .zero)` 跳到片段結尾（結尾在影片最後 1 秒內時跳到影片長度，視為播完）。只在 `timeControlStatus` 不是暫停、而且不是直播時跳。
+    - **另外在每個片段開頭（開始 + 0.05 秒）放一個 `addBoundaryTimeObserver`**，播放經過時也做同樣的檢查：背景只播聲音、子母畫面時定時觀察器如果沒有執行，也會在片段開頭跳過。兩個觀察器呼叫同一個檢查，跳過的片段標成處理過，不會重複跳。
+    - 使用者自己跳轉（拖曳或點進度條、雙擊快轉倒轉、鍵盤快捷鍵，都經過 `seek(to:)`）時，落點所在的片段標成處理過（`SkipState.userSeeked`），不會馬上被跳走。自動跳過、取消不經過 `seek(to:)`。
+    - 從上次的觀看進度開始（R55）：片段來了之後，上次的位置所在的片段當作使用者自己跳進去的，不跳。
+    - 狀態每一格各自保存，只在記憶體；播放中斷後重新解析（R135）會建立新的原生播放器，跳過的狀態重新開始。
+    - `shutdown()` 時移除定時與片段開頭的觀察器、取消提示的計時；`YouTubeSourcePlayer.shutdown()` 取消這一格等待中的請求（共用的請求不取消，其他格子可能在等，最多 5 秒）。
+  - **跳過提示**（`Cell/SkipNoticeView.swift`，放在 `CellView` 的右上角）：「● 已跳過<類別名稱>　取消」，圓點是類別的顏色；工具列顯示而且格子在最上面一列時往下移，避開工具列。5 秒後收起（由 `NativePlayer` 計時，App 在背景時也照樣計時）。按「取消」跳回片段開頭，這個片段之後不再跳。
+  - **進度條**（`Cell/ControlsBar.swift`）：一般影片的進度條上用類別的顏色畫出片段（`SponsorBlockRules.marks`，最窄 2pt），畫在已播放的部分上面。拖曳進度條時手指在片段上的話，預覽提示多一行「<顏色> <類別名稱>」。
+  - **設定**（`Panels/SettingsView.swift` 的「SponsorBlock（跳過業配）」）：「自動跳過片段」開關（預設開啟）；開啟時列出 8 個類別的勾選（左邊是進度條的顏色，預設只勾「業配」）；說明與資料來源。改了馬上套用到每一格，不用重新載入；保存在設定檔，匯入桌面版設定時沒有這個欄位就用預設值。
+  - **iOS 特有：背景播放與子母畫面**（R132）：
+    - 回到主畫面或鎖定螢幕時只播聲音（`continueAudioOnly` 把畫面從播放器拿掉）、子母畫面繼續播放時，App 在背景（`UIBackgroundModes` 有 `audio`），AVPlayer 的觀察器排在主佇列上，照常執行，所以照樣跳過。這兩種情況都沒有辦法在開發環境驗證（沒有 iOS 裝置），以第 11 節的實測為準；如果實測發現定時觀察器在背景不執行，片段開頭的 `addBoundaryTimeObserver` 仍然會跳過（這是上面同時放兩種觀察器的原因）。
+    - 背景跳過時看不到提示；回到 App 時如果還在 5 秒內會看到提示。
+    - 鎖定畫面、控制中心的進度跟著跳過後的位置（狀態回報照常）。
+- 驗收條件（AC1–AC10 同 Android 版 R161，下面是 iOS 版的寫法與多的項目）：
+  - AC1：用 yt-dlp 播一部有業配標記的 YouTube 影片，播到業配開始時自動跳到業配結束，右上角顯示「已跳過業配　取消」，5 秒後消失。
+  - AC2：按「取消」跳回業配開頭，整段業配播完不再被跳過；倒回去重看已經跳過的業配也不再跳。
+  - AC3：拖曳進度條到業配中間，從那裡繼續播放，不會被跳走；拖到業配前面，播放進入業配時照樣跳過。
+  - AC4：進度條上業配的位置有綠色色塊；拖曳進度條經過業配時，預覽提示顯示「業配」。
+  - AC5：設定關閉 SponsorBlock 後，色塊消失、不再跳過；勾選「開場」等其他類別後，那些片段也有色塊、也會跳過；設定在重開 App 後保留。
+  - AC6：鎖定螢幕（只播聲音）時，播到業配也會跳過；解鎖後位置在業配之後。
+  - AC7：回到主畫面、在子母畫面播放時，播到業配也會跳過（子母畫面的畫面跳到業配之後）。
+  - AC8：兩格各播一部（或同一部）有業配的影片，各自跳過、各自的提示與取消互不影響。
+  - AC9：連不到 SponsorBlock 時，影片照常播放，沒有色塊、沒有錯誤訊息；內嵌播放器、網頁格子、直播沒有色塊、不跳過。
+  - AC10：`ios/MultiViewCore` 的 `SponsorBlockTests` 全部通過（在 GitHub Actions 的 `swift test`）。
+
 ## 5. 對前置規格的影響
 
 桌面版的程式與行為都不變。下表是桌面版需求在 iOS 版的處理方式；沒有列出的需求，iOS 版和桌面版相同。
@@ -522,7 +557,7 @@
   - `App/`：App 進入點、背景與前景切換、用網址開啟（R123、R126、R132、R134）
   - `Grid/`：版型、分隔線、換位（R124、R125）
   - `Cell/`：格子、操作列、手勢（R127–R131）
-  - `Players/`：原生播放器、YouTube 內嵌、網頁格子（R120、R121、R137）
+  - `Players/`：原生播放器、YouTube 內嵌、網頁格子（R120、R121、R137）；SponsorBlock 的請求與跳過（R161）
   - `YtDlp/`：Python 與 yt-dlp、JavaScriptCore 外掛、更新（R122、R135、R136）
   - `AdBlock/`：內容阻擋規則（R138）
   - `Panels/`：清單、訂閱、YouTube 小視窗、設定、匯入（R140–R144）
@@ -589,7 +624,7 @@
   - [x] （0.0.30，R131）進度條的預覽縮圖（桌面版 R50）：拖曳進度條時顯示時間；YouTube、mp4 的一般影片有縮圖。規則照 `src/lib/storyboard.ts`（Android 版 `android/core/.../Storyboard.kt`），mp4 用 `AVAssetImageGenerator`。
   - [x] （0.0.29，R135）語音（聲音軌）選單（桌面版 R95）：yt-dlp 播放的 HLS 有多條聲音軌時，操作列有「語音」，依「這一格記住的語言 → 系統語言 → 原本的聲音 → 第一條」選擇，選過的語言存在來源的 `audioLang`。目前 iOS 版由 AVPlayer 自己選，可能選到 AI 配音。規則照 `src/lib/audioTracks.ts`（Android 版是 `android/core/.../AudioTracks.kt`）；AVPlayer 用 `AVMediaSelectionGroup`。
   - （「用行動數據／低數據模式時不自動更新 yt-dlp」iOS 版已經有，R136，不用補。）
-- [ ] **待辦（2026-11-16）**：SponsorBlock（同 Android 版 R161，見 [android-app.md](android-app.md) 的 R161）：yt-dlp 播放的 YouTube 一般影片自動跳過業配等片段、跳過提示與「取消」、進度條色塊、設定（預設開啟、只跳過業配；存在設定檔的 `sponsorBlock`）。規則在 `ios/MultiViewCore` 寫 `SponsorBlock.swift`，照搬 `android/core/.../SponsorBlock.kt` 與 `SponsorBlockTest.kt` 的案例（雜湊前綴用 CryptoKit 的 `SHA256`）；請求用 `URLSession`（逾時 5 秒、記憶體快取），原生播放器用 `addPeriodicTimeObserver` 定時檢查（背景播放時也要跳過）。
+- [x] **待辦（2026-11-16）**（0.0.35 完成，改成正式需求 R161，見第 4 節）：SponsorBlock（同 Android 版 R161，見 [android-app.md](android-app.md) 的 R161）：yt-dlp 播放的 YouTube 一般影片自動跳過業配等片段、跳過提示與「取消」、進度條色塊、設定（預設開啟、只跳過業配；存在設定檔的 `sponsorBlock`）。規則在 `ios/MultiViewCore` 寫 `SponsorBlock.swift`，照搬 `android/core/.../SponsorBlock.kt` 與 `SponsorBlockTest.kt` 的案例（雜湊前綴用 CryptoKit 的 `SHA256`）；請求用 `URLSession`（逾時 5 秒、記憶體快取），原生播放器用 `addPeriodicTimeObserver` 定時檢查（背景播放時也要跳過）。
 - [x] 裝置：iPad Pro M1（128GB）、iPhone 14 Pro（256GB）（2026-11-13）。兩台都能更新到最新的 iPadOS／iOS，最低支援版本維持 17。
 - [ ] Apple ID 用免費或付費（US$99/年）：目前以免費帳號加 SideStore 規劃；改付費帳號時，簽章可以用一年，第 8 節的限制大多不再適用。
 - [ ] repo 目前是私人，使用者會改成公開（2026-11-13），改了以後 macOS 的編譯時數不收費（第 8 節）。要編譯前先通知使用者；`.github/workflows/ios.yml` 等 repo 公開後才推送。
@@ -631,3 +666,4 @@
 | 2026-11-15 | R140：YouTube 小視窗第一次打開後一直留在畫面裡（關掉時移到畫面外），再打開時不重新載入，搜尋的內容與捲動位置保留；關著的時候不載入新的網頁；聊天室同一部影片只載入一次（和 Android 版 0.0.13 相同的做法） | 使用者回報每次打開小視窗都重新載入；0.0.28 |
 | 2026-11-15 | R135 補充聲音軌（R95）的做法：`AVMediaSelectionGroup` 讀取聲音軌、依記住的語言／系統語言／原本的聲音選擇、操作列的「語音」、選過的語言存在 `audioLang`；新增 AC4；第 12 節的待辦完成 | 從 Android 版 0.0.15 補回；0.0.29 |
 | 2026-11-15 | R131 補上字幕（yt-dlp 播放：`CaptionRules`、原生播放器自己下載並顯示 WebVTT、操作列的「字幕」、選的字幕存在 `captions`）與進度條的預覽縮圖（YouTube 用 `playerStoryboardSpecRenderer`、mp4 用 `AVAssetImageGenerator`）；新增 AC4、AC5；第 12 節的待辦完成 | 從 Android 版 0.0.16 補回；0.0.30 |
+| 2026-11-16 | 新增 R161 SponsorBlock（和 Android 版共用編號）：規則與測試照搬 Android 版、`URLSession` 請求與記憶體快取、`NativePlayer` 用定時觀察器加片段開頭的 `addBoundaryTimeObserver` 跳過、跳過提示與取消、進度條色塊、設定；記錄背景只播聲音與子母畫面的做法；第 12 節的待辦完成 | 使用者要求（Android 版 0.0.20 完成後照做）；0.0.35 |
