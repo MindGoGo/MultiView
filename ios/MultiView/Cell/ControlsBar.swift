@@ -522,8 +522,6 @@ private struct ProgressPreview: View {
     static let imageWidth: CGFloat = 160
 
     @State private var image: UIImage?
-    /// 讀不到縮圖的原因（暫時顯示，找出 iOS 0.0.31 沒有縮圖的原因用）。
-    @State private var problem: String?
     @State private var size: CGSize = .zero
 
     private var canShowImage: Bool {
@@ -551,14 +549,6 @@ private struct ProgressPreview: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 4))
-            if image == nil, let problem {
-                Text(problem)
-                    .font(.caption2)
-                    .foregroundStyle(.yellow)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 4))
-            }
         }
         .fixedSize()
         // 量寬度只用來讓提示不超出進度條的左右範圍；量到之前也照常顯示
@@ -573,17 +563,9 @@ private struct ProgressPreview: View {
         .offset(x: offsetX, y: -8)
         .allowsHitTesting(false)
         .task(id: PreviewRequest(bucket: bucket, enabled: canShowImage)) {
-            guard canShowImage else {
-                problem = "不顯示縮圖：\(kind == .vod ? "" : "不是一般影片 ")\(barWidth < Self.imageWidth ? "進度條太窄 " : "")\(PreviewThumbnails.supports(source) ? "" : "這種來源沒有縮圖")"
-                return
-            }
-            let next = await PreviewThumbnails.image(for: source, seconds: seconds, duration: duration)
-            guard !Task.isCancelled else { return }
-            if let next {
+            guard canShowImage else { return }
+            if let next = await PreviewThumbnails.image(for: source, seconds: seconds, duration: duration), !Task.isCancelled {
                 image = next
-                problem = nil
-            } else if image == nil {
-                problem = PreviewThumbnails.lastProblem ?? "讀不到縮圖"
             }
         }
     }

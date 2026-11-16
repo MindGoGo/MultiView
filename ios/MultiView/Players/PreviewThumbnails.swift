@@ -55,42 +55,18 @@ enum PreviewThumbnails {
     }
 
     /// 這個位置的縮圖；沒有或讀不到時回傳 nil。duration 是影片長度（秒）。
-    /// 最近一次讀不到縮圖的原因（暫時顯示在提示裡，找出 iOS 0.0.31 沒有縮圖的原因用）。
-    private(set) static var lastProblem: String?
-
     static func image(for source: CellSource, seconds: Double, duration: Double) async -> UIImage? {
-        var problems: [String] = []
-        if let storyboard = ytdlpStoryboards[source.id] {
-            if let frame = storyboard.frame(seconds: seconds, duration: duration) {
-                if let image = await crop(frame) {
-                    lastProblem = nil
-                    return image
-                }
-                problems.append("yt-dlp 縮圖：\(lastCropProblem ?? "讀不到")")
-            } else {
-                problems.append("yt-dlp 縮圖：資料不完整")
-            }
-        } else {
-            problems.append("yt-dlp 縮圖：沒有資料")
+        if let storyboard = ytdlpStoryboards[source.id],
+           let frame = storyboard.frame(seconds: seconds, duration: duration),
+           let image = await crop(frame) {
+            return image
         }
         switch source.parsed {
         case .youtube(let videoID):
-            if let image = await youtube(videoID: videoID, seconds: seconds, duration: duration) {
-                lastProblem = nil
-                return image
-            }
-            problems.append("網頁縮圖：\(lastPageProblem ?? lastCropProblem ?? "讀不到")")
-            lastProblem = problems.joined(separator: "；")
-            return nil
+            return await youtube(videoID: videoID, seconds: seconds, duration: duration)
         case .mp4(let href):
-            if let image = await mp4(href, seconds: seconds) {
-                lastProblem = nil
-                return image
-            }
-            lastProblem = "mp4 畫面：讀不到"
-            return nil
+            return await mp4(href, seconds: seconds)
         case .hls, .web:
-            lastProblem = problems.joined(separator: "；")
             return nil
         }
     }
@@ -99,38 +75,24 @@ enum PreviewThumbnails {
 
     private static func youtube(videoID: String, seconds: Double, duration: Double) async -> UIImage? {
         guard let storyboard = await storyboard(videoID: videoID) else { return nil }
-        lastPageProblem = nil
         return await crop(StoryboardRules.frame(storyboard, seconds: seconds, duration: duration))
     }
-
-    private static var lastCropProblem: String?
-    private static var lastPageProblem: String?
 
     /// 從整頁的縮圖圖片裁出一張。
     private static func crop(_ frame: StoryboardFrame) async -> UIImage? {
         let key = "\(frame.url)#\(frame.x),\(frame.y)" as NSString
         if let cached = frames.object(forKey: key) { return cached }
-        guard let sheet = await sheet(frame.url)?.cgImage else {
-            lastCropProblem = "圖片下載失敗"
-            return nil
-        }
-        guard frame.x + frame.width <= sheet.width, frame.y + frame.height <= sheet.height,
+        guard let sheet = await sheet(frame.url)?.cgImage,
+              frame.x + frame.width <= sheet.width, frame.y + frame.height <= sheet.height,
               let cropped = sheet.cropping(to: CGRect(x: frame.x, y: frame.y, width: frame.width, height: frame.height))
-        else {
-            lastCropProblem = "圖片大小 \(sheet.width)×\(sheet.height) 不符"
-            return nil
-        }
-        lastCropProblem = nil
+        else { return nil }
         let image = UIImage(cgImage: cropped)
         frames.setObject(image, forKey: key)
         return image
     }
 
     private static func storyboard(videoID: String) async -> Storyboard? {
-        if let known = storyboards[videoID] {
-            if known == nil { lastPageProblem = "網頁裡沒有縮圖資訊" }
-            return known
-        }
+        if let known = storyboards[videoID] { return known }
         let task: Task<StoryboardResult, Never>
         if let running = storyboardTasks[videoID] {
             task = running
@@ -148,10 +110,8 @@ enum PreviewThumbnails {
         switch result {
         case .found(let storyboard):
             storyboards[videoID] = .some(storyboard)
-            if storyboard == nil { lastPageProblem = "網頁裡沒有縮圖資訊" }
             return storyboard
         case .failed:
-            lastPageProblem = "網頁下載失敗"
             return nil
         }
     }
