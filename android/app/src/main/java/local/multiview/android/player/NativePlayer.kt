@@ -254,7 +254,7 @@ class NativePlayer(
     }
 
     /** 拿到這部影片的 SponsorBlock 片段（還沒過濾）。 */
-    fun setSponsorSegments(raw: List<SponsorSegment>) {
+    fun loadSponsorSegments(raw: List<SponsorSegment>) {
         if (closed) return
         sponsorRaw = raw
         applySponsor()

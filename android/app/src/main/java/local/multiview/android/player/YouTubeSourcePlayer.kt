@@ -135,7 +135,7 @@ class YouTubeSourcePlayer(
         sponsorJob = scope.launch {
             val raw = SponsorBlockClient.segments(videoId)
             sponsorRaw = raw
-            (inner as? NativePlayer)?.setSponsorSegments(raw)
+            (inner as? NativePlayer)?.loadSponsorSegments(raw)
         }
     }
 
@@ -220,7 +220,7 @@ class YouTubeSourcePlayer(
             sponsorJob?.cancel()
         } else {
             native.setSponsorBlock(sponsorBlock)
-            sponsorRaw?.let(native::setSponsorSegments)
+            sponsorRaw?.let(native::loadSponsorSegments)
             fetchSponsorSegments()
         }
     }
