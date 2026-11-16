@@ -48,7 +48,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import local.multiview.android.AppModel
 import local.multiview.android.player.CellPlayer
+import local.multiview.android.player.SkipNotice
 import local.multiview.core.Brightness
+import local.multiview.core.SponsorBlockRules
 import local.multiview.core.CellSource
 import local.multiview.core.PlayStatus
 import local.multiview.core.ProgressRules
@@ -123,6 +125,24 @@ fun CellView(
                 skipHint = null
             }
             Pill(hint.trimEnd('​'), Modifier.align(Alignment.Center), fontSize = 16)
+        }
+
+        // 右上角：SponsorBlock 自動跳過的提示，附「取消」（R161）
+        if (player != null) player.skipNotice?.let { notice ->
+            LaunchedEffect(notice.serial) {
+                delay(SponsorBlockRules.NOTICE_MS)
+                player.dismissSkipNotice()
+            }
+            SkipNoticePill(
+                notice,
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(
+                        end = insets.calculateEndPadding(LayoutDirection.Ltr),
+                        top = insets.calculateTopPadding() + if (touchesTop && model.toolbarVisible) ToolbarHeight else 0.dp,
+                    )
+                    .padding(6.dp),
+            ) { player.undoSkip() }
         }
 
         // 左上角：工具列顯示時是喇叭按鈕（只切換這一格的聲音，用來讓多格同時出聲），旁邊是播放方式的小標示
@@ -302,6 +322,38 @@ private fun TouchLayer(model: AppModel, index: Int, onSkipHint: (String) -> Unit
                 )
             },
     )
+}
+
+/** 「已跳過業配　取消」（R161）：左邊的小色塊是類別在進度條上的顏色。 */
+@Composable
+private fun SkipNoticePill(notice: SkipNotice, modifier: Modifier, onUndo: () -> Unit) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = 0.7f))
+            .padding(start = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(Color(0xFF000000 or notice.segment.category.color), CircleShape),
+        )
+        Text(
+            SponsorBlockRules.skippedLabel(notice.segment.category),
+            color = Color.White,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(start = 6.dp),
+        )
+        Text(
+            "取消",
+            color = Accent,
+            fontSize = 12.sp,
+            modifier = Modifier
+                .clickable(onClickLabel = "取消跳過，回到片段開頭", onClick = onUndo)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        )
+    }
 }
 
 /** 中央的半透明播放／暫停鈕（R30）。 */

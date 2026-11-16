@@ -45,6 +45,10 @@ import local.multiview.core.CaptionTrack
 import local.multiview.core.CellSource
 import local.multiview.core.Cue
 import local.multiview.core.SheetStoryboard
+import local.multiview.core.SkipState
+import local.multiview.core.SponsorBlockRules
+import local.multiview.core.SponsorBlockSettings
+import local.multiview.core.SponsorSegment
 import local.multiview.core.RawAudioTrack
 import java.util.Locale
 import local.multiview.core.MediaInfo
@@ -117,6 +121,27 @@ class NativePlayer(
             if (closed || cues.isEmpty()) return
             showCue()
             handler.postDelayed(this, CAPTION_INTERVAL_MS)
+        }
+    }
+
+    // SponsorBlock（R161）：和字幕一樣定時檢查播放位置。用主執行緒的 Handler，在背景只播聲音時也會執行
+    override var sponsorSegments by mutableStateOf<List<SponsorSegment>>(emptyList())
+        private set
+    override var skipNotice by mutableStateOf<SkipNotice?>(null)
+        private set
+    /** 還沒依設定過濾的片段。 */
+    private var sponsorRaw: List<SponsorSegment> = emptyList()
+    /** 由 YouTubeSourcePlayer 設定；其他來源（mp4、m3u8、其他網站）一直是關閉。 */
+    private var sponsorSettings = SponsorBlockSettings(enabled = false)
+    private var skipState = SkipState()
+    private var noticeSerial = 0
+    /** 從上次的進度開始：片段來了之後，這個位置所在的片段當作使用者自己跳進去的，不跳。 */
+    private var resumeAt: Double? = source.resume?.takeIf { it > 0 }
+    private val sponsorTicker = object : Runnable {
+        override fun run() {
+            if (closed || sponsorSegments.isEmpty()) return
+            checkSponsor()
+            handler.postDelayed(this, SponsorBlockRules.CHECK_INTERVAL_MS)
         }
     }
 
@@ -228,6 +253,56 @@ class NativePlayer(
         }
     }
 
+    /** 拿到這部影片的 SponsorBlock 片段（還沒過濾）。 */
+    fun setSponsorSegments(raw: List<SponsorSegment>) {
+        if (closed) return
+        sponsorRaw = raw
+        applySponsor()
+    }
+
+    override fun setSponsorBlock(settings: SponsorBlockSettings) {
+        if (closed || settings == sponsorSettings) return
+        sponsorSettings = settings
+        applySponsor()
+    }
+
+    private fun applySponsor() {
+        val segments = SponsorBlockRules.select(sponsorRaw, sponsorSettings)
+        sponsorSegments = segments
+        if (segments.isEmpty()) skipNotice = null
+        if (sponsorRaw.isNotEmpty()) {
+            resumeAt?.let { skipState = skipState.userSeeked(segments, it) }
+            resumeAt = null
+        }
+        handler.removeCallbacks(sponsorTicker)
+        if (segments.isNotEmpty()) handler.post(sponsorTicker)
+    }
+
+    /** 播放中進入還沒處理過的片段：跳到片段結尾，顯示提示。直播不處理。 */
+    private fun checkSponsor() {
+        if (exo.isCurrentMediaItemLive || !exo.playWhenReady) return
+        if (exo.playbackState != Player.STATE_READY && exo.playbackState != Player.STATE_BUFFERING) return
+        val duration = exo.duration.let { if (it == C.TIME_UNSET) Double.NaN else it / 1000.0 }
+        val action = SponsorBlockRules.check(sponsorSegments, skipState, exo.currentPosition / 1000.0, duration) ?: return
+        skipState = skipState.markHandled(action.segment)
+        exo.seekTo((action.target * 1000).toLong())
+        skipNotice = SkipNotice(action.segment, ++noticeSerial)
+        report()
+    }
+
+    override fun undoSkip() {
+        val notice = skipNotice ?: return
+        skipNotice = null
+        if (closed) return
+        // 片段已經標成處理過，跳回開頭後不會再跳
+        exo.seekTo((notice.segment.start * 1000).toLong())
+        report()
+    }
+
+    override fun dismissSkipNotice() {
+        skipNotice = null
+    }
+
     private fun showCue() {
         showCaption(CaptionRules.cueAt(cues, exo.currentPosition / 1000.0))
     }
@@ -286,6 +361,8 @@ class NativePlayer(
 
     override fun seekTo(seconds: Double) {
         if (closed || !seconds.isFinite()) return
+        // 使用者自己跳進片段裡：不要馬上又被跳走（R161）
+        skipState = skipState.userSeeked(sponsorSegments, seconds)
         val duration = exo.duration
         // 直播跳到最後面：回到直播最新的位置
         if (exo.isCurrentMediaItemLive && duration != C.TIME_UNSET && seconds * 1000 >= duration - 1000) {
@@ -305,6 +382,7 @@ class NativePlayer(
         closed = true
         handler.removeCallbacks(ticker)
         handler.removeCallbacks(captionTicker)
+        handler.removeCallbacks(sponsorTicker)
         scope.cancel()
         onUpdate = null
         exo.removeListener(listener)

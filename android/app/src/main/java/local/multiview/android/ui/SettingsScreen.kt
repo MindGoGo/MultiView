@@ -5,7 +5,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,10 +15,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,11 +46,12 @@ import local.multiview.core.ListsCodec
 import local.multiview.core.PlayMethod
 import local.multiview.core.Settings
 import local.multiview.core.SettingsCodec
+import local.multiview.core.SponsorCategory
 import local.multiview.core.WebMethod
 import local.multiview.core.YtDlpChannel
 
 /**
- * 設定畫面（桌面版 R96；Android 版 R158）：播放方式、yt-dlp 版本、匯入桌面版資料、清除網站資料、版本號。
+ * 設定畫面（桌面版 R96；Android 版 R158）：播放方式、SponsorBlock（R161）、yt-dlp 版本、匯入桌面版資料、清除網站資料、版本號。
  * 對照 iOS 版的 SettingsView.swift。
  */
 @Composable
@@ -94,6 +100,39 @@ fun SettingsScreen(model: AppModel) {
                 Label("一般影片")
                 Segmented(methodOptions, model.youtubeMethods.vod) { model.changeYouTubeMethods(model.youtubeMethods.copy(vod = it)) }
                 Note("yt-dlp：沒有 YouTube 的按鈕與廣告，可以多格同時出聲。播不了時自動改用內嵌播放器。")
+
+                Section("SponsorBlock（跳過業配）")
+                val sponsor = model.sponsorBlock
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Label("自動跳過片段")
+                    Spacer(modifier = Modifier.weight(1f))
+                    Switch(checked = sponsor.enabled, onCheckedChange = { model.changeSponsorBlock(sponsor.copy(enabled = it)) })
+                }
+                if (sponsor.enabled) {
+                    Label("要跳過的片段")
+                    SponsorCategory.entries.forEach { category ->
+                        val checked = category in sponsor.categories
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                model.changeSponsorBlock(sponsor.copy(categories = toggled(sponsor.categories, category, !checked)))
+                            },
+                        ) {
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = { model.changeSponsorBlock(sponsor.copy(categories = toggled(sponsor.categories, category, it))) },
+                            )
+                            Box(modifier = Modifier.size(width = 12.dp, height = 4.dp).background(Color(0xFF000000 or category.color)))
+                            Text(category.label, color = Color.White, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+                Note(
+                    "用 yt-dlp 播放 YouTube 一般影片時，自動跳過其他觀眾標記的片段，進度條上用色塊標出位置。" +
+                        "內嵌播放器、網頁、直播不處理。每部影片只向 SponsorBlock 要一次資料（只有幾 KB，行動數據也照常使用），" +
+                        "只送影片 ID 雜湊的前 4 碼。",
+                )
+                Note("片段資料來自 SponsorBlock（sponsor.ajay.app），授權 CC BY-NC-SA 4.0。")
 
                 Section("其他網站的播放方式")
                 Segmented(webMethodOptions, model.webMethod) { model.changeWebMethod(it) }
@@ -169,7 +208,10 @@ fun SettingsScreen(model: AppModel) {
     }
 }
 
-private val methodOptions = listOf(PlayMethod.YTDLP to "yt-dlp", PlayMethod.EMBED to "內嵌播放器")
+private fun toggled(categories: Set<SponsorCategory>, category: SponsorCategory, on: Boolean): Set<SponsorCategory> =
+    if (on) categories + category else categories - category
+
+private val methodOptions =listOf(PlayMethod.YTDLP to "yt-dlp", PlayMethod.EMBED to "內嵌播放器")
 private val webMethodOptions = listOf(WebMethod.WEB to "網頁", WebMethod.YTDLP to "yt-dlp")
 
 /** 讀取使用者選的檔案（UTF-8）；讀不到、太大時回傳 null。 */

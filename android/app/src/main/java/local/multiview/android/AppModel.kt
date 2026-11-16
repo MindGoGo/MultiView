@@ -63,6 +63,7 @@ import local.multiview.core.SlotRules
 import local.multiview.core.Slots
 import local.multiview.core.SourceId
 import local.multiview.core.SourceParser
+import local.multiview.core.SponsorBlockSettings
 import local.multiview.core.TrackAxis
 import local.multiview.core.WebMethod
 import local.multiview.core.YouTubeFeed
@@ -112,6 +113,10 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
 
     /** 其他網站的播放方式（R156；桌面版 R102）：網頁（預設）或 yt-dlp。 */
     var webMethod by mutableStateOf(WebMethod.WEB)
+        private set
+
+    /** SponsorBlock（R161）：yt-dlp 播放的 YouTube 一般影片自動跳過業配等片段。 */
+    var sponsorBlock by mutableStateOf(SponsorBlockSettings())
         private set
 
     /** 最愛、歷史、訂閱頻道（R158）；存在清單檔，和設定檔分開。 */
@@ -254,6 +259,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         masterBrightness = settings.brightness
         youtubeMethods = initialMethods(settings.youtubeMethods)
         webMethod = settings.webMethod
+        sponsorBlock = settings.sponsorBlock
         listTab = settings.listTab
         // 還原的來源載入後維持暫停（R10 AC1）
         slots = SettingsBridge.restoreSlots(settings.slots)
@@ -503,7 +509,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     }
 
     private fun makePlayer(context: Context, source: CellSource): CellPlayer = when (val parsed = source.parsed) {
-        is ParsedSource.YouTube -> YouTubeSourcePlayer(context, parsed.videoId, source, youtubeMethods).also { player ->
+        is ParsedSource.YouTube -> YouTubeSourcePlayer(context, parsed.videoId, source, youtubeMethods, sponsorBlock).also { player ->
             player.onFallback = { reason ->
                 showToast("yt-dlp 無法播放，已改用內嵌播放器")
                 updateYtDlpAfterFailure(reason)
@@ -875,6 +881,14 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         scheduleSave()
     }
 
+    /** 改變 SponsorBlock 的設定（R161）：每一格馬上套用，不用重新載入。 */
+    fun changeSponsorBlock(settings: SponsorBlockSettings) {
+        if (settings == sponsorBlock) return
+        sponsorBlock = settings
+        players.values.forEach { it.setSponsorBlock(settings) }
+        scheduleSave()
+    }
+
     /** 用匯入的設定取代目前的版型、格子、聲音、亮度、播放方式。匯入後所有格子維持暫停。 */
     fun importSettings(settings: Settings) {
         exitSolo()
@@ -885,6 +899,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         masterBrightness = settings.brightness
         youtubeMethods = settings.youtubeMethods
         webMethod = settings.webMethod
+        sponsorBlock = settings.sponsorBlock
         listTab = settings.listTab
         slots = SettingsBridge.restoreSlots(settings.slots)
         baseSettings = settings.copy(slots = SettingsBridge.saveSlots(slots))
@@ -1384,6 +1399,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
             brightness = masterBrightness,
             youtubeMethods = youtubeMethods,
             webMethod = webMethod,
+            sponsorBlock = sponsorBlock,
             listTab = listTab,
             slots = SettingsBridge.saveSlots(slots, positions),
         )

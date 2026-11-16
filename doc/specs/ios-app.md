@@ -589,6 +589,7 @@
   - [x] （0.0.30，R131）進度條的預覽縮圖（桌面版 R50）：拖曳進度條時顯示時間；YouTube、mp4 的一般影片有縮圖。規則照 `src/lib/storyboard.ts`（Android 版 `android/core/.../Storyboard.kt`），mp4 用 `AVAssetImageGenerator`。
   - [x] （0.0.29，R135）語音（聲音軌）選單（桌面版 R95）：yt-dlp 播放的 HLS 有多條聲音軌時，操作列有「語音」，依「這一格記住的語言 → 系統語言 → 原本的聲音 → 第一條」選擇，選過的語言存在來源的 `audioLang`。目前 iOS 版由 AVPlayer 自己選，可能選到 AI 配音。規則照 `src/lib/audioTracks.ts`（Android 版是 `android/core/.../AudioTracks.kt`）；AVPlayer 用 `AVMediaSelectionGroup`。
   - （「用行動數據／低數據模式時不自動更新 yt-dlp」iOS 版已經有，R136，不用補。）
+- [ ] **待辦（2026-11-16）**：SponsorBlock（同 Android 版 R161，見 [android-app.md](android-app.md) 的 R161）：yt-dlp 播放的 YouTube 一般影片自動跳過業配等片段、跳過提示與「取消」、進度條色塊、設定（預設開啟、只跳過業配；存在設定檔的 `sponsorBlock`）。規則在 `ios/MultiViewCore` 寫 `SponsorBlock.swift`，照搬 `android/core/.../SponsorBlock.kt` 與 `SponsorBlockTest.kt` 的案例（雜湊前綴用 CryptoKit 的 `SHA256`）；請求用 `URLSession`（逾時 5 秒、記憶體快取），原生播放器用 `addPeriodicTimeObserver` 定時檢查（背景播放時也要跳過）。
 - [x] 裝置：iPad Pro M1（128GB）、iPhone 14 Pro（256GB）（2026-11-13）。兩台都能更新到最新的 iPadOS／iOS，最低支援版本維持 17。
 - [ ] Apple ID 用免費或付費（US$99/年）：目前以免費帳號加 SideStore 規劃；改付費帳號時，簽章可以用一年，第 8 節的限制大多不再適用。
 - [ ] repo 目前是私人，使用者會改成公開（2026-11-13），改了以後 macOS 的編譯時數不收費（第 8 節）。要編譯前先通知使用者；`.github/workflows/ios.yml` 等 repo 公開後才推送。

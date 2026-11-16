@@ -70,6 +70,8 @@ data class Settings(
     val youtubeMethods: YouTubeMethods = YouTubeMethods(),
     val webMethod: WebMethod = WebMethod.WEB,
     val listTab: ListTab = ListTab(),
+    /** SponsorBlock（R161）：預設開啟，只跳過業配。 */
+    val sponsorBlock: SponsorBlockSettings = SponsorBlockSettings(),
 ) {
     /** 這個版型目前的比例。 */
     fun ratiosFor(layout: LayoutId): Ratios = ratios[layout] ?: Ratios.defaults(layout)
@@ -108,6 +110,7 @@ object SettingsCodec {
             youtubeMethods = normalizeMethods(root["youtubeMethods"]),
             webMethod = if (string(root["webMethod"]) == "ytdlp") WebMethod.YTDLP else WebMethod.WEB,
             listTab = normalizeListTab(root["listTab"]),
+            sponsorBlock = SponsorBlockRules.normalizeSettings(root["sponsorBlock"]),
         )
     }
 
@@ -146,6 +149,7 @@ object SettingsCodec {
                             "tab" to JsonPrimitive(settings.listTab.tab.raw),
                         ),
                     ),
+                    "sponsorBlock" to SponsorBlockRules.encodeSettings(settings.sponsorBlock),
                 ),
             ),
         )

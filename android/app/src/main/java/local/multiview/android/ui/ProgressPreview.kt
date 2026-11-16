@@ -3,9 +3,12 @@ package local.multiview.android.ui
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +35,7 @@ import local.multiview.core.CellSource
 import local.multiview.core.ParsedSource
 import local.multiview.core.PlaybackProgress
 import local.multiview.core.ProgressKind
+import local.multiview.core.SponsorBlockRules
 
 /** 縮圖的寬度（桌面版 R50 是 160px）。 */
 private val PreviewWidth = 160.dp
@@ -90,6 +94,20 @@ fun ProgressPreview(
                 contentScale = ContentScale.FillWidth,
                 modifier = Modifier.width(PreviewWidth).background(Color.Black, RoundedCornerShape(4.dp)),
             )
+        }
+        // 手指在 SponsorBlock 的片段上：顯示類別，左邊是和進度條一樣顏色的色塊（R161）
+        val segment = if (kind == ProgressKind.VOD) SponsorBlockRules.segmentAt(player?.sponsorSegments.orEmpty(), seconds) else null
+        if (segment != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .offset(y = 2.dp)
+                    .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+                Box(modifier = Modifier.size(width = 10.dp, height = 4.dp).background(Color(0xFF000000 or segment.category.color)))
+                Text(segment.category.label, color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+            }
         }
         Text(
             time,

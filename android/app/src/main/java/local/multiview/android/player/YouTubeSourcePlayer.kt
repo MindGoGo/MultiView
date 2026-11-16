@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -19,6 +20,8 @@ import local.multiview.core.PlayMethod
 import local.multiview.core.PlayStatus
 import local.multiview.core.Quality
 import local.multiview.core.SourceParser
+import local.multiview.core.SponsorBlockSettings
+import local.multiview.core.SponsorSegment
 import local.multiview.core.YouTubeMethods
 import local.multiview.core.YtStream
 
@@ -31,6 +34,8 @@ class YouTubeSourcePlayer(
     private val videoId: String,
     source: CellSource,
     private val methods: YouTubeMethods,
+    /** SponsorBlock 的設定（R161）。 */
+    private var sponsorBlock: SponsorBlockSettings = SponsorBlockSettings(),
 ) : CellPlayer {
     override var onUpdate: ((PlayerUpdate) -> Unit)? = null
 
@@ -66,6 +71,31 @@ class YouTubeSourcePlayer(
     }
     override val currentAudio get() = inner?.currentAudio ?: -1
 
+    // SponsorBlock（R161）：只有 yt-dlp 播放的一般影片（內嵌播放器沒有這些，一直是空的）
+    override val sponsorSegments get() = inner?.sponsorSegments ?: emptyList()
+    override val skipNotice get() = inner?.skipNotice
+
+    override fun undoSkip() {
+        inner?.undoSkip()
+    }
+
+    override fun dismissSkipNotice() {
+        inner?.dismissSkipNotice()
+    }
+
+    override fun setSponsorBlock(settings: SponsorBlockSettings) {
+        sponsorBlock = settings
+        inner?.setSponsorBlock(settings)
+        fetchSponsorSegments()
+    }
+
+    /** 這部影片的 SponsorBlock 片段（還沒過濾）；null 是還沒抓。 */
+    private var sponsorRaw: List<SponsorSegment>? = null
+    private var sponsorJob: Job? = null
+
+    /** yt-dlp 解析出來是直播：不抓片段。 */
+    private var isLive = false
+
     override fun setAudioTrack(index: Int) {
         audioOptions.firstOrNull { it.index == index }?.let { source = source.copy(audioLang = it.lang) }
         inner?.setAudioTrack(index)
@@ -91,6 +121,22 @@ class YouTubeSourcePlayer(
 
     init {
         if (methods.needsResolve) startResolving() else useEmbed()
+        // 影片 ID 一開始就知道：和 yt-dlp 解析同時在背景抓片段
+        fetchSponsorSegments()
+    }
+
+    /**
+     * 在背景抓 SponsorBlock 的片段（R161）：開啟、一般影片用 yt-dlp 播放、不是直播、還沒抓過時才抓。
+     * 抓不到（失敗、逾時）當作沒有片段，不影響播放。
+     */
+    private fun fetchSponsorSegments() {
+        if (closed || !sponsorBlock.active || methods.vod != PlayMethod.YTDLP || isLive) return
+        if (sponsorRaw != null || sponsorJob?.isActive == true) return
+        sponsorJob = scope.launch {
+            val raw = SponsorBlockClient.segments(videoId)
+            sponsorRaw = raw
+            (inner as? NativePlayer)?.setSponsorSegments(raw)
+        }
     }
 
     override fun play() {
@@ -158,17 +204,25 @@ class YouTubeSourcePlayer(
             return
         }
         usingYtDlp = true
-        install(
-            NativePlayer(
-                context,
-                stream.url,
-                startingSource(stream.isLive),
-                adaptive = stream.kind == YtStream.Kind.HLS,
-                captionTracks = stream.captions,
-                storyboard = stream.storyboard,
-                headers = stream.headers,
-            ),
+        val native = NativePlayer(
+            context,
+            stream.url,
+            startingSource(stream.isLive),
+            adaptive = stream.kind == YtStream.Kind.HLS,
+            captionTracks = stream.captions,
+            storyboard = stream.storyboard,
+            headers = stream.headers,
         )
+        install(native)
+        // SponsorBlock（R161）：直播不處理
+        isLive = stream.isLive
+        if (isLive) {
+            sponsorJob?.cancel()
+        } else {
+            native.setSponsorBlock(sponsorBlock)
+            sponsorRaw?.let(native::setSponsorSegments)
+            fetchSponsorSegments()
+        }
     }
 
     /** yt-dlp 失敗：改用內嵌播放器，從原本的時間點繼續（R90）。 */

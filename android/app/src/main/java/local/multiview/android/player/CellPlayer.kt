@@ -7,6 +7,8 @@ import local.multiview.core.SheetStoryboard
 import local.multiview.core.PlayStatus
 import local.multiview.core.PlaybackProgress
 import local.multiview.core.Quality
+import local.multiview.core.SponsorBlockSettings
+import local.multiview.core.SponsorSegment
 
 /** 播放器回報的狀態。 */
 data class PlayerUpdate(
@@ -82,4 +84,22 @@ interface CellPlayer {
 
     /** 顯示這一軌字幕（[CaptionTrack.key]），null 是關閉。 */
     fun setCaption(key: String?) {}
+
+    /** SponsorBlock 要跳過的片段（yt-dlp 播放的 YouTube 一般影片，R161）；進度條的色塊用。沒有時是空的。 */
+    val sponsorSegments: List<SponsorSegment> get() = emptyList()
+
+    /** 剛剛自動跳過的片段（格子角落的提示）；沒有時為 null。 */
+    val skipNotice: SkipNotice? get() = null
+
+    /** 跳過提示的「取消」：跳回片段開頭，這個片段之後不再跳。 */
+    fun undoSkip() {}
+
+    /** 跳過提示時間到，收起來。 */
+    fun dismissSkipNotice() {}
+
+    /** SponsorBlock 的設定改了（R161）。 */
+    fun setSponsorBlock(settings: SponsorBlockSettings) {}
 }
+
+/** 跳過提示：serial 每次跳過都不同（同一個片段取消後再看到也重新計時）。 */
+data class SkipNotice(val segment: SponsorSegment, val serial: Int)

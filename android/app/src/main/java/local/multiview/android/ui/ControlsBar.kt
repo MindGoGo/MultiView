@@ -28,7 +28,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -45,6 +47,7 @@ import local.multiview.core.CellSource
 import local.multiview.core.PlaybackProgress
 import local.multiview.core.ProgressKind
 import local.multiview.core.ProgressRules
+import local.multiview.core.SponsorBlockRules
 import local.multiview.core.Volume
 
 /** 操作列的彈出視窗：一次只開一個。 */
@@ -424,6 +427,24 @@ private fun ProgressBar(progress: PlaybackProgress, source: CellSource, player: 
                     .height(4.dp)
                     .background(Accent, RoundedCornerShape(2.dp)),
             )
+            // SponsorBlock 片段的色塊（R161），畫在已播放的部分上面
+            val marks = if (display.kind == ProgressKind.VOD) {
+                SponsorBlockRules.marks(player?.sponsorSegments.orEmpty(), progress.end - progress.start)
+            } else {
+                emptyList()
+            }
+            if (marks.isNotEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(4.dp).drawBehind {
+                        val minWidth = 2.dp.toPx()
+                        for (mark in marks) {
+                            val x = (mark.start * size.width).toFloat()
+                            val w = ((mark.end - mark.start) * size.width).toFloat().coerceAtLeast(minWidth)
+                            drawRect(Color(0xFF000000 or mark.category.color), Offset(x, 0f), Size(w, size.height))
+                        }
+                    },
+                )
+            }
             // 拖曳時在手指上方顯示那個位置的縮圖與時間（桌面版 R50）
             dragFraction?.let { ProgressPreview(source, player, progress, display.kind, seconds, leading, it, barWidth) }
         }
