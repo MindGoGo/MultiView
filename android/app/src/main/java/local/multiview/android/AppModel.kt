@@ -791,7 +791,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     }
 
     /** 搜尋分頁點影片的方式（R162）：放進格子或在這裡看。 */
-    fun setCompanionBrowse(browse: Boolean) {
+    fun changeCompanionBrowse(browse: Boolean) {
         if (companionBrowse == browse) return
         companionBrowse = browse
         appContext.getSharedPreferences("app", Context.MODE_PRIVATE).edit().putBoolean(KEY_COMPANION_BROWSE, browse).apply()

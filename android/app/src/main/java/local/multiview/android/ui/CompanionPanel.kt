@@ -147,7 +147,7 @@ fun CompanionPanel(
                             if (model.companionBrowse) "點影片：在這裡看（按一下改成放進格子）" else "點影片：放進格子（按一下改成在這裡看）",
                             highlighted = model.companionBrowse,
                             onClick = touched {
-                                model.setCompanionBrowse(!model.companionBrowse)
+                                model.changeCompanionBrowse(!model.companionBrowse)
                                 model.showToast(if (model.companionBrowse) "點影片：在小視窗裡看" else "點影片：放進格子")
                             },
                         )
