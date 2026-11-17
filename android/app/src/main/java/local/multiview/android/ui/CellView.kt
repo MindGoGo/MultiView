@@ -52,6 +52,7 @@ import local.multiview.android.player.SkipNotice
 import local.multiview.core.Brightness
 import local.multiview.core.SponsorBlockRules
 import local.multiview.core.CellSource
+import local.multiview.core.LayoutId
 import local.multiview.core.PlayStatus
 import local.multiview.core.ProgressRules
 
@@ -173,8 +174,8 @@ fun CellView(
                 // 放在喇叭按鈕右邊，不要蓋住喇叭（iOS 0.0.16 的問題）
                 model.badgeOf(source)?.let { Pill(it, Modifier.padding(start = 4.dp), fontSize = 10) }
             }
-        } else if (source.isAudible && model.pipCell == null) {
-            // 有聲音的格子一直顯示小喇叭（R7 AC5）
+        } else if (source.isAudible && model.pipCell == null && model.solo == null && model.displayedLayout != LayoutId.ONE) {
+            // 有聲音的格子一直顯示小喇叭（R7 AC5）。畫面上只有一格（版型 `1`、單格全螢幕）時不顯示（R162）
             Icon(
                 AppIcons.VolumeUp,
                 contentDescription = "有聲音",

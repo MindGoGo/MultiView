@@ -91,6 +91,15 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         fun enterPictureInPicture(): Boolean
     }
 
+    /** YouTube 小視窗的搜尋分頁的網頁（R162）：在這裡看影片時，App 要能暫停它、讓它回上一頁。 */
+    interface CompanionBrowser {
+        /** 暫停網頁裡的影片。 */
+        fun pauseMedia()
+
+        /** 網頁回上一頁；沒有上一頁時回傳 false。 */
+        fun goBack(): Boolean
+    }
+
     var host: Host? = null
 
     // 會保存的設定
@@ -166,8 +175,21 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     var companionOpen by mutableStateOf(false)
         private set
     var companionTab by mutableStateOf(CompanionTab.SEARCH)
+        private set
     var companionCell by mutableStateOf<Int?>(null)
         private set
+
+    /**
+     * 搜尋分頁點影片的方式（R162）：false 放進格子（原本的做法）；true 在小視窗裡直接看（網頁照常換頁、播放）。
+     * 是 App 自己的偏好設定，不寫進和桌面版共用格式的設定檔。
+     */
+    var companionBrowse by mutableStateOf(
+        appContext.getSharedPreferences("app", Context.MODE_PRIVATE).getBoolean(KEY_COMPANION_BROWSE, false),
+    )
+        private set
+
+    /** 小視窗搜尋分頁的網頁，由畫面設定。 */
+    var companionBrowser: CompanionBrowser? = null
 
     /** 目前使用的 yt-dlp 版本；還不知道時為 null。 */
     var ytdlpVersion by mutableStateOf<String?>(null)
@@ -232,6 +254,12 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
 
     /** 進入單格全螢幕時因此暫停的來源；離開時恢復播放。 */
     private var soloPaused = setOf<Int>()
+
+    /** 單格全螢幕中打開小視窗時轉成了直向（R162：上面影片、下面小視窗），關掉小視窗時轉回橫向。 */
+    private var companionRotated = false
+
+    /** 小視窗的網頁開始播放影片時因此暫停的來源（R162）；關掉小視窗、或改回「放進格子」時恢復播放。 */
+    private var companionPaused = setOf<Int>()
 
     /** 切到背景、或被其他 App 的聲音打斷時因此暫停的來源；回來時恢復播放。 */
     private var backgroundPaused = setOf<Int>()
@@ -360,6 +388,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
             return
         }
         rotatedForSolo = false
+        companionRotated = false
         val landscape = host.isPortrait
         lockedLandscape = landscape
         host.lockOrientation(landscape)
@@ -370,6 +399,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     /** 解除固定，回到跟著裝置旋轉。 */
     fun unlockOrientation() {
         rotatedForSolo = false
+        companionRotated = false
         lockedLandscape = null
         host?.lockOrientation(null)
         orientationLocked = false
@@ -381,9 +411,10 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     /** 這一格占滿畫面，其他顯示中、正在播放的來源暫停。 */
     fun enterSolo(index: Int) {
         if (solo != null || slots.getOrNull(index) == null || !isVisible(index)) return
-        // 手機直向時轉成橫向（關了自動旋轉、或用旋轉按鈕固定成直向也一樣），離開時轉回原本的方向
+        // 手機直向時轉成橫向（關了自動旋轉、或用旋轉按鈕固定成直向也一樣），離開時轉回原本的方向。
+        // 小視窗開著時不轉：維持直向，上面影片、下面小視窗（R162）
         val host = host
-        if (host != null && !isLarge && host.isPortrait) {
+        if (host != null && !isLarge && host.isPortrait && !companionOpen) {
             rotatedForSolo = true
             host.lockOrientation(landscape = true)
         }
@@ -404,8 +435,9 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     fun exitSolo() {
         if (solo == null) return
         solo = null
-        if (rotatedForSolo) {
+        if (rotatedForSolo || companionRotated) {
             rotatedForSolo = false
+            companionRotated = false
             host?.lockOrientation(lockedLandscape)
         }
         soloPaused.forEach { players[it]?.play() }
@@ -573,9 +605,11 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
      * 都沒有的時候回傳 false（由系統處理：離開 App）。
      */
     fun handleBack(): Boolean {
+        // 小視窗在這裡看影片時（R162）：網頁先回上一頁
+        if (companionBrowsing && companionBrowser?.goBack() == true) return true
         if (listPanelOpen || companionOpen) {
             listPanelOpen = false
-            companionOpen = false
+            hideCompanion()
             return true
         }
         val index = activeCell ?: solo ?: visibleSlotIndices.singleOrNull { webPageOf(slots[it]?.id)?.mode == WebMode.PAGE }
@@ -710,13 +744,13 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     /** 清單面板和 YouTube 小視窗用同一個位置，一次只開一個。 */
     fun toggleListPanel() {
         listPanelOpen = !listPanelOpen
-        if (listPanelOpen) companionOpen = false
+        if (listPanelOpen) hideCompanion()
         keepControlsVisible()
     }
 
     fun toggleCompanion() {
         if (companionOpen) {
-            companionOpen = false
+            hideCompanion()
         } else {
             listPanelOpen = false
             if (companionSource() == null) {
@@ -724,12 +758,70 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
                 companionCell = slots.indices.firstOrNull { isVisible(it) && slots[it]?.parsed is ParsedSource.YouTube }
             }
             companionOpen = true
+            // 手機單格全螢幕（橫向）中打開：轉成直向，上面影片、下面小視窗（R162）；關掉小視窗時轉回橫向
+            val host = host
+            if (solo != null && !isLarge && host != null && !host.isPortrait) {
+                companionRotated = true
+                host.lockOrientation(false)
+            }
         }
         keepControlsVisible()
     }
 
     fun closeCompanion() {
+        hideCompanion()
+    }
+
+    /** 關掉小視窗：網頁裡的影片暫停，因此暫停的格子恢復播放；全螢幕中打開時轉成了直向的，轉回橫向。 */
+    private fun hideCompanion() {
+        if (!companionOpen) return
         companionOpen = false
+        stopCompanionMedia()
+        if (companionRotated) {
+            companionRotated = false
+            if (solo != null) host?.lockOrientation(true)
+        }
+    }
+
+    fun selectCompanionTab(tab: CompanionTab) {
+        if (companionTab == tab) return
+        // 離開搜尋分頁：在那裡看的影片暫停（看不到的網頁不出聲）
+        if (companionTab == CompanionTab.SEARCH) stopCompanionMedia()
+        companionTab = tab
+    }
+
+    /** 搜尋分頁點影片的方式（R162）：放進格子或在這裡看。 */
+    fun setCompanionBrowse(browse: Boolean) {
+        if (companionBrowse == browse) return
+        companionBrowse = browse
+        appContext.getSharedPreferences("app", Context.MODE_PRIVATE).edit().putBoolean(KEY_COMPANION_BROWSE, browse).apply()
+        if (!browse) stopCompanionMedia()
+    }
+
+    /** 小視窗開著、在搜尋分頁、而且是「在這裡看」。 */
+    val companionBrowsing: Boolean get() = companionOpen && companionBrowse && companionTab == CompanionTab.SEARCH
+
+    /** 小視窗的網頁開始播放有聲音的影片（R162）：正在播放的格子暫停，一次只聽一個。 */
+    fun companionMediaStarted() {
+        val playing = playingSourceIds()
+        if (playing.isEmpty()) return
+        companionPaused = companionPaused + playing
+        playing.forEach { players[it]?.pause() }
+    }
+
+    /** 小視窗的網頁裡的影片暫停；因為它而暫停的格子恢復播放。 */
+    private fun stopCompanionMedia() {
+        companionBrowser?.pauseMedia()
+        val paused = companionPaused
+        companionPaused = emptySet()
+        if (!inBackground) paused.forEach { players[it]?.play() }
+    }
+
+    /** 在這裡看的影片放進格子（R162 的「放進格子」按鈕）：網頁裡的影片先暫停。 */
+    fun companionPushCurrent(href: String) {
+        companionBrowser?.pauseMedia()
+        companionPaused = emptySet()
+        companionOpenVideo(href, replaceLinkedCell = false)
     }
 
     /** 連結的格子裡的 YouTube 來源；格子被移除或換成別種來源時為 null。 */
@@ -1103,6 +1195,11 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
             audioFocus.abandon()
             return
         }
+        // 小視窗的網頁開始播放（R162；WebView 自己要了焦點）：不算被打斷，記下暫停的格子，關掉小視窗時恢復
+        if (!transient && companionBrowsing) {
+            companionMediaStarted()
+            return
+        }
         // 先記下來再暫停：暫停時狀態會改變，不能因此把焦點放掉（要等焦點還回來）
         interruptionPaused = if (transient) playingSourceIds() else emptySet()
         pauseAll()
@@ -1171,7 +1268,14 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     fun togglePlay(index: Int) {
         val source = slots.getOrNull(index) ?: return
         val player = players[source.id] ?: return
-        if (statusOf(source).showsPause) player.pause() else player.play()
+        if (statusOf(source).showsPause) {
+            player.pause()
+        } else {
+            // 小視窗的網頁在播放時（R162）：那邊暫停，這一格播放
+            companionBrowser?.pauseMedia()
+            companionPaused = emptySet()
+            player.play()
+        }
         keepControlsVisible()
     }
 
@@ -1420,6 +1524,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         /** 變更後多久寫入設定檔（R155）。 */
         private const val SAVE_DELAY_MS = 300L
         private const val KEY_METHODS_DEFAULT = "youtubeMethodsDefaultApplied"
+        private const val KEY_COMPANION_BROWSE = "companionBrowse"
 
         /** 畫質選單的選項（R153）。 */
         val qualityOptions: List<Quality> =

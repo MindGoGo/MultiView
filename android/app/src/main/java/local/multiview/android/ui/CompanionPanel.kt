@@ -14,6 +14,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,15 +23,20 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -43,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import kotlinx.coroutines.delay
 import local.multiview.android.AppModel
 import local.multiview.core.CompanionRules
 import local.multiview.core.CompanionTab
@@ -53,6 +60,7 @@ import org.json.JSONObject
 /**
  * YouTube 小視窗（桌面版 R78–R83；Android 版 R158）：搜尋、推薦影片、留言、聊天室。對照 iOS 版的 CompanionPanel.swift。
  * 內容跟著最後點過的 YouTube 格子。面板裡的網頁不播放影片，不會搶走格子的聲音。
+ * 例外是搜尋分頁選了「在這裡看」（R162）：點影片時網頁照常換頁、播放，開始播放時格子暫停，關掉小視窗時恢復。
  */
 @Composable
 fun CompanionPanel(
@@ -72,6 +80,40 @@ fun CompanionPanel(
     var chatVideo by remember { mutableStateOf<String?>(null) }
     if (open && tab == CompanionTab.CHAT && videoId != null && chatVideo != videoId) chatVideo = videoId
 
+    // 搜尋分頁的網頁：上一頁、放進格子、暫停影片要用到（R162）
+    val context = LocalContext.current
+    val search = remember {
+        CompanionWebHolder(context, CompanionPage.SEARCH, onMediaStarted = { model.companionMediaStarted() }) { href ->
+            model.companionOpenVideo(href, replaceLinkedCell = false)
+        }
+    }
+    DisposableEffect(search) {
+        val browser = object : AppModel.CompanionBrowser {
+            override fun pauseMedia() = search.pauseMedia()
+            override fun goBack() = search.goBack()
+        }
+        model.companionBrowser = browser
+        onDispose { if (model.companionBrowser === browser) model.companionBrowser = null }
+    }
+
+    // 在這裡看（R162）：上方的標題、分頁像格子的工具列一樣，過幾秒自動隱藏，點上方的小把手再叫出來
+    val browsing = model.companionBrowse && tab == CompanionTab.SEARCH
+    var headerShown by remember { mutableStateOf(true) }
+    var headerTouches by remember { mutableIntStateOf(0) }
+    if (!browsing && !headerShown) headerShown = true
+    LaunchedEffect(browsing, headerShown, headerTouches, open) {
+        if (browsing && headerShown && open) {
+            delay(HEADER_TIMEOUT_MS)
+            headerShown = false
+        }
+    }
+    // 按了上方的按鈕：重新計算自動隱藏的時間
+    fun touched(action: () -> Unit): () -> Unit = {
+        headerTouches++
+        action()
+    }
+    val currentVideo = search.currentUrl.takeIf { SourceParser.parse(it) is ParsedSource.YouTube }
+
     Column(
         modifier = modifier
             .fillMaxHeight()
@@ -80,39 +122,74 @@ fun CompanionPanel(
             .pointerInput(Unit) { detectTapGestures { } }
             .padding(insets),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    CompanionRules.header(model.companionCell, model.companionTitle),
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                BarButton(AppIcons.Close, "關閉 YouTube 小視窗") { model.closeCompanion() }
+        if (headerShown) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (browsing && search.canGoBack) {
+                        BarButton(AppIcons.ArrowBack, "上一頁", onClick = touched { search.goBack() })
+                    }
+                    Text(
+                        if (browsing) "在小視窗裡看" else CompanionRules.header(model.companionCell, model.companionTitle),
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // 在這裡看的是一部影片：放進格子
+                    if (browsing && currentVideo != null) {
+                        BarButton(AppIcons.SendToGrid, "放進格子", onClick = touched { model.companionPushCurrent(currentVideo) })
+                    }
+                    // 搜尋分頁點影片的方式：圖示是目前的方式，按一下切換（R162）
+                    if (tab == CompanionTab.SEARCH) {
+                        BarButton(
+                            if (model.companionBrowse) AppIcons.WatchHere else AppIcons.SendToGrid,
+                            if (model.companionBrowse) "點影片：在這裡看（按一下改成放進格子）" else "點影片：放進格子（按一下改成在這裡看）",
+                            highlighted = model.companionBrowse,
+                            onClick = touched {
+                                model.setCompanionBrowse(!model.companionBrowse)
+                                model.showToast(if (model.companionBrowse) "點影片：在小視窗裡看" else "點影片：放進格子")
+                            },
+                        )
+                    }
+                    BarButton(AppIcons.Close, "關閉 YouTube 小視窗") { model.closeCompanion() }
+                }
+                Segmented(CompanionTab.entries.map { it to it.label }, tab) {
+                    headerTouches++
+                    model.selectCompanionTab(it)
+                }
             }
-            Segmented(CompanionTab.entries.map { it to it.label }, tab) { model.companionTab = it }
+        } else {
+            // 小把手：叫出上方的標題與分頁
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClickLabel = "顯示小視窗的工具列") { headerShown = true }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(modifier = Modifier.size(width = 44.dp, height = 5.dp).background(Color.White.copy(alpha = 0.35f), CircleShape))
+            }
         }
 
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F0F0F)), contentAlignment = Alignment.Center) {
             // 網頁還沒顯示出來時看到的是這行字，不是黑色的畫面
             Text("載入中…", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
             // 每個分頁各自一個網頁，切換分頁時保留原本的內容
-            CompanionWeb(CompanionPage.SEARCH, null, null, visible = tab == CompanionTab.SEARCH, active = open) { href ->
-                model.companionOpenVideo(href, replaceLinkedCell = false)
-            }
+            CompanionWeb(search, null, null, visible = tab == CompanionTab.SEARCH, active = open, browse = model.companionBrowse)
             if (videoId != null) {
                 val watchVisible = tab == CompanionTab.RELATED || tab == CompanionTab.COMMENTS
+                val watch = rememberCompanionWeb(CompanionPage.WATCH) { href -> model.companionOpenVideo(href, replaceLinkedCell = true) }
                 CompanionWeb(
-                    CompanionPage.WATCH,
+                    watch,
                     videoId,
                     if (tab == CompanionTab.COMMENTS) "comments" else "related",
                     visible = watchVisible,
                     active = open,
-                ) { href -> model.companionOpenVideo(href, replaceLinkedCell = true) }
+                )
                 if (chatVideo == videoId) {
-                    CompanionWeb(CompanionPage.CHAT, videoId, null, visible = tab == CompanionTab.CHAT, active = open) { }
+                    val chat = rememberCompanionWeb(CompanionPage.CHAT) { }
+                    CompanionWeb(chat, videoId, null, visible = tab == CompanionTab.CHAT, active = open)
                 }
             } else if (tab != CompanionTab.SEARCH) {
                 Text(
@@ -131,22 +208,31 @@ private enum class CompanionPage { SEARCH, WATCH, CHAT }
 
 private const val BRIDGE = "MultiViewCompanion"
 
+/** 在這裡看（R162）時，上方的標題與分頁自動隱藏的時間（和格子的工具列相同）。 */
+private const val HEADER_TIMEOUT_MS = 3000L
+
+/** 建立小視窗裡的一個網頁（推薦／留言、聊天室）。 */
+@Composable
+private fun rememberCompanionWeb(page: CompanionPage, onVideo: (String) -> Unit): CompanionWebHolder {
+    val context = LocalContext.current
+    val currentOnVideo = rememberUpdatedState(onVideo)
+    return remember(page) { CompanionWebHolder(context, page) { currentOnVideo.value(it) } }
+}
+
 /** 小視窗裡的一個網頁。 */
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun CompanionWeb(
-    page: CompanionPage,
+    holder: CompanionWebHolder,
     videoId: String?,
     section: String?,
     visible: Boolean,
     /** 面板開著：關著的時候不載入新的網頁（連結的影片換了，等打開面板才載入）。 */
     active: Boolean,
-    onVideo: (String) -> Unit,
+    /** 搜尋分頁點影片時在這裡看（R162），不交給 App。 */
+    browse: Boolean = false,
 ) {
-    val context = LocalContext.current
-    val currentOnVideo = rememberUpdatedState(onVideo)
-    val holder = remember(page) { CompanionWebHolder(context, page) { currentOnVideo.value(it) } }
     DisposableEffect(holder) { onDispose { holder.destroy() } }
+    val page = holder.page
 
     val address = when (page) {
         CompanionPage.SEARCH -> CompanionRules.MOBILE_HOME
@@ -159,6 +245,7 @@ private fun CompanionWeb(
         update = {
             // 看不到的分頁藏起來（網頁留著，不重新排版）
             holder.visible = visible
+            holder.browse = browse
             if (active) holder.show(address, section)
         },
     )
@@ -166,7 +253,13 @@ private fun CompanionWeb(
 
 /** 小視窗的網頁與它的狀態。 */
 @SuppressLint("SetJavaScriptEnabled")
-private class CompanionWebHolder(context: Context, page: CompanionPage, private val onVideo: (String) -> Unit) {
+private class CompanionWebHolder(
+    context: Context,
+    val page: CompanionPage,
+    /** 在這裡看（R162）：網頁開始播放有聲音的影片。 */
+    private val onMediaStarted: () -> Unit = {},
+    private val onVideo: (String) -> Unit,
+) {
     private val main = Handler(Looper.getMainLooper())
     private var loaded = ""
     private var section: String? = null
@@ -174,6 +267,20 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
 
     /** 網頁已經開始顯示內容。還沒顯示時把網頁藏起來，看到的是後面的「載入中…」，不是黑色的畫面。 */
     private var painted = false
+
+    /** 網頁目前的網址（包括網頁自己換頁，例如 YouTube 手機版不重新載入的換頁）與能不能回上一頁（R162）。 */
+    var currentUrl by mutableStateOf("")
+        private set
+    var canGoBack by mutableStateOf(false)
+        private set
+
+    /** 點影片時在這裡看，不交給 App（R162）。 */
+    var browse = false
+        set(value) {
+            if (field == value) return
+            field = value
+            applyBrowse()
+        }
 
     /** 這個分頁是不是目前的分頁。 */
     var visible = true
@@ -220,6 +327,11 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
                 return scheme != "http" && scheme != "https"
             }
 
+            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                currentUrl = url.orEmpty()
+                canGoBack = view?.canGoBack() ?: false
+            }
+
             override fun onPageCommitVisible(view: WebView?, url: String?) {
                 painted = true
                 updateVisibility()
@@ -261,6 +373,19 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
         }
     }
 
+    /** 暫停網頁裡的影片（R162）。 */
+    fun pauseMedia() {
+        if (destroyed) return
+        webView.evaluateJavascript("document.querySelectorAll('video').forEach(function (v) { v.pause(); }); void 0", null)
+    }
+
+    /** 回上一頁；沒有上一頁時回傳 false。 */
+    fun goBack(): Boolean {
+        if (destroyed || !webView.canGoBack()) return false
+        webView.goBack()
+        return true
+    }
+
     fun destroy() {
         if (destroyed) return
         destroyed = true
@@ -268,6 +393,11 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
         webView.removeJavascriptInterface(BRIDGE)
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
+    }
+
+    private fun applyBrowse() {
+        if (destroyed) return
+        webView.evaluateJavascript("window.__multiViewBrowse = $browse; void 0", null)
     }
 
     private fun applySection() {
@@ -288,7 +418,12 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
         }
         when (body.optString("type")) {
             // 網頁（重新）載入：告訴它現在要顯示哪一區
-            "ready" -> applySection()
+            "ready" -> {
+                applySection()
+                applyBrowse()
+            }
+            // 在這裡看的影片開始播放（R162）
+            "playing" -> if (browse) onMediaStarted()
             "video" -> {
                 val href = body.optString("href")
                 when {
@@ -311,8 +446,9 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
           window.__multiViewInstalled = true;
           function post(message) { try { $BRIDGE.post(JSON.stringify(message)); } catch (e) {} }
 
-          // 影片連結：不讓網頁換頁，交給 App 處理
+          // 影片連結：不讓網頁換頁，交給 App 處理。在這裡看（R162，只有 Android 版）時照常換頁
           document.addEventListener('click', function (event) {
+            if (window.__multiViewBrowse) return;
             var link = event.target && event.target.closest ? event.target.closest('a[href]') : null;
             if (!link) return;
             var href = link.href || '';
@@ -381,6 +517,15 @@ private class CompanionWebHolder(context: Context, page: CompanionPage, private 
             video.muted = true;
             video.pause();
           }, true);
+          // 在這裡看（R162）：有聲音的影片開始播放時告訴 App（搜尋結果裡靜音的預覽不算）
+          function audible(event) {
+            var video = event.target;
+            if (!window.__multiViewBrowse || !video || video.tagName !== 'VIDEO' || video.muted || video.paused) return;
+            post({ type: 'playing' });
+          }
+          window.addEventListener('playing', audible, true);
+          // 靜音開始播放、之後才打開聲音
+          window.addEventListener('volumechange', audible, true);
           document.addEventListener('DOMContentLoaded', function () { window.__multiViewApply(); });
           post({ type: 'ready' });
         })();

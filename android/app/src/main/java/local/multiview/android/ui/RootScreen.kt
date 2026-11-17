@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
@@ -43,6 +45,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import local.multiview.android.AppModel
+import local.multiview.core.LayoutId
+import local.multiview.core.ScreenRules
 
 /** 主畫面：只有格子；工具列和提示蓋在上面（R149、R151）。對照 iOS 版的 RootView.swift。 */
 @OptIn(ExperimentalLayoutApi::class)
@@ -60,8 +64,22 @@ fun RootScreen(model: AppModel) {
             bottom = padding.calculateBottomPadding(),
         )
 
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            GridView(model, safeArea)
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            // 手機直向、畫面上只有一格（版型 `1` 或單格全螢幕）時打開小視窗：上面影片、下面小視窗（R162）。
+            // 格子區域縮成 16:9 放在上面，小視窗接在下面；同一個格子畫面，不會重新載入
+            val portraitPhone = maxHeight > maxWidth && !ScreenRules.isLarge(maxWidth.value.toDouble(), maxHeight.value.toDouble())
+            val companionStacked = model.companionOpen && portraitPhone && model.pipCell == null &&
+                (model.solo != null || model.displayedLayout == LayoutId.ONE)
+            val videoHeight = maxWidth * 9f / 16f
+            Box(
+                modifier = if (companionStacked) {
+                    Modifier.fillMaxWidth().padding(top = safeArea.top).height(videoHeight)
+                } else {
+                    Modifier.fillMaxSize()
+                },
+            ) {
+                GridView(model, if (companionStacked) safeArea.copy(top = 0.dp, bottom = 0.dp) else safeArea)
+            }
 
             AnimatedVisibility(
                 visible = model.toolbarVisible,
@@ -76,6 +94,8 @@ fun RootScreen(model: AppModel) {
             val panelTop = safeArea.top + if (model.toolbarVisible) 52.dp else 0.dp
             val panelInsets = PaddingValues(end = safeArea.right, bottom = safeArea.bottom)
             val panelModifier = Modifier.padding(top = panelTop).then(if (model.isLarge) Modifier.width(360.dp) else Modifier.fillMaxWidth())
+            // 上下排時小視窗接在影片下面，不跟著工具列移動
+            val companionModifier = if (companionStacked) Modifier.padding(top = safeArea.top + videoHeight).fillMaxWidth() else panelModifier
 
             // YouTube 小視窗：第一次打開之後就一直留著，關掉時只是移到畫面外。
             // 裡面的網頁不用每次重新建立、重新載入（0.0.12 實測：每次打開整個畫面先黑一下，搜尋的內容也不見了）
@@ -94,7 +114,7 @@ fun RootScreen(model: AppModel) {
                             }
                         },
                 ) {
-                    CompanionPanel(model, panelInsets, panelModifier, open = model.companionOpen)
+                    CompanionPanel(model, panelInsets, companionModifier, open = model.companionOpen)
                 }
             }
 
@@ -118,6 +138,11 @@ fun RootScreen(model: AppModel) {
             ) {
                 Pill(model.toast.orEmpty(), fontSize = 14)
             }
+
+            // 清單、設定開著時，工具列不自動隱藏。
+            // 小視窗上下排（沒有蓋住影片）、或在小視窗裡看影片時照常自動隱藏（R162）
+            val holdForCompanion = model.companionOpen && !model.companionBrowsing && !companionStacked
+            if (model.listPanelOpen || holdForCompanion || model.settingsOpen) HoldControls(model)
         }
 
         // 沒有空格時選擇要取代的格子（R150）
@@ -142,8 +167,6 @@ fun RootScreen(model: AppModel) {
 
         if (model.settingsOpen) SettingsScreen(model)
 
-        // 清單、設定開著時，工具列不自動隱藏
-        if (model.listPanelOpen || model.companionOpen || model.settingsOpen) HoldControls(model)
 
         KeepScreenOn(model)
     }
