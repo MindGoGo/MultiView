@@ -7,16 +7,46 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// YouTube 小視窗打開過：之後一直留在畫面裡（關掉時移到畫面外），裡面的網頁不用每次重新載入（R140）。
     @State private var companionCreated = false
+    /// 整個畫面（包括安全區域）的大小，用來判斷小視窗要不要和影片上下排（R162）。
+    @State private var screenSize: CGSize = .zero
+
+    /// iPhone（小螢幕）直向、畫面上只有一格（版型 `1` 或單格全螢幕）時打開小視窗：上面影片、下面小視窗（R162）。
+    private var companionStacked: Bool {
+        let portraitPhone = screenSize.height > screenSize.width &&
+            !ScreenRules.isLarge(width: screenSize.width, height: screenSize.height)
+        return model.companionOpen && portraitPhone && (model.solo != nil || model.displayedLayout == .one)
+    }
+
+    /// 上下排時影片的高度：占滿寬度、16:9。
+    private var stackedVideoHeight: CGFloat {
+        (screenSize.width * 9 / 16).rounded()
+    }
+
+    /// 包括安全區域的整個畫面大小。
+    private static func fullSize(_ proxy: GeometryProxy) -> CGSize {
+        let insets = proxy.safeAreaInsets
+        return CGSize(width: proxy.size.width + insets.leading + insets.trailing, height: proxy.size.height + insets.top + insets.bottom)
+    }
 
     var body: some View {
+        let stacked = companionStacked
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
 
             // 格子畫到螢幕邊緣（滿版）；操作列等會自己避開瀏海、圓角和 Home 指示條。
-            // 安全區域要在忽略安全區域之前量（忽略之後量到的都是 0）
+            // 安全區域要在忽略安全區域之前量（忽略之後量到的都是 0）。
+            // 上下排（R162）時格子區域縮成 16:9 放在上面（從安全區域上緣開始）；
+            // 一直是同一個 GridView，只改大小，格子不會重新載入
             GeometryReader { proxy in
-                GridView(safeArea: proxy.safeAreaInsets)
+                let insets = proxy.safeAreaInsets
+                GridView(safeArea: stacked ? EdgeInsets(top: 0, leading: insets.leading, bottom: 0, trailing: insets.trailing) : insets)
+                    .frame(height: stacked ? stackedVideoHeight : nil)
+                    .padding(.top, stacked ? insets.top : 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .ignoresSafeArea()
+                    .onChange(of: Self.fullSize(proxy), initial: true) { _, size in
+                        screenSize = size
+                    }
             }
 
             if model.toolbarVisible {
@@ -36,7 +66,8 @@ struct RootView: View {
                     }
                     .offset(x: model.companionOpen ? 0 : proxy.size.width + 40)
                 }
-                .padding(.top, model.toolbarVisible ? 52 : 0)
+                // 上下排時小視窗接在影片下面，不跟著工具列移動
+                .padding(.top, stacked ? stackedVideoHeight : (model.toolbarVisible ? 52 : 0))
                 .allowsHitTesting(model.companionOpen)
                 .accessibilityHidden(!model.companionOpen)
             }
@@ -90,6 +121,9 @@ struct RootView: View {
         }
         .onChange(of: model.companionOpen, initial: true) { _, open in
             if open { companionCreated = true }
+        }
+        .onChange(of: stacked, initial: true) { _, value in
+            model.companionStacked = value
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)

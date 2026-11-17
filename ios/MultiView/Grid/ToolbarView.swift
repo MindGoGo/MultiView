@@ -27,13 +27,19 @@ struct ToolbarView: View {
                 .padding(.trailing, 8)
                 .allowsHitTesting(false)
         }
-        .onChange(of: showsBrightness || model.listPanelOpen || model.companionOpen || model.settingsOpen) { _, open in
-            // 滑桿、清單、設定開著時，工具列不自動隱藏（R41 AC4、R21）
+        .onChange(of: showsBrightness || model.listPanelOpen || holdsForCompanion || model.settingsOpen) { _, open in
+            // 滑桿、清單、設定開著時，工具列不自動隱藏（R41 AC4、R21）。
+            // 小視窗上下排（沒有蓋住影片）、或在小視窗裡看影片時照常自動隱藏（R162）
             model.holdControls(open)
         }
         .onDisappear {
             model.holdControls(false)
         }
+    }
+
+    /// 小視窗開著、蓋住影片，而且不是在小視窗裡看影片：工具列不自動隱藏。
+    private var holdsForCompanion: Bool {
+        model.companionOpen && !model.companionBrowsing && !model.companionStacked
     }
 
     private var row: some View {

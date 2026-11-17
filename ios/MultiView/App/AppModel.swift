@@ -63,13 +63,20 @@ final class AppModel {
     /// 清單面板、設定畫面是不是開著。清單面板和 YouTube 小視窗用同一個位置，一次只開一個（R140）。
     var listPanelOpen = false {
         didSet {
-            if listPanelOpen { companionOpen = false }
+            if listPanelOpen { hideCompanion() }
         }
     }
     /// YouTube 小視窗（R140）：是不是開著、目前的分頁、連結的格子（最後點過的 YouTube 格子）。
     private(set) var companionOpen = false
-    var companionTab: CompanionTab = .search
+    private(set) var companionTab: CompanionTab = .search
     private(set) var companionCell: Int?
+    /// 搜尋分頁點影片的方式（R162）：false 放進格子（原本的做法）；true 在小視窗裡直接看（網頁照常換頁、播放）。
+    /// 是 App 自己的偏好設定（UserDefaults），不寫進和桌面版共用格式的設定檔。
+    private(set) var companionBrowse = UserDefaults.standard.bool(forKey: AppModel.companionBrowseKey)
+    /// 小視窗和影片上下排（R162：iPhone 直向、畫面上只有一格），由畫面回報。這時工具列照常自動隱藏。
+    var companionStacked = false
+    /// 小視窗搜尋分頁的網頁（R162）：在這裡看影片時，App 要能暫停它。
+    let companionBrowser = CompanionBrowser()
     var settingsOpen = false
     /// 從清單點了一筆、但沒有空格：等使用者選擇要取代哪一格（R64）。
     var pendingReplaceURL: String?
@@ -97,10 +104,17 @@ final class AppModel {
     @ObservationIgnored private var rotatedForSolo = false
     /// 畫面方向被固定了（工具列的旋轉按鈕）；圖示跟著改變。
     private(set) var orientationLocked = false
+    /// 單格全螢幕（橫向）中打開小視窗時轉成了直向（R162：上面影片、下面小視窗），關掉小視窗時轉回橫向。
+    @ObservationIgnored private var companionRotated = false
+    /// 轉成直向之前的方向固定（nil 表示跟著裝置）；關掉小視窗、離開全螢幕時回到這個狀態。
+    @ObservationIgnored private var companionRestoreLock: UIInterfaceOrientationMask?
+    /// 小視窗的網頁開始播放影片時因此暫停的來源（R162）；關掉小視窗、切到其他分頁、改回「放進格子」時恢復播放。
+    @ObservationIgnored private var companionPaused: Set<Int> = []
 
     /// 工具列的旋轉按鈕：轉成另一個方向並固定（關了自動旋轉也可以轉）；再按一次轉回來。
     func rotate() {
         rotatedForSolo = false
+        companionRotated = false
         Orientation.lock(Orientation.isPortrait ? .landscape : .portrait)
         orientationLocked = true
         keepControlsVisible()
@@ -108,6 +122,7 @@ final class AppModel {
 
     /// 解除固定，回到跟著裝置旋轉。
     func unlockOrientation() {
+        companionRotated = false
         Orientation.lock(nil)
         orientationLocked = false
         keepControlsVisible()
@@ -130,6 +145,8 @@ final class AppModel {
     private static let toastTimeout: Duration = .seconds(3)
     /// 變更後多久寫入設定檔（R10 AC3：最晚 1 秒內）。
     private static let saveDelay: Duration = .milliseconds(300)
+    /// 搜尋分頁點影片的方式（R162）存在 UserDefaults 的名稱。
+    private static let companionBrowseKey = "companionBrowse"
 
     init(directory: URL? = nil) {
         let folder = directory ?? AppModel.defaultDirectory()
@@ -249,8 +266,9 @@ final class AppModel {
     /// 這一格占滿畫面，其他顯示中、正在播放的來源暫停。
     func enterSolo(_ index: Int) {
         guard solo == nil, slots.indices.contains(index), slots[index] != nil, isVisible(index) else { return }
-        // iPhone 直向時轉成橫向（關了自動旋轉也一樣），離開時轉回來
-        if UIDevice.current.userInterfaceIdiom == .phone, Orientation.locked == nil, Orientation.isPortrait {
+        // iPhone 直向時轉成橫向（關了自動旋轉也一樣），離開時轉回來。
+        // 小視窗開著時不轉：維持直向，上面影片、下面小視窗（R162）
+        if UIDevice.current.userInterfaceIdiom == .phone, Orientation.locked == nil, Orientation.isPortrait, !companionOpen {
             rotatedForSolo = true
             Orientation.lock(.landscape)
         }
@@ -271,9 +289,15 @@ final class AppModel {
         guard solo != nil else { return }
         solo = nil
         if rotatedForSolo {
+            // 進入時是直向：轉回直向，再回到跟著裝置
             rotatedForSolo = false
+            companionRotated = false
             Orientation.lock(.portrait)
             Orientation.lock(nil)
+        } else if companionRotated {
+            // 進入時是橫向、打開小視窗時轉成了直向（R162）：回到原本的方向固定（旋轉按鈕固定的方向，或跟著裝置）
+            companionRotated = false
+            Orientation.lock(companionRestoreLock)
         }
         for id in soloPaused {
             players[id]?.play()
@@ -599,12 +623,90 @@ final class AppModel {
                 companionCell = slots.indices.first { isVisible($0) && slots[$0]?.parsed.kind == .youtube }
             }
             companionOpen = true
+            // iPhone 單格全螢幕（橫向）中打開：轉成直向，上面影片、下面小視窗（R162）；關掉小視窗時轉回橫向
+            if solo != nil, UIDevice.current.userInterfaceIdiom == .phone, !Orientation.isPortrait {
+                companionRotated = true
+                companionRestoreLock = Orientation.locked
+                Orientation.lock(.portrait)
+            }
         }
         keepControlsVisible()
     }
 
     func closeCompanion() {
+        hideCompanion()
+    }
+
+    /// 關掉小視窗：網頁裡的影片暫停，因此暫停的格子恢復播放；全螢幕中打開時轉成了直向的，轉回橫向。
+    private func hideCompanion() {
+        guard companionOpen else { return }
         companionOpen = false
+        stopCompanionMedia()
+        if companionRotated {
+            companionRotated = false
+            if solo != nil {
+                Orientation.lock(.landscape)
+                // 原本跟著裝置：轉回橫向後再解除固定（和離開全螢幕時轉回直向的做法相同）
+                if companionRestoreLock == nil, !rotatedForSolo {
+                    Orientation.lock(nil)
+                }
+            }
+        }
+    }
+
+    func selectCompanionTab(_ tab: CompanionTab) {
+        guard companionTab != tab else { return }
+        // 離開搜尋分頁：在那裡看的影片暫停（看不到的網頁不出聲）
+        if companionTab == .search {
+            stopCompanionMedia()
+        }
+        companionTab = tab
+    }
+
+    /// 搜尋分頁點影片的方式（R162）：放進格子或在這裡看。
+    func setCompanionBrowse(_ browse: Bool) {
+        guard companionBrowse != browse else { return }
+        companionBrowse = browse
+        UserDefaults.standard.set(browse, forKey: AppModel.companionBrowseKey)
+        if !browse {
+            stopCompanionMedia()
+        }
+    }
+
+    /// 小視窗開著、在搜尋分頁、而且是「在這裡看」。
+    var companionBrowsing: Bool {
+        companionOpen && companionBrowse && companionTab == .search
+    }
+
+    /// 小視窗的網頁開始播放有聲音的影片（R162）：正在播放的格子暫停，一次只聽一個。
+    func companionMediaStarted() {
+        guard companionBrowsing else { return }
+        let playing = playingSourceIDs()
+        guard !playing.isEmpty else { return }
+        companionPaused.formUnion(playing)
+        for id in playing {
+            players[id]?.pause()
+        }
+    }
+
+    /// 小視窗的網頁裡的影片暫停；因為它而暫停的格子恢復播放。
+    private func stopCompanionMedia() {
+        companionBrowser.pauseMedia()
+        let paused = companionPaused
+        companionPaused = []
+        guard !paused.isEmpty, !inBackground else { return }
+        // 網頁播放過影片後，再確認一次 App 的音訊設定（多格同時出聲、不和其他 App 混音）
+        configureAudioSession()
+        for id in paused {
+            players[id]?.play()
+        }
+    }
+
+    /// 在這裡看的影片放進格子（R162 的「放進格子」按鈕）：網頁裡的影片先暫停。
+    func companionPushCurrent(_ href: String) {
+        companionBrowser.pauseMedia()
+        companionPaused = []
+        companionOpenVideo(href, replaceLinkedCell: false)
     }
 
     /// 連結的格子裡的 YouTube 來源；格子被移除或換成別種來源時為 nil。
@@ -1103,6 +1205,9 @@ final class AppModel {
         if status(of: source).showsPause {
             player.pause()
         } else {
+            // 小視窗的網頁在播放時（R162）：那邊暫停，這一格播放
+            companionBrowser.pauseMedia()
+            companionPaused = []
             player.play()
         }
         keepControlsVisible()
@@ -1231,6 +1336,11 @@ final class AppModel {
     private func handleInterruption(type: AVAudioSession.InterruptionType?, shouldResume: Bool) {
         switch type {
         case .began:
+            // 在小視窗裡看影片時（R162）：當作網頁開始播放（不算被其他 App 打斷），記下暫停的格子，關掉小視窗時恢復
+            if companionBrowsing {
+                companionMediaStarted()
+                return
+            }
             interruptionPaused = Set(statuses.filter { $0.value == .playing }.keys)
             pauseAll()
         case .ended:

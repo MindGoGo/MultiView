@@ -84,8 +84,8 @@ struct CellView: View {
                 }
                 .padding(.top, insets.top + (touchesTop ? Self.toolbarHeight : 0))
                 .padding(.leading, insets.leading)
-            } else if source.isAudible {
-                // 有聲音的格子一直顯示小喇叭（R7 AC5）
+            } else if source.isAudible, model.solo == nil, model.displayedLayout != .one {
+                // 有聲音的格子一直顯示小喇叭（R7 AC5）。畫面上只有一格（版型 `1`、單格全螢幕）時不顯示（R162）
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.caption)
                     .padding(6)
