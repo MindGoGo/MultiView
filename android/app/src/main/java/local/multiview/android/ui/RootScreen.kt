@@ -3,6 +3,7 @@ package local.multiview.android.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -74,24 +75,38 @@ fun RootScreen(model: AppModel) {
             // 手機直向、畫面上只有一格（版型 `1` 或單格全螢幕）時打開小視窗：上面影片、下面小視窗（R162）。
             // 格子區域縮成 16:9 放在上面，小視窗接在下面；同一個格子畫面，不會重新載入
             val portraitPhone = maxHeight > maxWidth && !ScreenRules.isLarge(maxWidth.value.toDouble(), maxHeight.value.toDouble())
-            val companionStacked = model.companionOpen && portraitPhone && model.pipCell == null &&
+            // 打開小視窗的話會上下排（R164：這時在影片上往上滑就打開小視窗）
+            val stackAvailable = portraitPhone && model.pipCell == null &&
                 (model.solo != null || model.displayedLayout == LayoutId.ONE)
+            val companionStacked = model.companionOpen && stackAvailable
             val videoHeight = maxWidth * 9f / 16f
-            SideEffect { model.reportCompanionStacked(companionStacked) }
+            SideEffect { model.reportStackLayout(stackAvailable, companionStacked) }
+
+            // YouTube 小視窗：第一次打開之後就一直留著，關掉時只是移到畫面外。
+            // 裡面的網頁不用每次重新建立、重新載入（0.0.12 實測：每次打開整個畫面先黑一下，搜尋的內容也不見了）
+            var companionCreated by remember { mutableStateOf(false) }
+            if (model.companionOpen) companionCreated = true
+            val shift by animateFloatAsState(if (model.companionOpen) 0f else 1f, tween(COMPANION_SLIDE_MS), label = "companion")
+            // 上下排時打開、關掉是上下滑動（R164）：往下收起，影片等小視窗離開後才放大回整個畫面。
+            // 其他情況（蓋在右側、占滿寬度）照原本左右滑動
+            var slideDown by remember { mutableStateOf(false) }
+            if (model.companionOpen) slideDown = companionStacked
+            val panelStacked = companionStacked || (slideDown && !model.companionOpen && shift < 1f)
 
             // 上下排時小視窗的上緣（像素，R163）：接在影片下面；拉到最上面時占滿畫面（蓋住影片，影片照常播放）。
-            // 按著小視窗上方的小把手上下拖曳，放開時往拖曳的方向收合或展開
+            // 按著小視窗上方的小把手上下拖曳，放開時往拖曳的方向收合或展開；接在影片下面時往下拉就關掉（R164）
             val density = LocalDensity.current
             val stackMin = with(density) { safeArea.top.toPx() }
             val stackMax = with(density) { (safeArea.top + videoHeight).toPx() }
+            val stackLimit = with(density) { maxHeight.toPx() }
             val stackRest = if (model.companionExpanded) stackMin else stackMax
             val stackTop = remember { Animatable(stackRest) }
             var stackDragStart by remember { mutableStateOf<Float?>(null) }
             var stackDragTotal by remember { mutableFloatStateOf(0f) }
             val scope = rememberCoroutineScope()
-            LaunchedEffect(stackRest, companionStacked) {
+            LaunchedEffect(stackRest, panelStacked) {
                 if (stackDragStart != null) return@LaunchedEffect
-                if (companionStacked) stackTop.animateTo(stackRest) else stackTop.snapTo(stackRest)
+                if (panelStacked) stackTop.animateTo(stackRest) else stackTop.snapTo(stackRest)
             }
             val stackDrag = PanelDrag(
                 onDrag = { dy ->
@@ -100,30 +115,37 @@ fun RootScreen(model: AppModel) {
                         stackDragTotal = 0f
                     }
                     stackDragTotal += dy
-                    val next = (start + stackDragTotal).coerceIn(stackMin, stackMax)
+                    val next = (start + stackDragTotal).coerceIn(stackMin, stackLimit)
                     scope.launch { stackTop.snapTo(next) }
                 },
                 onEnd = {
                     stackDragStart = null
                     val moved = stackDragTotal
                     val threshold = with(density) { 40.dp.toPx() }
-                    val expand = when {
-                        moved < -threshold -> true
-                        moved > threshold -> false
-                        else -> model.companionExpanded
+                    val closeThreshold = with(density) { CLOSE_DRAG.toPx() }
+                    val wasExpanded = model.companionExpanded
+                    if (!wasExpanded && moved > closeThreshold) {
+                        // 接在影片下面時往下拉：關掉，從手指放開的位置往下收起
+                        model.closeCompanion()
+                    } else {
+                        val expand = when {
+                            moved < -threshold -> true
+                            moved > threshold -> false
+                            else -> wasExpanded
+                        }
+                        model.changeCompanionExpanded(expand)
+                        scope.launch { stackTop.animateTo(if (expand) stackMin else stackMax) }
                     }
-                    model.changeCompanionExpanded(expand)
-                    scope.launch { stackTop.animateTo(if (expand) stackMin else stackMax) }
                 },
             )
             Box(
-                modifier = if (companionStacked) {
+                modifier = if (panelStacked) {
                     Modifier.fillMaxWidth().padding(top = safeArea.top).height(videoHeight)
                 } else {
                     Modifier.fillMaxSize()
                 },
             ) {
-                GridView(model, if (companionStacked) safeArea.copy(top = 0.dp, bottom = 0.dp) else safeArea)
+                GridView(model, if (panelStacked) safeArea.copy(top = 0.dp, bottom = 0.dp) else safeArea)
             }
 
             AnimatedVisibility(
@@ -140,26 +162,26 @@ fun RootScreen(model: AppModel) {
             val panelInsets = PaddingValues(end = safeArea.right, bottom = safeArea.bottom)
             val panelModifier = Modifier.padding(top = panelTop).then(if (model.isLarge) Modifier.width(360.dp) else Modifier.fillMaxWidth())
             // 上下排時小視窗接在影片下面，不跟著工具列移動
-            val companionModifier = if (companionStacked) {
+            val companionModifier = if (panelStacked) {
                 Modifier.padding(top = with(density) { stackTop.value.toDp() }).fillMaxWidth()
             } else {
                 panelModifier
             }
 
-            // YouTube 小視窗：第一次打開之後就一直留著，關掉時只是移到畫面外。
-            // 裡面的網頁不用每次重新建立、重新載入（0.0.12 實測：每次打開整個畫面先黑一下，搜尋的內容也不見了）
-            var companionCreated by remember { mutableStateOf(false) }
-            if (model.companionOpen) companionCreated = true
             if (companionCreated) {
-                val shift by animateFloatAsState(if (model.companionOpen) 0f else 1f, label = "companion")
                 Box(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        // 關掉時整個移到畫面右邊外面（不會擋住點擊）
+                        // 關掉時整個移到畫面外面（不會擋住點擊）：上下排時往下，其他時候往右
                         .layout { measurable, constraints ->
                             val placeable = measurable.measure(constraints)
                             layout(placeable.width, placeable.height) {
-                                placeable.place((placeable.width * shift).toInt() + if (shift >= 1f) 100_000 else 0, 0)
+                                val away = if (shift >= 1f) 100_000 else 0
+                                if (slideDown) {
+                                    placeable.place(0, (placeable.height * shift).toInt() + away)
+                                } else {
+                                    placeable.place((placeable.width * shift).toInt() + away, 0)
+                                }
                             }
                         },
                 ) {
@@ -168,7 +190,8 @@ fun RootScreen(model: AppModel) {
                         panelInsets,
                         companionModifier,
                         open = model.companionOpen,
-                        drag = if (companionStacked) stackDrag else null,
+                        // 收起的動畫中也維持上下排的樣子（標題列不跳動）
+                        drag = if (panelStacked) stackDrag else null,
                     )
                 }
             }
@@ -234,3 +257,9 @@ private fun KeepScreenOn(model: AppModel) {
     val playing = model.anyPlaying
     SideEffect { view.keepScreenOn = playing }
 }
+
+/** 小視窗打開、關掉的動畫時間（R164）。 */
+private const val COMPANION_SLIDE_MS = 250
+
+/** 上下排時，小視窗接在影片下面往下拉超過這個距離就關掉（R164）。 */
+private val CLOSE_DRAG = 80.dp

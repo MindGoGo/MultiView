@@ -84,6 +84,10 @@ final class AppModel {
     }
     /// 上下排時把小視窗往上拉成占滿畫面（R163）；往下拉回到上下排。關掉小視窗時重設。
     var companionExpanded = false
+    /// 打開小視窗的話會上下排（iPhone 直向、只有一格），由畫面回報。這時在影片上往上滑就打開小視窗（R164）。
+    var companionStackAvailable = false
+    /// 上下排的小視窗正在往下收起（R164）：收起的動畫中影片維持 16:9，小視窗離開後才放大回整個畫面。
+    private(set) var companionClosingStacked = false
     /// 小視窗搜尋分頁的網頁（R162）：在這裡看影片時，App 要能暫停它。
     let companionBrowser = CompanionBrowser()
     var settingsOpen = false
@@ -275,9 +279,12 @@ final class AppModel {
     /// 這一格占滿畫面，其他顯示中、正在播放的來源暫停。
     func enterSolo(_ index: Int) {
         guard solo == nil, slots.indices.contains(index), slots[index] != nil, isVisible(index) else { return }
-        // iPhone 直向時轉成橫向（關了自動旋轉也一樣），離開時轉回來。
-        // 小視窗開著時不轉：維持直向，上面影片、下面小視窗（R162）
-        if UIDevice.current.userInterfaceIdiom == .phone, Orientation.locked == nil, Orientation.isPortrait, !companionOpen {
+        // 上下排時按全螢幕：關掉小視窗，照常轉成橫向的全螢幕（R164；R162 原本是不轉，看起來像沒有作用）
+        if companionStacked {
+            hideCompanion()
+        }
+        // iPhone 直向時轉成橫向（關了自動旋轉也一樣），離開時轉回來
+        if UIDevice.current.userInterfaceIdiom == .phone, Orientation.locked == nil, Orientation.isPortrait {
             rotatedForSolo = true
             Orientation.lock(.landscape)
         }
@@ -317,6 +324,12 @@ final class AppModel {
     }
 
     func toggleSolo(_ index: Int) {
+        // 上下排時（R164）：全螢幕按鈕一律是「關掉小視窗、橫向全螢幕」。
+        // 全螢幕中打開小視窗轉成直向的，關掉小視窗就轉回橫向的全螢幕
+        if companionStacked, solo != nil {
+            hideCompanion()
+            return
+        }
         if solo == nil {
             enterSolo(index)
         } else {
@@ -646,9 +659,22 @@ final class AppModel {
         hideCompanion()
     }
 
+    /// 在影片上往上滑（R164）：會上下排而且小視窗沒開時打開小視窗。
+    func swipeUpCell() {
+        guard !companionOpen, companionStackAvailable else { return }
+        toggleCompanion()
+    }
+
     /// 關掉小視窗：網頁裡的影片暫停，因此暫停的格子恢復播放；全螢幕中打開時轉成了直向的，轉回橫向。
     private func hideCompanion() {
         guard companionOpen else { return }
+        if companionStacked {
+            companionClosingStacked = true
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(300))
+                self?.companionClosingStacked = false
+            }
+        }
         companionOpen = false
         companionExpanded = false
         stopCompanionMedia()

@@ -20,6 +20,8 @@ struct CellView: View {
     /// 兩指張開、捏合超過這個比例才進入、離開單格全螢幕（R129）。
     private static let enterSoloScale: CGFloat = 1.25
     private static let exitSoloScale: CGFloat = 0.8
+    /// 在影片上往上滑超過這個距離就打開小視窗（R164）。
+    private static let swipeUpDistance: CGFloat = 60
 
     var body: some View {
         let player = model.player(for: source)
@@ -157,6 +159,17 @@ struct CellView: View {
                                 model.endSwap()
                             } else {
                                 model.cancelSwap()
+                            }
+                        }
+                )
+                // 一指往上滑（R164）：iPhone 直向、只有一格、小視窗沒開時打開小視窗
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 30)
+                        .onEnded { value in
+                            let dx = value.translation.width
+                            let dy = value.translation.height
+                            if dy < -Self.swipeUpDistance, abs(dy) > 2 * abs(dx) {
+                                model.swipeUpCell()
                             }
                         }
                 )

@@ -74,7 +74,7 @@ fun CompanionPanel(
      * 關著的時候不載入新的網頁。
      */
     open: Boolean = true,
-    /** 上下排時（R163）：上方的小把手可以拖曳，往上拉占滿畫面、往下拉回到影片下面。 */
+    /** 上下排時（R163、R164）：上方的小把手可以拖曳，往上拉占滿畫面、往下拉回到影片下面或關掉。 */
     drag: PanelDrag? = null,
 ) {
     val videoId = model.companionVideoId
@@ -162,7 +162,10 @@ fun CompanionPanel(
                             },
                         )
                     }
-                    BarButton(AppIcons.Close, "關閉 YouTube 小視窗") { model.closeCompanion() }
+                    // 上下排時往下拉小把手就關掉，不用關閉按鈕（R164）
+                    if (drag == null) {
+                        BarButton(AppIcons.Close, "關閉 YouTube 小視窗") { model.closeCompanion() }
+                    }
                 }
                 Segmented(CompanionTab.entries.map { it to it.label }, tab) {
                     headerTouches++

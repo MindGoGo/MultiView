@@ -51,6 +51,7 @@ import local.multiview.android.player.CellPlayer
 import local.multiview.android.player.SkipNotice
 import local.multiview.core.Brightness
 import local.multiview.core.SponsorBlockRules
+import kotlin.math.abs
 import local.multiview.core.CellSource
 import local.multiview.core.LayoutId
 import local.multiview.core.PlayStatus
@@ -59,7 +60,10 @@ import local.multiview.core.ProgressRules
 /** 工具列的高度（按鈕 44dp 加上下留白）。 */
 private val ToolbarHeight = 52.dp
 
-/** 格子比這個矮時，操作列只排一列（R162）。 */
+/** 在影片上往上滑超過這個距離就打開小視窗（R164）。 */
+private val SWIPE_UP_DISTANCE = 60.dp
+
+/** 格子比這個矮時，操作列只排一列（R163）。 */
 private val COMPACT_CONTROLS_HEIGHT = 260.dp
 
 /** 兩指張開、捏合超過這個比例才進入、離開單格全螢幕（R153）。 */
@@ -267,10 +271,11 @@ private fun TouchLayer(model: AppModel, index: Int, onSkipHint: (String) -> Unit
         modifier = Modifier
             .fillMaxSize()
             .onGloballyPositioned { coordinates = it }
-            // 兩指張開、捏合：在其他手勢之前看到事件，兩指時把事件吃掉（不要變成點一下）
+            // 兩指張開、捏合：在其他手勢之前看到事件，兩指時把事件吃掉（不要變成點一下）。
+            // 一指往上滑（R164）：手機直向、只有一格、小視窗沒開時打開小視窗；放開的事件吃掉（不要變成點一下）
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     var zoom = 1f
                     var pinched = false
                     do {
@@ -279,6 +284,14 @@ private fun TouchLayer(model: AppModel, index: Int, onSkipHint: (String) -> Unit
                             pinched = true
                             zoom *= event.calculateZoom()
                             event.changes.forEach { it.consume() }
+                        }
+                        if (!pinched && event.changes.none { it.pressed }) {
+                            val up = event.changes.firstOrNull { it.id == down.id }
+                            if (up != null) {
+                                val dx = up.position.x - down.position.x
+                                val dy = up.position.y - down.position.y
+                                if (dy < -SWIPE_UP_DISTANCE.toPx() && abs(dy) > 2 * abs(dx) && model.swipeUpCell()) up.consume()
+                            }
                         }
                     } while (event.changes.any { it.pressed })
                     if (pinched) {

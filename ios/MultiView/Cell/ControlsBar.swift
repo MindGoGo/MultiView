@@ -192,7 +192,8 @@ struct ControlsBar: View {
 
     /// 單格全螢幕（R20、R129）。
     private var soloButton: some View {
-        let isSolo = model.solo == index
+        // 上下排時是「進入全螢幕」（R164）
+        let isSolo = model.solo == index && !model.companionStacked
         return BarButton(
             icon: isSolo ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
             label: isSolo ? "離開全螢幕" : "全螢幕",

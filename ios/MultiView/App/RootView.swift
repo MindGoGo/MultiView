@@ -14,9 +14,14 @@ struct RootView: View {
 
     /// iPhone（小螢幕）直向、畫面上只有一格（版型 `1` 或單格全螢幕）時打開小視窗：上面影片、下面小視窗（R162）。
     private var companionStacked: Bool {
+        model.companionOpen && stackAvailable
+    }
+
+    /// 打開小視窗的話會上下排（R164：這時在影片上往上滑就打開小視窗）。
+    private var stackAvailable: Bool {
         let portraitPhone = screenSize.height > screenSize.width &&
             !ScreenRules.isLarge(width: screenSize.width, height: screenSize.height)
-        return model.companionOpen && portraitPhone && (model.solo != nil || model.displayedLayout == .one)
+        return portraitPhone && (model.solo != nil || model.displayedLayout == .one)
     }
 
     /// 上下排時影片的高度：占滿寬度、16:9。
@@ -27,7 +32,9 @@ struct RootView: View {
     /// 上下排時小視窗的上緣（從安全區域上緣算起，R163）：接在影片下面；拉到最上面時占滿畫面（蓋住影片，影片照常播放）。
     private var stackedPanelTop: CGFloat {
         let rest = model.companionExpanded ? 0 : stackedVideoHeight
-        return min(max(rest + stackDrag, 0), stackedVideoHeight)
+        // 接在影片下面時可以往下拉（往下拉就關掉，R164）
+        let limit = model.companionExpanded ? stackedVideoHeight : screenSize.height
+        return min(max(rest + stackDrag, 0), limit)
     }
 
     /// 按著小視窗上方的小把手上下拖曳，放開時往拖曳的方向收合或展開（R163）。
@@ -35,6 +42,17 @@ struct RootView: View {
         PanelDrag(
             changed: { stackDrag = $0 },
             ended: { moved in
+                if !model.companionExpanded, moved > 80 {
+                    // 接在影片下面時往下拉：關掉，從手指放開的位置往下收起（R164）；收起之後才把拖曳的距離歸零
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        model.closeCompanion()
+                    }
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(320))
+                        stackDrag = 0
+                    }
+                    return
+                }
                 let expand = moved < -40 ? true : (moved > 40 ? false : model.companionExpanded)
                 withAnimation(.easeOut(duration: 0.25)) {
                     model.companionExpanded = expand
@@ -51,7 +69,10 @@ struct RootView: View {
     }
 
     var body: some View {
-        let stacked = companionStacked
+        // 收起的動畫中也維持上下排（R164）：影片等小視窗離開後才放大回整個畫面
+        let stacked = companionStacked || model.companionClosingStacked
+        // 上下排時打開、關掉是上下滑動；其他情況（蓋在右側、占滿寬度）照原本左右滑動
+        let slidesDown = model.companionOpen ? companionStacked : (stackAvailable || model.companionClosingStacked)
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
 
@@ -86,7 +107,10 @@ struct RootView: View {
                         CompanionPanel(open: model.companionOpen, drag: stacked ? stackPanelDrag : nil)
                             .frame(maxWidth: model.isLarge ? 360 : .infinity)
                     }
-                    .offset(x: model.companionOpen ? 0 : proxy.size.width + 40)
+                    .offset(
+                        x: model.companionOpen || slidesDown ? 0 : proxy.size.width + 40,
+                        y: !model.companionOpen && slidesDown ? proxy.size.height + 40 : 0
+                    )
                 }
                 // 上下排時小視窗接在影片下面，不跟著工具列移動
                 .padding(.top, stacked ? stackedPanelTop : (model.toolbarVisible ? 52 : 0))
@@ -144,8 +168,11 @@ struct RootView: View {
         .onChange(of: model.companionOpen, initial: true) { _, open in
             if open { companionCreated = true }
         }
-        .onChange(of: stacked, initial: true) { _, value in
+        .onChange(of: companionStacked, initial: true) { _, value in
             model.companionStacked = value
+        }
+        .onChange(of: stackAvailable, initial: true) { _, value in
+            model.companionStackAvailable = value
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)

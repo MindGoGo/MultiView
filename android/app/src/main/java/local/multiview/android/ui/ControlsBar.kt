@@ -75,7 +75,8 @@ fun ControlsBar(
     val favorite = model.isFavorite(source)
     val supportsPip = model.supportsPictureInPicture(source)
     val webMode = model.webModeOf(source)
-    val isSolo = model.solo == index
+    // 上下排時全螢幕按鈕是「進入全螢幕」（R164）
+    val isSolo = model.solo == index && !model.companionStacked
     val showsPause = model.statusOf(source).showsPause
 
     Column(

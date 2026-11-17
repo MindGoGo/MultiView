@@ -195,6 +195,10 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     var companionStacked by mutableStateOf(false)
         private set
 
+    /** 打開小視窗的話會上下排（手機直向、只有一格），由畫面回報。這時在影片上往上滑就打開小視窗（R164）。 */
+    var companionStackAvailable by mutableStateOf(false)
+        private set
+
     /** 上下排時把小視窗往上拉成占滿畫面（R163）；往下拉回到上下排。關掉小視窗時重設。 */
     var companionExpanded by mutableStateOf(false)
         private set
@@ -419,10 +423,11 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     /** 這一格占滿畫面，其他顯示中、正在播放的來源暫停。 */
     fun enterSolo(index: Int) {
         if (solo != null || slots.getOrNull(index) == null || !isVisible(index)) return
-        // 手機直向時轉成橫向（關了自動旋轉、或用旋轉按鈕固定成直向也一樣），離開時轉回原本的方向。
-        // 小視窗開著時不轉：維持直向，上面影片、下面小視窗（R162）
+        // 上下排時按全螢幕：關掉小視窗，照常轉成橫向的全螢幕（R164；R162 原本是不轉，看起來像沒有作用）
+        if (companionStacked) hideCompanion()
+        // 手機直向時轉成橫向（關了自動旋轉、或用旋轉按鈕固定成直向也一樣），離開時轉回原本的方向
         val host = host
-        if (host != null && !isLarge && host.isPortrait && !companionOpen) {
+        if (host != null && !isLarge && host.isPortrait) {
             rotatedForSolo = true
             host.lockOrientation(landscape = true)
         }
@@ -454,6 +459,12 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     }
 
     fun toggleSolo(index: Int) {
+        // 上下排時（R164）：全螢幕按鈕一律是「關掉小視窗、橫向全螢幕」。
+        // 全螢幕中打開小視窗轉成直向的，關掉小視窗就轉回橫向的全螢幕
+        if (companionStacked && solo != null) {
+            hideCompanion()
+            return
+        }
         if (solo == null) enterSolo(index) else exitSolo()
     }
 
@@ -797,11 +808,19 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         }
     }
 
-    fun reportCompanionStacked(stacked: Boolean) {
+    fun reportStackLayout(available: Boolean, stacked: Boolean) {
+        if (companionStackAvailable != available) companionStackAvailable = available
         if (companionStacked == stacked) return
         companionStacked = stacked
         // 變成上下排：上方的工具列收起（點影片時也不再出現，R163）
         if (stacked) toolbarVisible = false
+    }
+
+    /** 在影片上往上滑（R164）：會上下排而且小視窗沒開時打開小視窗；有作用時回傳 true。 */
+    fun swipeUpCell(): Boolean {
+        if (companionOpen || !companionStackAvailable) return false
+        toggleCompanion()
+        return true
     }
 
     fun changeCompanionExpanded(expanded: Boolean) {

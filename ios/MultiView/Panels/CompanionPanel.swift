@@ -127,8 +127,11 @@ struct CompanionPanel: View {
                         model.showToast(model.companionBrowse ? "點影片：在小視窗裡看" : "點影片：放進格子")
                     }
                 }
-                BarButton(icon: "xmark", label: "關閉 YouTube 小視窗") {
-                    model.closeCompanion()
+                // 上下排時往下拉小把手就關掉，不用關閉按鈕（R164）
+                if drag == nil {
+                    BarButton(icon: "xmark", label: "關閉 YouTube 小視窗") {
+                        model.closeCompanion()
+                    }
                 }
             }
             Picker("分頁", selection: Binding(get: { tab }, set: {
