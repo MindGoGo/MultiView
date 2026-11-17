@@ -59,6 +59,9 @@ import local.multiview.core.ProgressRules
 /** 工具列的高度（按鈕 44dp 加上下留白）。 */
 private val ToolbarHeight = 52.dp
 
+/** 格子比這個矮時，操作列只排一列（R162）。 */
+private val COMPACT_CONTROLS_HEIGHT = 260.dp
+
 /** 兩指張開、捏合超過這個比例才進入、離開單格全螢幕（R153）。 */
 private const val ENTER_SOLO_SCALE = 1.25f
 private const val EXIT_SOLO_SCALE = 0.8f
@@ -197,7 +200,8 @@ fun CellView(
         )
         if (active) {
             Box(modifier = Modifier.align(Alignment.BottomCenter)) {
-                ControlsBar(model, index, source, player, bottomInsets)
+                // 很矮的格子（直向上下排時上面的影片，R162）：操作列只排一列
+                ControlsBar(model, index, source, player, bottomInsets, compact = height < COMPACT_CONTROLS_HEIGHT)
             }
         } else if (interactive) {
             Box(

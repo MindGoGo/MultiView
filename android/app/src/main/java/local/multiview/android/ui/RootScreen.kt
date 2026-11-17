@@ -1,6 +1,7 @@
 package local.multiview.android.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -22,28 +23,33 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import local.multiview.android.AppModel
 import local.multiview.core.LayoutId
 import local.multiview.core.ScreenRules
@@ -71,6 +77,45 @@ fun RootScreen(model: AppModel) {
             val companionStacked = model.companionOpen && portraitPhone && model.pipCell == null &&
                 (model.solo != null || model.displayedLayout == LayoutId.ONE)
             val videoHeight = maxWidth * 9f / 16f
+            SideEffect { model.reportCompanionStacked(companionStacked) }
+
+            // 上下排時小視窗的上緣（像素，R163）：接在影片下面；拉到最上面時占滿畫面（蓋住影片，影片照常播放）。
+            // 按著小視窗上方的小把手上下拖曳，放開時往拖曳的方向收合或展開
+            val density = LocalDensity.current
+            val stackMin = with(density) { safeArea.top.toPx() }
+            val stackMax = with(density) { (safeArea.top + videoHeight).toPx() }
+            val stackRest = if (model.companionExpanded) stackMin else stackMax
+            val stackTop = remember { Animatable(stackRest) }
+            var stackDragStart by remember { mutableStateOf<Float?>(null) }
+            var stackDragTotal by remember { mutableFloatStateOf(0f) }
+            val scope = rememberCoroutineScope()
+            LaunchedEffect(stackRest, companionStacked) {
+                if (stackDragStart != null) return@LaunchedEffect
+                if (companionStacked) stackTop.animateTo(stackRest) else stackTop.snapTo(stackRest)
+            }
+            val stackDrag = PanelDrag(
+                onDrag = { dy ->
+                    val start = stackDragStart ?: stackTop.value.also {
+                        stackDragStart = it
+                        stackDragTotal = 0f
+                    }
+                    stackDragTotal += dy
+                    val next = (start + stackDragTotal).coerceIn(stackMin, stackMax)
+                    scope.launch { stackTop.snapTo(next) }
+                },
+                onEnd = {
+                    stackDragStart = null
+                    val moved = stackDragTotal
+                    val threshold = with(density) { 40.dp.toPx() }
+                    val expand = when {
+                        moved < -threshold -> true
+                        moved > threshold -> false
+                        else -> model.companionExpanded
+                    }
+                    model.changeCompanionExpanded(expand)
+                    scope.launch { stackTop.animateTo(if (expand) stackMin else stackMax) }
+                },
+            )
             Box(
                 modifier = if (companionStacked) {
                     Modifier.fillMaxWidth().padding(top = safeArea.top).height(videoHeight)
@@ -95,7 +140,11 @@ fun RootScreen(model: AppModel) {
             val panelInsets = PaddingValues(end = safeArea.right, bottom = safeArea.bottom)
             val panelModifier = Modifier.padding(top = panelTop).then(if (model.isLarge) Modifier.width(360.dp) else Modifier.fillMaxWidth())
             // 上下排時小視窗接在影片下面，不跟著工具列移動
-            val companionModifier = if (companionStacked) Modifier.padding(top = safeArea.top + videoHeight).fillMaxWidth() else panelModifier
+            val companionModifier = if (companionStacked) {
+                Modifier.padding(top = with(density) { stackTop.value.toDp() }).fillMaxWidth()
+            } else {
+                panelModifier
+            }
 
             // YouTube 小視窗：第一次打開之後就一直留著，關掉時只是移到畫面外。
             // 裡面的網頁不用每次重新建立、重新載入（0.0.12 實測：每次打開整個畫面先黑一下，搜尋的內容也不見了）
@@ -114,7 +163,13 @@ fun RootScreen(model: AppModel) {
                             }
                         },
                 ) {
-                    CompanionPanel(model, panelInsets, companionModifier, open = model.companionOpen)
+                    CompanionPanel(
+                        model,
+                        panelInsets,
+                        companionModifier,
+                        open = model.companionOpen,
+                        drag = if (companionStacked) stackDrag else null,
+                    )
                 }
             }
 

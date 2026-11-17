@@ -9,6 +9,8 @@ struct RootView: View {
     @State private var companionCreated = false
     /// 整個畫面（包括安全區域）的大小，用來判斷小視窗要不要和影片上下排（R162）。
     @State private var screenSize: CGSize = .zero
+    /// 正在拖曳上下排的小視窗（R163）：從按下的位置算起的垂直移動距離（往下為正）。
+    @State private var stackDrag: CGFloat = 0
 
     /// iPhone（小螢幕）直向、畫面上只有一格（版型 `1` 或單格全螢幕）時打開小視窗：上面影片、下面小視窗（R162）。
     private var companionStacked: Bool {
@@ -20,6 +22,26 @@ struct RootView: View {
     /// 上下排時影片的高度：占滿寬度、16:9。
     private var stackedVideoHeight: CGFloat {
         (screenSize.width * 9 / 16).rounded()
+    }
+
+    /// 上下排時小視窗的上緣（從安全區域上緣算起，R163）：接在影片下面；拉到最上面時占滿畫面（蓋住影片，影片照常播放）。
+    private var stackedPanelTop: CGFloat {
+        let rest = model.companionExpanded ? 0 : stackedVideoHeight
+        return min(max(rest + stackDrag, 0), stackedVideoHeight)
+    }
+
+    /// 按著小視窗上方的小把手上下拖曳，放開時往拖曳的方向收合或展開（R163）。
+    private var stackPanelDrag: PanelDrag {
+        PanelDrag(
+            changed: { stackDrag = $0 },
+            ended: { moved in
+                let expand = moved < -40 ? true : (moved > 40 ? false : model.companionExpanded)
+                withAnimation(.easeOut(duration: 0.25)) {
+                    model.companionExpanded = expand
+                    stackDrag = 0
+                }
+            }
+        )
     }
 
     /// 包括安全區域的整個畫面大小。
@@ -61,13 +83,13 @@ struct RootView: View {
                 GeometryReader { proxy in
                     HStack(spacing: 0) {
                         Spacer(minLength: 0)
-                        CompanionPanel(open: model.companionOpen)
+                        CompanionPanel(open: model.companionOpen, drag: stacked ? stackPanelDrag : nil)
                             .frame(maxWidth: model.isLarge ? 360 : .infinity)
                     }
                     .offset(x: model.companionOpen ? 0 : proxy.size.width + 40)
                 }
                 // 上下排時小視窗接在影片下面，不跟著工具列移動
-                .padding(.top, stacked ? stackedVideoHeight : (model.toolbarVisible ? 52 : 0))
+                .padding(.top, stacked ? stackedPanelTop : (model.toolbarVisible ? 52 : 0))
                 .allowsHitTesting(model.companionOpen)
                 .accessibilityHidden(!model.companionOpen)
             }

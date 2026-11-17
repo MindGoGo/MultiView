@@ -10,53 +10,82 @@ struct ControlsBar: View {
     let supportsVolume: Bool
     /// 這一格貼著畫面邊緣時，按鈕要避開的範圍。
     var insets = EdgeInsets()
+    /// 只排一列：播放、喇叭、進度條、全螢幕、「⋯」（直向上下排時上面的影片很矮，R163）。
+    var compact = false
 
     @State private var showsVolume = false
     @State private var showsBrightness = false
     @State private var showsEdit = false
     @State private var showsMore = false
 
+    /// 進度條；直播沒有。
+    @ViewBuilder private var progressBar: some View {
+        if let progress = model.progress[source.id], ProgressRules.view(progress).kind != .live {
+            ProgressBar(
+                progress: progress, source: source, segments: model.segments(of: source),
+                onDragging: { model.holdControls($0) }
+            ) { fraction in
+                model.seek(index, fraction: fraction)
+            }
+        }
+    }
+
+    private var showsProgress: Bool {
+        guard let progress = model.progress[source.id] else { return false }
+        return ProgressRules.view(progress).kind != .live
+    }
+
+    /// 一般的操作列：格子太窄放不下時，次要按鈕收進「⋯」選單（R127）。
+    private var fullRows: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 2) {
+                playButton
+                muteButton
+                if supportsVolume { volumeButton }
+                brightnessButton
+                if model.supportsQuality(source) { qualityButton }
+                if let audio = model.audioMenu(source) { audioButton(audio) }
+                if let captions = model.captionMenu(source) { captionButton(captions) }
+                Spacer(minLength: 8)
+                if model.canSwap { moveHandle }
+                soloButton
+                if model.supportsPictureInPicture(source) { pictureInPictureButton }
+                if let mode = model.webMode(of: source) {
+                    webModeButton(mode)
+                    adblockButton
+                }
+                favoriteButton
+                editButton
+                removeButton
+            }
+            HStack(spacing: 2) {
+                playButton
+                muteButton
+                Spacer(minLength: 0)
+                if model.canSwap { moveHandle }
+                soloButton
+                moreMenu
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 4) {
-            if let progress = model.progress[source.id], ProgressRules.view(progress).kind != .live {
-                ProgressBar(
-                    progress: progress, source: source, segments: model.segments(of: source),
-                    onDragging: { model.holdControls($0) }
-                ) { fraction in
-                    model.seek(index, fraction: fraction)
-                }
-            }
-
-            // 格子太窄放不下時，次要按鈕收進「⋯」選單（R127）
-            ViewThatFits(in: .horizontal) {
+            if compact {
                 HStack(spacing: 2) {
                     playButton
                     muteButton
-                    if supportsVolume { volumeButton }
-                    brightnessButton
-                    if model.supportsQuality(source) { qualityButton }
-                    if let audio = model.audioMenu(source) { audioButton(audio) }
-                    if let captions = model.captionMenu(source) { captionButton(captions) }
-                    Spacer(minLength: 8)
-                    if model.canSwap { moveHandle }
-                    soloButton
-                    if model.supportsPictureInPicture(source) { pictureInPictureButton }
-                    if let mode = model.webMode(of: source) {
-                        webModeButton(mode)
-                        adblockButton
+                    if showsProgress {
+                        progressBar
+                    } else {
+                        Spacer(minLength: 0)
                     }
-                    favoriteButton
-                    editButton
-                    removeButton
-                }
-                HStack(spacing: 2) {
-                    playButton
-                    muteButton
-                    Spacer(minLength: 0)
-                    if model.canSwap { moveHandle }
                     soloButton
                     moreMenu
                 }
+            } else {
+                progressBar
+                fullRows
             }
         }
         .padding(.horizontal, 6)

@@ -56,9 +56,17 @@ private enum class Popup { NONE, VOLUME, BRIGHTNESS, QUALITY, AUDIO, CAPTIONS, M
 /**
  * 每一格下方的操作列（R151）：播放／暫停、喇叭、音量、亮度、畫質、移動、全螢幕、最愛、更換網址、移除，
  * 以及進度條（R153）。格子太窄放不下時，次要的按鈕收進「⋯」選單。
+ * compact：格子很矮（例如直向上下排時上面的影片，R162）時只排一列：播放、喇叭、進度條、全螢幕、「⋯」。
  */
 @Composable
-fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPlayer?, insets: PaddingValues) {
+fun ControlsBar(
+    model: AppModel,
+    index: Int,
+    source: CellSource,
+    player: CellPlayer?,
+    insets: PaddingValues,
+    compact: Boolean = false,
+) {
     var popup by remember { mutableStateOf(Popup.NONE) }
     val supportsVolume = player?.supportsVolume ?: false
     val supportsQuality = model.supportsQuality(source)
@@ -82,7 +90,8 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         val progress = model.progress[source.id]
-        if (progress != null && ProgressRules.view(progress).kind != ProgressKind.LIVE) {
+        val showsProgress = progress != null && ProgressRules.view(progress).kind != ProgressKind.LIVE
+        if (showsProgress && !compact && progress != null) {
             ProgressBar(progress, source, player) { model.seek(index, it) }
         }
 
@@ -90,7 +99,7 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
             // 全部按鈕需要的寬度（每個 44dp）
             val wideCount = 7 + listOf(supportsVolume, supportsQuality, audioOptions.size > 1, captionTracks.isNotEmpty(), model.canSwap, supportsPip).count { it } +
                 if (webMode != null) 2 else 0
-            val wide = maxWidth >= (44 * wideCount + 8).dp
+            val wide = !compact && maxWidth >= (44 * wideCount + 8).dp
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BarButton(if (showsPause) AppIcons.Pause else AppIcons.Play, if (showsPause) "暫停" else "播放") {
@@ -135,7 +144,11 @@ fun ControlsBar(model: AppModel, index: Int, source: CellSource, player: CellPla
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                if (compact && showsProgress && progress != null) {
+                    ProgressBar(progress, source, player, Modifier.weight(1f)) { model.seek(index, it) }
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
 
                 if (model.canSwap) MoveHandle(model, index)
                 BarButton(
@@ -369,7 +382,13 @@ private fun MoveHandle(model: AppModel, index: Int) {
 
 /** 進度條：點一下或拖曳跳到那個位置（R153）。拖曳中顯示手指所在的時間，放開後才跳轉。 */
 @Composable
-private fun ProgressBar(progress: PlaybackProgress, source: CellSource, player: CellPlayer?, onSeek: (Double) -> Unit) {
+private fun ProgressBar(
+    progress: PlaybackProgress,
+    source: CellSource,
+    player: CellPlayer?,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    onSeek: (Double) -> Unit,
+) {
     var dragFraction by remember { mutableStateOf<Double?>(null) }
     val display = ProgressRules.view(progress)
     val fraction = dragFraction ?: display.fraction
@@ -387,7 +406,7 @@ private fun ProgressBar(progress: PlaybackProgress, source: CellSource, player: 
 
     var barWidth by remember { mutableStateOf(0) }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+        modifier = modifier.padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

@@ -16,6 +16,7 @@ import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,6 +74,8 @@ fun CompanionPanel(
      * 關著的時候不載入新的網頁。
      */
     open: Boolean = true,
+    /** 上下排時（R163）：上方的小把手可以拖曳，往上拉占滿畫面、往下拉回到影片下面。 */
+    drag: PanelDrag? = null,
 ) {
     val videoId = model.companionVideoId
     val tab = model.companionTab
@@ -123,7 +126,14 @@ fun CompanionPanel(
             .padding(insets),
     ) {
         if (headerShown) {
-            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 上下排時標題上面也有小把手：拖曳，或點一下切換占滿畫面／回到影片下面（R163）
+            if (drag != null) {
+                PanelHandle(
+                    drag,
+                    if (model.companionExpanded) "小視窗回到影片下面" else "小視窗占滿畫面",
+                ) { model.changeCompanionExpanded(!model.companionExpanded) }
+            }
+            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = if (drag != null) 0.dp else 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (browsing && search.canGoBack) {
                         BarButton(AppIcons.ArrowBack, "上一頁", onClick = touched { search.goBack() })
@@ -160,16 +170,8 @@ fun CompanionPanel(
                 }
             }
         } else {
-            // 小把手：叫出上方的標題與分頁
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClickLabel = "顯示小視窗的工具列") { headerShown = true }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(modifier = Modifier.size(width = 44.dp, height = 5.dp).background(Color.White.copy(alpha = 0.35f), CircleShape))
-            }
+            // 小把手：點一下叫出上方的標題與分頁；上下排時也可以拖曳（R163）
+            PanelHandle(drag, "顯示小視窗的工具列") { headerShown = true }
         }
 
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F0F0F)), contentAlignment = Alignment.Center) {
@@ -201,6 +203,35 @@ fun CompanionPanel(
                 )
             }
         }
+    }
+}
+
+/** 上下排時拖曳小視窗上方的小把手（R163）：dy 是這次移動的像素（往下為正）；放開時呼叫 onEnd。 */
+class PanelDrag(val onDrag: (Float) -> Unit, val onEnd: () -> Unit)
+
+/** 小視窗上方的小把手：點一下做 onTap；有 drag 時可以上下拖曳。 */
+@Composable
+private fun PanelHandle(drag: PanelDrag?, label: String, onTap: () -> Unit) {
+    // 拖曳中畫面每一格都會重畫：手勢不能因此重新開始，所以用最新的 drag，不當作手勢的 key
+    val currentDrag by rememberUpdatedState(drag)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = label, onClick = onTap)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = { currentDrag?.onEnd?.invoke() },
+                    onDragCancel = { currentDrag?.onEnd?.invoke() },
+                ) { change, dy ->
+                    val target = currentDrag ?: return@detectVerticalDragGestures
+                    change.consume()
+                    target.onDrag(dy)
+                }
+            }
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(modifier = Modifier.size(width = 44.dp, height = 5.dp).background(Color.White.copy(alpha = 0.35f), CircleShape))
     }
 }
 

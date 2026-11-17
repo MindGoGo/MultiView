@@ -90,11 +90,6 @@ struct ToolbarView: View {
                 }
             }
 
-            // AirPlay：把聲音送到 AirPlay 喇叭或 Apple TV（R132）
-            AirPlayButton()
-                .frame(width: 44, height: 44)
-                .accessibilityLabel("AirPlay")
-
             // 旋轉：關了自動旋轉也能切換橫向、直向（R123）
             BarButton(icon: "rotate.right", label: "旋轉畫面", highlighted: model.orientationLocked) {
                 model.rotate()
@@ -110,6 +105,10 @@ struct ToolbarView: View {
             BarButton(icon: "play.rectangle.on.rectangle.fill", label: "YouTube 小視窗", highlighted: model.companionOpen) {
                 model.toggleCompanion()
             }
+            // AirPlay：把聲音送到 AirPlay 喇叭或 Apple TV（R132）。放在 YouTube 小視窗後面（R163）
+            AirPlayButton()
+                .frame(width: 44, height: 44)
+                .accessibilityLabel("AirPlay")
             BarButton(icon: "list.bullet", label: "清單", highlighted: model.listPanelOpen) {
                 model.listPanelOpen.toggle()
                 model.keepControlsVisible()

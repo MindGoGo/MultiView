@@ -191,6 +191,14 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     /** 小視窗搜尋分頁的網頁，由畫面設定。 */
     var companionBrowser: CompanionBrowser? = null
 
+    /** 小視窗和影片上下排（R162），由畫面回報。這時點影片只出現格子的操作列，不出現上方的工具列（R163）。 */
+    var companionStacked by mutableStateOf(false)
+        private set
+
+    /** 上下排時把小視窗往上拉成占滿畫面（R163）；往下拉回到上下排。關掉小視窗時重設。 */
+    var companionExpanded by mutableStateOf(false)
+        private set
+
     /** 目前使用的 yt-dlp 版本；還不知道時為 null。 */
     var ytdlpVersion by mutableStateOf<String?>(null)
         private set
@@ -607,6 +615,11 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     fun handleBack(): Boolean {
         // 小視窗在這裡看影片時（R162）：網頁先回上一頁
         if (companionBrowsing && companionBrowser?.goBack() == true) return true
+        // 小視窗拉成占滿畫面時（R163）：先回到上下排
+        if (companionStacked && companionExpanded) {
+            companionExpanded = false
+            return true
+        }
         if (listPanelOpen || companionOpen) {
             listPanelOpen = false
             hideCompanion()
@@ -776,11 +789,23 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     private fun hideCompanion() {
         if (!companionOpen) return
         companionOpen = false
+        companionExpanded = false
         stopCompanionMedia()
         if (companionRotated) {
             companionRotated = false
             if (solo != null) host?.lockOrientation(true)
         }
+    }
+
+    fun reportCompanionStacked(stacked: Boolean) {
+        if (companionStacked == stacked) return
+        companionStacked = stacked
+        // 變成上下排：上方的工具列收起（點影片時也不再出現，R163）
+        if (stacked) toolbarVisible = false
+    }
+
+    fun changeCompanionExpanded(expanded: Boolean) {
+        companionExpanded = expanded
     }
 
     fun selectCompanionTab(tab: CompanionTab) {
@@ -1097,7 +1122,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
      */
     fun tapCell(index: Int) {
         if (slots.getOrNull(index) == null) return
-        if (activeCell == index && toolbarVisible) {
+        if (activeCell == index && (toolbarVisible || companionStacked)) {
             hideControls()
             return
         }
@@ -1428,7 +1453,8 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
 
     fun showControls(index: Int?) {
         activeCell = index
-        toolbarVisible = true
+        // 上下排時點影片只出現格子的操作列：上方的工具列會蓋住大半部影片（R163）
+        toolbarVisible = index == null || !companionStacked
         restartHideTimer()
     }
 

@@ -110,7 +110,8 @@ struct CellView: View {
         }
         .overlay(alignment: .bottom) {
             if active {
-                ControlsBar(index: index, source: source, supportsVolume: player.supportsVolume, insets: insets)
+                // 直向上下排時上面的影片很矮：操作列只排一列（R163）
+                ControlsBar(index: index, source: source, supportsVolume: player.supportsVolume, insets: insets, compact: model.companionStacked)
                     .transition(.opacity)
             } else if interactive {
                 // 整頁模式：點網頁就是操作網頁，用小把手叫出操作列（R127）

@@ -73,8 +73,17 @@ final class AppModel {
     /// 搜尋分頁點影片的方式（R162）：false 放進格子（原本的做法）；true 在小視窗裡直接看（網頁照常換頁、播放）。
     /// 是 App 自己的偏好設定（UserDefaults），不寫進和桌面版共用格式的設定檔。
     private(set) var companionBrowse = UserDefaults.standard.bool(forKey: AppModel.companionBrowseKey)
-    /// 小視窗和影片上下排（R162：iPhone 直向、畫面上只有一格），由畫面回報。這時工具列照常自動隱藏。
-    var companionStacked = false
+    /// 小視窗和影片上下排（R162：iPhone 直向、畫面上只有一格），由畫面回報。這時工具列照常自動隱藏；
+    /// 點影片只出現格子的操作列，不出現上方的工具列（R163：工具列會蓋住大半部影片）。
+    var companionStacked = false {
+        didSet {
+            if companionStacked, !oldValue {
+                toolbarVisible = false
+            }
+        }
+    }
+    /// 上下排時把小視窗往上拉成占滿畫面（R163）；往下拉回到上下排。關掉小視窗時重設。
+    var companionExpanded = false
     /// 小視窗搜尋分頁的網頁（R162）：在這裡看影片時，App 要能暫停它。
     let companionBrowser = CompanionBrowser()
     var settingsOpen = false
@@ -641,6 +650,7 @@ final class AppModel {
     private func hideCompanion() {
         guard companionOpen else { return }
         companionOpen = false
+        companionExpanded = false
         stopCompanionMedia()
         if companionRotated {
             companionRotated = false
@@ -937,7 +947,7 @@ final class AppModel {
     /// 這一格的操作列已經顯示時，再點一下就收起來（和一般影片 App 相同）；聲音已經在這一格，不用再切換。
     func tapCell(_ index: Int) {
         guard slots.indices.contains(index), slots[index] != nil else { return }
-        if activeCell == index, toolbarVisible {
+        if activeCell == index, toolbarVisible || companionStacked {
             hideControls()
             return
         }
@@ -1438,7 +1448,8 @@ final class AppModel {
 
     func showControls(for index: Int?) {
         activeCell = index
-        toolbarVisible = true
+        // 上下排時點影片只出現格子的操作列（R163）
+        toolbarVisible = index == nil || !companionStacked
         restartHideTimer()
     }
 

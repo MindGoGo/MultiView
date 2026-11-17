@@ -10,6 +10,8 @@ struct CompanionPanel: View {
     /// 面板是不是開著。關著的時候面板在畫面外，裡面的網頁留著，但不載入新的網頁
     /// （連結的影片換了，等打開面板才載入）。
     var open = true
+    /// 上下排時（R163）：上方的小把手可以拖曳，往上拉占滿畫面、往下拉回到影片下面。
+    var drag: PanelDrag?
     /// 載入過聊天室的影片：同一部影片切換分頁時不重新載入。
     @State private var chatVideo: String?
     /// 在這裡看（R162）：上方的標題與分頁和格子的工具列一樣，3 秒沒有操作就隱藏，點小把手再叫出來。
@@ -30,21 +32,18 @@ struct CompanionPanel: View {
 
         VStack(spacing: 0) {
             if headerShown || !browsing {
+                // 上下排時標題上面也有小把手：拖曳，或點一下切換占滿畫面／回到影片下面（R163）
+                if let drag {
+                    PanelHandle(label: model.companionExpanded ? "小視窗回到影片下面" : "小視窗占滿畫面", drag: drag) {
+                        withAnimation(.easeOut(duration: 0.25)) { model.companionExpanded.toggle() }
+                    }
+                }
                 header(tab: tab, browsing: browsing, canGoBack: browser.canGoBack, currentVideo: currentVideo)
             } else {
-                // 小把手：叫出上方的標題與分頁
-                Button {
+                // 小把手：點一下叫出上方的標題與分頁；上下排時也可以拖曳（R163）
+                PanelHandle(label: "顯示小視窗的工具列", drag: drag) {
                     headerShown = true
-                } label: {
-                    Capsule()
-                        .fill(Color.white.opacity(0.35))
-                        .frame(width: 44, height: 5)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("顯示小視窗的工具列")
             }
 
             ZStack {
@@ -408,5 +407,38 @@ private struct CompanionWebView: UIViewRepresentable {
           post({ type: 'ready' });
         })();
         """#
+    }
+}
+
+/// 上下排時拖曳小視窗上方的小把手（R163）：參數是從按下的位置算起的垂直移動距離（往下為正）。
+struct PanelDrag {
+    var changed: (CGFloat) -> Void
+    var ended: (CGFloat) -> Void
+}
+
+/// 小視窗上方的小把手：點一下做 onTap；有 drag 時可以上下拖曳。
+private struct PanelHandle: View {
+    let label: String
+    let drag: PanelDrag?
+    let onTap: () -> Void
+
+    var body: some View {
+        Capsule()
+            .fill(Color.white.opacity(0.35))
+            .frame(width: 44, height: 5)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onTap)
+            // 拖曳時小視窗本身也在移動：用整個畫面的座標，移動距離才不會跳動
+            .gesture(
+                DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                    .onChanged { value in drag?.changed(value.translation.height) }
+                    .onEnded { value in drag?.ended(value.translation.height) }
+            )
+            .accessibilityElement()
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onTap() }
     }
 }
