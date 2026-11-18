@@ -34,7 +34,23 @@ const DEFS: Record<LayoutId, LayoutDef> = {
   '1+3': { cells: 4, cols: 2, rows: 3 }
 }
 
-export const cellCount = (layout: LayoutId) => DEFS[layout].cells
+/**
+ * 目前畫面用的版型：固定版型的代號，或自訂版型的切割樹（R167，型別在 layoutTree.ts）。
+ * 格數、能不能看到某一格只需要這個。
+ */
+export type LayoutRef = LayoutId | TreeLike
+
+/** 切割樹的最小結構（避免和 layoutTree.ts 互相 import） */
+type TreeLike = { kind: 'cell' } | { kind: 'split'; children: TreeLike[] }
+
+const countTree = (n: TreeLike): number => (n.kind === 'cell' ? 1 : n.children.reduce((a, c) => a + countTree(c), 0))
+
+export const cellCount = (layout: LayoutRef) => (typeof layout === 'string' ? DEFS[layout].cells : countTree(layout))
+
+/** 設定檔的 layout：固定版型的代號，或「custom:<自訂版型的 id>」（R167） */
+export type LayoutKey = LayoutId | `custom:${string}`
+
+export const isPresetLayout = (key: string): key is LayoutId => (LAYOUT_IDS as string[]).includes(key)
 
 const even = (n: number) => Array.from({ length: n }, () => 1 / n)
 

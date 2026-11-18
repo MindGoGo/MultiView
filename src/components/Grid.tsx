@@ -1,6 +1,7 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { isYouTubeSite } from '../lib/source'
-import { cellRects, dividers, type Axis, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
+import { cellCount, cellRects, dividers, type Axis, type FracRect, type LayoutId, type Ratios } from '../lib/layout'
+import { splitBlocked, treeDividers, treeRects, type LayoutNode, type SplitBlock, type SplitDir, type TreeDivider } from '../lib/layoutTree'
 import { isVisible, type Slots, type Source } from '../lib/slots'
 import type { AudioMenu, NavState, PlayerHandle, PlayStatus } from '../players/types'
 import type { Failure } from '../lib/webErrors'
@@ -35,7 +36,9 @@ export function rectStyle(r: FracRect): CSSProperties {
 }
 
 interface Props {
-  layout: LayoutId
+  /** 固定版型的代號，或自訂版型的切割樹（R167） */
+  layout: LayoutId | LayoutNode
+  /** 固定版型的比例（自訂版型的比例在切割樹裡） */
   ratios: Ratios
   slots: Slots
   statuses: Record<number, PlayStatus>
@@ -60,6 +63,13 @@ interface Props {
   onUseYoutubeWeb(index: number): void
   onDividerDrag(axis: Axis, index: number, pos: number, containerPx: number): void
   onDividerReset(axis: Axis, index: number, containerPx: number): void
+  /** 自訂版型的分隔線（R167） */
+  onTreeDividerDrag(d: TreeDivider, pos: number, containerPx: number): void
+  onTreeDividerReset(d: TreeDivider, containerPx: number): void
+  /** 編輯版型中（R167）：格子顯示編號與「左右切」「上下切」「刪除這格」 */
+  editing: boolean
+  onSplitCell(index: number, dir: SplitDir): void
+  onRemoveCell(index: number): void
   /** 拖曳換位中：來源格與目前游標下的格子（R6） */
   move: { from: number; over: number | null } | null
   onMoveStart(index: number): void
@@ -135,7 +145,25 @@ const HIDDEN_WEB_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0,
 export function Grid(props: Props) {
   const { layout, ratios, slots, statuses, solo } = props
   // 單格全螢幕時放大的那一格填滿整個畫面，其他格不顯示（R20）
-  const layoutRects = cellRects(layout, ratios)
+  const layoutRects = typeof layout === 'string' ? cellRects(layout, ratios) : treeRects(layout)
+  const count = cellCount(layout)
+  // 編輯版型時要知道格子區域的大小，判斷切開後會不會太小（R167）
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    const update = () => setSize({ width: el.clientWidth, height: el.clientHeight })
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const editInfo = (index: number) => {
+    if (!props.editing || typeof layout === 'string') return null
+    const block = (dir: SplitDir): SplitBlock => splitBlocked(layout, index, dir, size.width, size.height)
+    return { row: block('row'), col: block('col'), canRemove: count > 1 }
+  }
   const rects = solo === null ? layoutRects : layoutRects.map((_, i) => (i === solo ? FULL : null))
 
   // 播放器依 id 排序並固定在同一層，換位或切換版型時只改位置，不搬動 DOM，所以不會重新載入
@@ -149,7 +177,7 @@ export function Grid(props: Props) {
     .sort((a, b) => a.source.id - b.source.id)
 
   return (
-    <div className="grid">
+    <div className="grid" ref={gridRef}>
       {placed.map(({ source, index, parked }) => {
         const visible = !parked && isVisible(index, layout, solo)
         const common = {
@@ -254,8 +282,11 @@ export function Grid(props: Props) {
             toolbarShown={props.toolbarShown}
             poke={props.poke.index === index ? props.poke.n : 0}
             onUseYoutubeWeb={props.onUseYoutubeWeb}
-            canMove={layout !== '1' && solo === null}
-            singleView={layout === '1' || solo !== null}
+            canMove={count > 1 && solo === null}
+            singleView={count === 1 || solo !== null}
+            edit={editInfo(index)}
+            onSplit={props.onSplitCell}
+            onRemoveCell={props.onRemoveCell}
             moving={props.move?.from === index}
             dropTarget={
               (props.move !== null && props.move.over === index && props.move.from !== index) || props.listOver === index
@@ -292,14 +323,26 @@ export function Grid(props: Props) {
         )
       })}
 
-      {(solo === null ? dividers(layout, ratios) : []).map((d) => (
-        <Divider
-          key={`${d.axis}-${d.index}`}
-          def={d}
-          onDrag={props.onDividerDrag}
-          onReset={props.onDividerReset}
-        />
-      ))}
+      {solo === null &&
+        typeof layout === 'string' &&
+        dividers(layout, ratios).map((d) => (
+          <Divider
+            key={`${d.axis}-${d.index}`}
+            def={d}
+            onDrag={(pos, px) => props.onDividerDrag(d.axis, d.index, pos, px)}
+            onReset={(px) => props.onDividerReset(d.axis, d.index, px)}
+          />
+        ))}
+      {solo === null &&
+        typeof layout !== 'string' &&
+        treeDividers(layout).map((d) => (
+          <Divider
+            key={`${d.path.join('.')}-${d.index}`}
+            def={d}
+            onDrag={(pos, px) => props.onTreeDividerDrag(d, pos, px)}
+            onReset={(px) => props.onTreeDividerReset(d, px)}
+          />
+        ))}
     </div>
   )
 }

@@ -20,6 +20,7 @@ import { loadingKind } from '../lib/loading'
 import { playbackBadge } from '../lib/playbackBadge'
 import { controlsView, HANDLE_COLLAPSE_MS } from '../lib/pointerZones'
 import { categoryInfo, skippedLabel, type SkipAction, type SponsorSegment } from '../lib/sponsorBlock'
+import type { SplitBlock, SplitDir } from '../lib/layoutTree'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
 interface Props {
@@ -92,6 +93,16 @@ interface Props {
   toolbarShown: boolean
   /** 畫面上只有這一格（版型 1、單格全螢幕）：不顯示「有聲音」的小喇叭（R162，和手機版相同） */
   singleView: boolean
+  /** 編輯版型中（R167）：能不能左右切（row）、上下切（col）、刪除；不在編輯時是 null */
+  edit: { row: SplitBlock; col: SplitBlock; canRemove: boolean } | null
+  onSplit(index: number, dir: SplitDir): void
+  onRemoveCell(index: number): void
+}
+
+/** 切開的按鈕停用時的原因（R167） */
+const SPLIT_BLOCK_TEXT: Record<Exclude<SplitBlock, null>, string> = {
+  max: '最多 9 格',
+  small: '這一格太小，不能再切'
 }
 
 /** 格子裡的選單：字幕、畫質（R31、R32）；亮度、音量的滑桿選單（R40、R42） */
@@ -292,7 +303,7 @@ export function Cell(props: Props) {
 
   return (
     <div
-      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''} ${props.direct || pageMode ? 'direct' : ''}`}
+      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''} ${props.direct || pageMode ? 'direct' : ''} ${props.edit ? 'editing' : ''}`}
       ref={cellRef}
       style={style}
       data-index={index}
@@ -304,6 +315,37 @@ export function Cell(props: Props) {
         if (e.target === e.currentTarget) props.onFocusAudio(index)
       }}
     >
+      {/* 編輯版型（R167）：格子編號與切開、刪除的按鈕，蓋住格子的其他操作 */}
+      {props.edit && (
+        <div className="cell-edit">
+          <div className="cell-edit-number">{index + 1}</div>
+          <div className="cell-edit-buttons">
+            {(['row', 'col'] as const).map((dir) => {
+              const block = props.edit![dir]
+              const label = dir === 'row' ? '左右切' : '上下切'
+              return (
+                <button
+                  key={dir}
+                  disabled={block !== null}
+                  title={block ? SPLIT_BLOCK_TEXT[block] : dir === 'row' ? '把這一格分成左右兩格' : '把這一格分成上下兩格'}
+                  onClick={() => props.onSplit(index, dir)}
+                >
+                  <span className={`split-icon ${dir}`} aria-hidden="true" />
+                  {label}
+                </button>
+              )
+            })}
+            <button
+              className="danger"
+              disabled={!props.edit.canRemove}
+              title={props.edit.canRemove ? '拿掉這一格，空間交給旁邊的格子（影片變成暫時隱藏）' : '只剩一格，不能刪除'}
+              onClick={() => props.onRemoveCell(index)}
+            >
+              刪除這格
+            </button>
+          </div>
+        </div>
+      )}
       {/* 左上角：有聲音（R7）與播放方式的小標示（R109，和操作區同時出現） */}
       {source && !showInput && ((isAudible(source) && !props.singleView) || (badge && view === 'bar')) && (
         <div className="cell-corner">

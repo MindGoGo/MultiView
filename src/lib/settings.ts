@@ -1,5 +1,6 @@
 // 設定檔的資料結構與驗證（R10）。主程序與畫面共用，不依賴 Electron。
-import { DEFAULT_LAYOUT, isValidRatios, LAYOUT_IDS, type LayoutId, type Ratios } from './layout'
+import { DEFAULT_LAYOUT, isPresetLayout, isValidRatios, LAYOUT_IDS, type LayoutId, type LayoutKey, type Ratios } from './layout'
+import { CUSTOM_PREFIX, normalizeCustomLayouts, type CustomLayout } from './layoutTree'
 import { isYouTubeSite, parseSource } from './source'
 import { SLOT_COUNT, type Quality } from './slots'
 import { normalizeQuality } from './quality'
@@ -44,7 +45,10 @@ export interface SavedSource {
 
 /** 畫面這一側的設定，由畫面送給主程序保存 */
 export interface ViewSettings {
-  layout: LayoutId
+  /** 固定版型的代號，或「custom:<id>」（自訂版型，R167） */
+  layout: LayoutKey
+  /** 自訂版型（R167）；舊的設定檔沒有時是空的 */
+  customLayouts: CustomLayout[]
   ratios: Partial<Record<LayoutId, Ratios>>
   slots: (SavedSource | null)[]
   /** 總亮度（R41）；舊的設定檔沒有這個欄位時視為 100 */
@@ -78,6 +82,7 @@ export function defaultSettings(): Settings {
     window: { ...DEFAULT_WINDOW },
     companion: { ...DEFAULT_COMPANION },
     layout: DEFAULT_LAYOUT,
+    customLayouts: [],
     ratios: {},
     slots: Array.from({ length: SLOT_COUNT }, () => null),
     brightness: BRIGHTNESS_DEFAULT,
@@ -155,11 +160,21 @@ function normalizeSlots(raw: unknown): (SavedSource | null)[] {
   return Array.from({ length: SLOT_COUNT }, (_, i) => normalizeSource(list[i]))
 }
 
+/** 固定版型，或存在的自訂版型；其他（包括指向已刪除的自訂版型）用預設版型 */
+function normalizeLayoutKey(raw: unknown, custom: CustomLayout[]): LayoutKey {
+  if (typeof raw !== 'string') return DEFAULT_LAYOUT
+  if (isPresetLayout(raw)) return raw
+  if (raw.startsWith(CUSTOM_PREFIX) && custom.some((l) => CUSTOM_PREFIX + l.id === raw)) return raw as LayoutKey
+  return DEFAULT_LAYOUT
+}
+
 /** 只接受合法的版型、比例與來源；其餘換成預設值。 */
 export function normalizeView(raw: unknown): ViewSettings {
   const obj = isObject(raw) ? raw : {}
+  const customLayouts = normalizeCustomLayouts(obj.customLayouts)
   return {
-    layout: LAYOUT_IDS.includes(obj.layout as LayoutId) ? (obj.layout as LayoutId) : DEFAULT_LAYOUT,
+    layout: normalizeLayoutKey(obj.layout, customLayouts),
+    customLayouts,
     ratios: normalizeRatios(obj.ratios),
     slots: normalizeSlots(obj.slots),
     brightness: normalizeBrightness(obj.brightness),

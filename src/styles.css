@@ -1551,3 +1551,108 @@ button.danger {
   font-size: 13px;
   cursor: pointer;
 }
+
+/* ---- 編輯版型（R167） ---- */
+/* 編輯中只留下編號與按鈕，格子的其他操作不出現 */
+.cell.editing > :not(.cell-edit) {
+  display: none !important;
+}
+
+.cell-edit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  border: 2px dashed rgba(61, 139, 253, 0.7);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.cell-edit-number {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.cell-edit-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.cell-edit-buttons button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: rgba(30, 30, 33, 0.92);
+  border-color: rgba(255, 255, 255, 0.14);
+  white-space: nowrap;
+}
+
+.cell-edit-buttons button:hover:not(:disabled) {
+  background: rgba(60, 60, 66, 0.95);
+}
+
+.cell-edit-buttons button.danger:not(:disabled) {
+  color: #ff8a80;
+}
+
+/* 切開的方向：方框中間一條線 */
+.split-icon {
+  position: relative;
+  width: 14px;
+  height: 11px;
+  border: 1.4px solid currentColor;
+  border-radius: 2px;
+}
+
+.split-icon::after {
+  content: '';
+  position: absolute;
+  background: currentColor;
+}
+
+.split-icon.row::after {
+  left: calc(50% - 0.7px);
+  top: 0;
+  bottom: 0;
+  width: 1.4px;
+}
+
+.split-icon.col::after {
+  top: calc(50% - 0.7px);
+  left: 0;
+  right: 0;
+  height: 1.4px;
+}
+
+/* 工具列的「完成」「刪除這個版型」 */
+.seg-btn.seg-text {
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.seg-btn.danger {
+  background: transparent;
+  color: #ff8a80;
+}
+
+/* 刪除自訂版型的確認 */
+.layout-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.6);
+}

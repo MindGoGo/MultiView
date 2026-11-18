@@ -1,6 +1,7 @@
 // 工具列與設定視窗的圖示（R96、R97）：16×16 的線條圖示，顏色跟著文字，不從網路載入
 import type { ReactNode } from 'react'
 import type { LayoutId } from '../lib/layout'
+import { treeDividers, type LayoutNode } from '../lib/layoutTree'
 
 function Icon({ children, size = 16 }: { children: ReactNode; size?: number }) {
   return (
@@ -35,6 +36,27 @@ export function LayoutIcon({ id }: { id: LayoutId }) {
     <Icon>
       {frame}
       {lines[id]}
+    </Icon>
+  )
+}
+
+/** 自訂版型的縮圖（R167）：外框加上切割樹的分隔線 */
+export function TreeLayoutIcon({ tree }: { tree: LayoutNode }) {
+  const X = 1.5
+  const Y = 2.5
+  const W = 13
+  const H = 11
+  const d = treeDividers(tree)
+    .map((l) =>
+      l.axis === 'cols'
+        ? `M${(X + l.pos * W).toFixed(2)} ${(Y + l.from * H).toFixed(2)}V${(Y + l.to * H).toFixed(2)}`
+        : `M${(X + l.from * W).toFixed(2)} ${(Y + l.pos * H).toFixed(2)}H${(X + l.to * W).toFixed(2)}`
+    )
+    .join('')
+  return (
+    <Icon>
+      <rect x={X} y={Y} width={W} height={H} rx="1.8" />
+      {d && <path d={d} />}
     </Icon>
   )
 }

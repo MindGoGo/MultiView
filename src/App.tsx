@@ -5,12 +5,15 @@ import { Grid } from './components/Grid'
 import { useWindowState } from './hooks/useWindowState'
 import { usePointerZones } from './hooks/usePointerZones'
 import {
+  DEFAULT_LAYOUT,
   defaultRatios,
+  isPresetLayout,
   minFraction,
   moveDivider,
   resetDivider,
   type Axis,
   type LayoutId,
+  type LayoutKey,
   type Ratios
 } from './lib/layout'
 import {
@@ -35,6 +38,24 @@ import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
 import type { YtMode } from './players/YouTubeSource'
 import { SettingsDialog } from './components/SettingsDialog'
+import {
+  CUSTOM_PREFIX,
+  customLabel,
+  MAX_CUSTOM_LAYOUTS,
+  moveTreeDivider,
+  nextCustomId,
+  presetToTree,
+  removeCell,
+  resetTreeDivider,
+  slotsAfterRemove,
+  slotsAfterSplit,
+  splitCell,
+  treeCellCount,
+  type CustomLayout,
+  type LayoutNode,
+  type SplitDir,
+  type TreeDivider
+} from './lib/layoutTree'
 import { NOTICE_MS, type SkipAction } from './lib/sponsorBlock'
 import { canonicalYouTubeUrl, classifyLink, youtubePageUrl } from './lib/links'
 import { skipTarget, resumePosition } from './lib/progress'
@@ -109,7 +130,13 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const anyPageMode = Object.values(webModes).includes('page')
   const { toolbarVisible, direct, setDirect } = usePointerZones(anyPageMode)
 
-  const [layout, setLayout] = useState<LayoutId>(initial.layout)
+  const [layout, setLayout] = useState<LayoutKey>(initial.layout)
+  /** 自訂版型（R167） */
+  const [customLayouts, setCustomLayouts] = useState<CustomLayout[]>(initial.customLayouts)
+  /** 編輯版型中（R167） */
+  const [editing, setEditing] = useState(false)
+  const editingRef = useRef(editing)
+  editingRef.current = editing
   const [ratiosMap, setRatiosMap] = useState<Partial<Record<LayoutId, Ratios>>>(initial.ratios)
   /** 總亮度（R41） */
   const [masterBrightness, setMasterBrightness] = useState(initial.brightness)
@@ -157,7 +184,14 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
   const settingsOpenRef = useRef(settingsOpen)
   settingsOpenRef.current = settingsOpen
-  const ratios = ratiosMap[layout] ?? defaultRatios(layout)
+  /** 目前的固定版型；自訂版型時是 null */
+  const preset: LayoutId | null = isPresetLayout(layout) ? layout : null
+  const custom = preset ? null : (customLayouts.find((c) => CUSTOM_PREFIX + c.id === layout) ?? null)
+  /** 格數、格子位置用的版型（R167）；自訂版型找不到時用預設版型 */
+  const shape: LayoutId | LayoutNode = custom ? custom.tree : (preset ?? DEFAULT_LAYOUT)
+  const shapeOf = (key: LayoutKey): LayoutId | LayoutNode =>
+    isPresetLayout(key) ? key : (customLayouts.find((c) => CUSTOM_PREFIX + c.id === key)?.tree ?? DEFAULT_LAYOUT)
+  const ratios = typeof shape === 'string' ? (ratiosMap[shape] ?? defaultRatios(shape)) : defaultRatios('1')
   const [slots, setSlots] = useState<Slots>(() => restoreSlots(initial.slots))
   const [statuses, setStatuses] = useState<Record<number, PlayStatus>>({})
   const statusesRef = useRef(statuses)
@@ -231,6 +265,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   }, [])
   const viewOf = (pos: Record<number, number | null>): ViewSettings => ({
     layout,
+    customLayouts,
     ratios: ratiosMap,
     brightness: masterBrightness,
     autoYoutubeWeb,
@@ -273,7 +308,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
     window.multiview.saveView(viewOf(positions))
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, sponsorBlock, loginBrowser])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, sponsorBlock, loginBrowser, customLayouts])
 
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
@@ -324,7 +359,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         url: text.trim(),
         parsed,
         // 更換網址時保留原本的聲音設定（R2 AC8）
-        muted: existing ? existing.muted : initialMuted(slots, layout, soloIndex),
+        muted: existing ? existing.muted : initialMuted(slots, shape, soloIndex),
         volume: existing ? existing.volume : 100,
         autoplay: true,
         // 廣告阻擋預設開啟（R17）；YouTube 網站頁面預設關閉（R57）
@@ -509,7 +544,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const [picking, setPicking] = useState<{ item: ListItem; cells: PickerCell[] } | null>(null)
   /** 回傳是否跳出選擇要取代的格子 */
   const onPickItem = (item: ListItem): boolean => {
-    const visible = slots.map((_, i) => i).filter((i) => isVisible(i, layout, soloIndex))
+    const visible = slots.map((_, i) => i).filter((i) => isVisible(i, shape, soloIndex))
     const empty = visible.find((i) => slots[i] === null)
     if (empty !== undefined) putItem(empty, item)
     else if (visible.length === 1) putItem(visible[0], item)
@@ -608,7 +643,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (!slots[index] || solo) return
     // 只記下「顯示中、而且正在播放」的其他來源，離開時恢復（R20 AC2、AC3、AC9）
     const resume = slots.flatMap((s, i) =>
-      s && i !== index && isVisible(i, layout) && statuses[s.id] === 'playing' ? [s.id] : []
+      s && i !== index && isVisible(i, shape) && statuses[s.id] === 'playing' ? [s.id] : []
     )
     // 視窗狀態向主程序查詢：畫面這邊記的狀態可能還沒更新（R20 AC4）
     void window.multiview.getWindowState().then(({ fullscreen }) => {
@@ -694,8 +729,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
 
   // 每種版型的比例分開記錄（R5 AC4）
   const updateRatios = (axis: Axis, fn: (sizes: number[], min: number) => number[], px: number) => {
+    if (typeof shape !== 'string') return
     const sizes = fn(ratios[axis], minFraction(axis, px))
-    setRatiosMap((prev) => ({ ...prev, [layout]: { ...ratios, [axis]: sizes } }))
+    setRatiosMap((prev) => ({ ...prev, [shape]: { ...ratios, [axis]: sizes } }))
   }
   const onDividerDrag = (axis: Axis, index: number, pos: number, px: number) =>
     updateRatios(axis, (sizes, min) => moveDivider(sizes, index, pos, min), px)
@@ -802,7 +838,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     else p.play()
   }
 
-  const controllable = controllableIndices(slots, layout, statuses, soloIndex)
+  const controllable = controllableIndices(slots, shape, statuses, soloIndex)
   const playAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.play())
   const pauseAll = () => controllable.forEach((i) => players.current.get(slots[i]!.id)?.pause())
 
@@ -812,7 +848,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     if (!action) return false
     switch (action.type) {
       case 'toggleAll':
-        if (toggleAllAction(slots, layout, statuses, soloIndex) === 'pause') pauseAll()
+        if (toggleAllAction(slots, shape, statuses, soloIndex) === 'pause') pauseAll()
         else playAll()
         break
       case 'muteAll':
@@ -820,7 +856,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         break
       case 'focusAudio':
         // 單格全螢幕時數字鍵不作用（R20 AC5）
-        if (soloIndex === null && isVisible(action.index, layout)) onFocusAudio(action.index)
+        if (soloIndex === null && isVisible(action.index, shape)) onFocusAudio(action.index)
         break
       case 'back': {
         // 目前操作的格子是從 YouTube 網站開啟的影片時才作用（R63 AC8）
@@ -842,7 +878,9 @@ export default function App({ initial }: { initial: ViewSettings }) {
         else window.multiview.toggleFullscreen()
         break
       case 'exitFullscreen':
-        if (solo) exitSolo()
+        // 編輯版型中 Esc 是「完成」（R167）
+        if (editingRef.current) setEditing(false)
+        else if (solo) exitSolo()
         else window.multiview.exitFullscreen()
         break
     }
@@ -893,12 +931,62 @@ export default function App({ initial }: { initial: ViewSettings }) {
     }
   }, [])
 
-  const changeLayout = (next: LayoutId) => {
+  const changeLayout = (next: LayoutKey) => {
     // 單格全螢幕時先回到分割畫面，再切換版型（R20 AC6）
     exitSoloRef.current()
     setLayout(next)
-    const n = hiddenCount(slots, next)
+    const n = hiddenCount(slots, shapeOf(next))
     if (n > 0) showToast(`有 ${n} 個來源暫時隱藏`)
+  }
+
+  // ---- 自訂版型（R167） ----
+  const updateCustomTree = (fn: (tree: LayoutNode) => LayoutNode) => {
+    if (!custom) return
+    setCustomLayouts((prev) => prev.map((c) => (c.id === custom.id ? { ...c, tree: fn(c.tree) } : c)))
+  }
+  const onTreeDividerDrag = (d: TreeDivider, pos: number, px: number) => updateCustomTree((t) => moveTreeDivider(t, d, pos, px))
+  const onTreeDividerReset = (d: TreeDivider, px: number) => updateCustomTree((t) => resetTreeDivider(t, d, px))
+  /** 編輯版型：固定版型先複製成新的自訂版型 */
+  const startEdit = () => {
+    exitSoloRef.current()
+    if (!custom) {
+      if (customLayouts.length >= MAX_CUSTOM_LAYOUTS) {
+        showToast(`自訂版型最多 ${MAX_CUSTOM_LAYOUTS} 個，請先刪除一個`)
+        return
+      }
+      const base = preset ?? DEFAULT_LAYOUT
+      const id = nextCustomId(customLayouts)
+      setCustomLayouts((prev) => [...prev, { id, tree: presetToTree(base, ratiosMap[base] ?? defaultRatios(base)) }])
+      setLayout(`${CUSTOM_PREFIX}${id}`)
+      showToast(`已建立「${customLabel(id)}」`)
+    }
+    setEditing(true)
+  }
+  const finishEdit = () => setEditing(false)
+  const onSplitCell = (index: number, dir: SplitDir) => {
+    if (!custom) return
+    updateCustomTree((t) => splitCell(t, index, dir))
+    setSlots(slotsAfterSplit(slots, index))
+  }
+  const onRemoveCell = (index: number) => {
+    if (!custom || treeCellCount(custom.tree) <= 1) return
+    const hadSource = slots[index] !== null
+    const next = removeCell(custom.tree, index)
+    updateCustomTree(() => next)
+    const nextSlots = slotsAfterRemove(slots, index, treeCellCount(next))
+    setSlots(nextSlots)
+    if (hadSource) showToast(`有 ${hiddenCount(nextSlots, next)} 個來源暫時隱藏`)
+  }
+  /** 刪除自訂版型前的確認 */
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const deleteLayout = () => {
+    setConfirmDelete(false)
+    if (!custom) return
+    setCustomLayouts((prev) => prev.filter((c) => c.id !== custom.id))
+    setEditing(false)
+    setLayout(DEFAULT_LAYOUT)
+    const n = hiddenCount(slots, DEFAULT_LAYOUT)
+    showToast(n > 0 ? `已刪除「${customLabel(custom.id)}」，有 ${n} 個來源暫時隱藏` : `已刪除「${customLabel(custom.id)}」`)
   }
 
   return (
@@ -914,7 +1002,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         ytModes={ytModes}
         onYtMode={onYtMode}
         onYtFallback={onYtFallback}
-        layout={layout}
+        layout={shape}
         ratios={ratios}
         slots={slots}
         statuses={statuses}
@@ -930,6 +1018,11 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onYouTubeMenu={onYouTubeMenu}
         onDividerDrag={onDividerDrag}
         onDividerReset={onDividerReset}
+        onTreeDividerDrag={onTreeDividerDrag}
+        onTreeDividerReset={onTreeDividerReset}
+        editing={editing}
+        onSplitCell={onSplitCell}
+        onRemoveCell={onRemoveCell}
         move={move}
         onMoveStart={(from) => setMove({ from, over: from })}
         onMoveOver={(over) => setMove((m) => (m ? { ...m, over } : m))}
@@ -973,11 +1066,16 @@ export default function App({ initial }: { initial: ViewSettings }) {
         poke={poke}
       />
       <Toolbar
-        visible={toolbarVisible || toast !== null || listOpen || toolbarPopup || settingsOpen}
+        visible={toolbarVisible || toast !== null || listOpen || toolbarPopup || settingsOpen || editing}
         win={win}
         solo={solo !== null}
         layout={layout}
         onLayout={changeLayout}
+        customLayouts={customLayouts}
+        editing={editing}
+        onEditLayout={startEdit}
+        onFinishEdit={finishEdit}
+        onDeleteLayout={() => setConfirmDelete(true)}
         toast={toast}
         canControl={controllable.length > 0}
         onPlayAll={playAll}
@@ -1007,6 +1105,21 @@ export default function App({ initial }: { initial: ViewSettings }) {
           onLoginBrowser={setLoginBrowser}
           onToast={showToast}
         />
+      )}
+      {confirmDelete && custom && (
+        <div className="layout-confirm" onPointerDown={(e) => e.target === e.currentTarget && setConfirmDelete(false)}>
+          <div className="list-confirm-box" role="alertdialog" aria-modal="true">
+            <div>要刪除「{customLabel(custom.id)}」嗎？</div>
+            <div className="list-form-buttons">
+              <button className="set-button danger" onClick={deleteLayout}>
+                刪除
+              </button>
+              <button className="set-button" autoFocus onClick={() => setConfirmDelete(false)}>
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {picking && (
         <CellPicker

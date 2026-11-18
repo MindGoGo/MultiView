@@ -473,6 +473,7 @@ ipcMain.on('win:focus', () => {
 // 畫面這一側的設定（版型、比例、來源）（R10）
 ipcMain.handle('settings:getView', () => ({
   layout: settings.layout,
+  customLayouts: settings.customLayouts,
   ratios: settings.ratios,
   slots: settings.slots,
   brightness: settings.brightness,
