@@ -31,6 +31,10 @@ const api = {
   googleLogin: (): Promise<true | LoginFailure> => ipcRenderer.invoke('google:login'),
   googleLogout: (): Promise<void> => ipcRenderer.invoke('google:logout'),
   onAccount: (cb: (loggedIn: boolean) => void) => listen('companion:account', cb),
+  /** 不等了：停止等待登入（瀏覽器視窗要使用者自己關） */
+  cancelLogin: () => ipcRenderer.send('google:cancelLogin'),
+  /** 使用者關掉登入的瀏覽器，開始讀取登入狀態 */
+  onLoginReading: (cb: () => void) => listen('companion:loginReading', cb),
   /** 網頁載入網址前設定廣告阻擋（R17、R78） */
   initWeb: (webContentsId: number, opts: { adblock: boolean }): Promise<void> =>
     ipcRenderer.invoke('web:init', webContentsId, opts)

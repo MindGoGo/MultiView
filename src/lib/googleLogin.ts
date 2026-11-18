@@ -125,7 +125,7 @@ export const cookieUrl = (c: { domain?: string; path?: string }) => `https://${h
 export type LoginResult =
   | { ok: true; cookies: CookieDetails[] }
   /** no-browser：找不到 Edge、Chrome 或 Brave；cancelled：使用者關掉瀏覽器；timeout：太久沒有登入；failed：其他原因 */
-  | { ok: false; reason: 'no-browser' | 'cancelled' | 'timeout' | 'failed' | 'busy' }
+  | { ok: false; reason: 'no-browser' | 'cancelled' | 'timeout' | 'failed' | 'busy' | 'not-logged-in' }
 
 export type LoginFailure = Exclude<LoginResult, { ok: true }>['reason']
 
@@ -134,7 +134,8 @@ export const LOGIN_FAILURE_TEXT: Record<LoginFailure, string> = {
   cancelled: '已取消登入',
   timeout: '太久沒有完成登入，已取消',
   failed: '登入失敗，請再試一次',
-  busy: '登入視窗已經開著'
+  busy: '登入視窗已經開著',
+  'not-logged-in': '沒有偵測到登入：請在瀏覽器登入 Google 後再關掉視窗'
 }
 
 /** 手機版 YouTube 的觀看紀錄（小視窗的「紀錄」按鈕） */

@@ -33,6 +33,9 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
   /** Google 帳號（R165）：null 是還不知道；loggingIn 是登入用的瀏覽器名稱（顯示「請在 ○○ 視窗登入」） */
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
   const [loggingIn, setLoggingIn] = useState<string | null>(null)
+  /** 使用者關掉登入的瀏覽器後，讀取登入狀態中 */
+  const [reading, setReading] = useState(false)
+  useEffect(() => window.companion.onLoginReading(() => setReading(true)), [])
   const [notice, setNotice] = useState<string | null>(null)
   /** 登入、登出後每個網頁重新載入 */
   const [reloadKey, setReloadKey] = useState(0)
@@ -55,8 +58,10 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
   const login = async () => {
     const { picked } = await window.companion.googleBrowsers()
     setLoggingIn(picked ? loginBrowserInfo(picked).label : '瀏覽器')
+    setReading(false)
     void window.companion.googleLogin().then((r) => {
       setLoggingIn(null)
+      setReading(false)
       showNotice(r === true ? '已登入 Google' : LOGIN_FAILURE_TEXT[r])
     })
   }
@@ -177,9 +182,20 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
         {message && <div className="companion-message">{message}</div>}
         {loggingIn && (
           <div className="companion-message companion-login">
-            請在開啟的 {loggingIn} 視窗登入 Google。登入完成後 {loggingIn} 會自動關閉，這裡會換成你的帳號。
-            <br />
-            不想登入時關掉 {loggingIn} 視窗即可。
+            {reading ? (
+              '正在讀取登入狀態…'
+            ) : (
+              <div>
+                請在開啟的 {loggingIn} 視窗登入 Google，
+                <br />
+                <b>登入完成後關閉 {loggingIn} 視窗</b>，這裡就會換成你的帳號。
+                <br />
+                不想登入時直接關掉 {loggingIn} 視窗即可。
+                <div className="companion-login-cancel">
+                  <button onClick={() => window.companion.cancelLogin()}>取消登入</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {notice && <div className="companion-notice">{notice}</div>}

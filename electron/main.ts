@@ -380,6 +380,11 @@ function sendAccount(loggedIn: boolean) {
   companion?.webContents.send('companion:account', loggedIn)
 }
 let loginRunning = false
+/** 登入中按「取消」（R165） */
+let loginAbort: AbortController | null = null
+ipcMain.on('google:cancelLogin', (e) => {
+  if (e.sender === companion?.webContents) loginAbort?.abort()
+})
 /** 有安裝的登入用瀏覽器，與依設定實際會用的那一個（R165） */
 function loginBrowsers() {
   const exes = installedBrowsers()
@@ -411,7 +416,13 @@ ipcMain.handle('google:login', async (e): Promise<true | LoginFailure> => {
     const { exes, picked } = loginBrowsers()
     log(`設定：${settings.loginBrowser}，使用：${picked ?? '沒有'}`)
     if (!picked) return 'no-browser'
-    const r = await loginWithBrowser({ executable: exes[picked], log })
+    loginAbort = new AbortController()
+    const r = await loginWithBrowser({
+      executable: exes[picked],
+      log,
+      signal: loginAbort.signal,
+      onReading: () => companion?.webContents.send('companion:loginReading')
+    })
     log(r.ok ? '結果：成功' : `結果：${r.reason}`)
     if (!r.ok) return r.reason
     const ses = webSession()
@@ -435,6 +446,7 @@ ipcMain.handle('google:login', async (e): Promise<true | LoginFailure> => {
     return true
   } finally {
     loginRunning = false
+    loginAbort = null
   }
 })
 ipcMain.handle('google:logout', async (e) => {

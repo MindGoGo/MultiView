@@ -237,3 +237,19 @@ body,
 .companion-confirm-buttons button.danger:hover {
   background: #d84040;
 }
+
+.companion-login-cancel {
+  margin-top: 14px;
+}
+.companion-login-cancel button {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e8e8ea;
+  font: inherit;
+  cursor: pointer;
+}
+.companion-login-cancel button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}

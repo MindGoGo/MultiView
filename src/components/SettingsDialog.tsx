@@ -190,7 +190,7 @@ function LoginBrowserRow({ value, onChange }: { value: LoginBrowser; onChange(b:
             ? '讀取中…'
             : options.length === 0
               ? '找不到 Microsoft Edge、Google Chrome 或 Brave，YouTube 小視窗無法登入。'
-              : 'YouTube 小視窗按「登入」時開啟這個瀏覽器（全新的視窗，不會用到你平常在這個瀏覽器的帳號和資料），登入完成後自動關閉。'
+              : 'YouTube 小視窗按「登入」時開啟這個瀏覽器（全新的視窗，不會用到你平常在這個瀏覽器的帳號和資料）；登入後關掉那個視窗即可。'
         }
       >
         {options.length > 1 && <Choice label="登入用的瀏覽器" value={shown} options={options} onChange={onChange} />}

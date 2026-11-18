@@ -148,3 +148,30 @@ describe('cookie 轉換', () => {
     expect(cookieUrl({ domain: 'accounts.google.com', path: '/ServiceLogin' })).toBe('https://accounts.google.com/ServiceLogin')
   })
 })
+
+describe('瀏覽器還開著登入的資料夾嗎', async () => {
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const { profileInUse } = await import('../../electron/googleLogin')
+  const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mv-test-profile-'))
+
+  it('Windows：有 lockfile 就是開著', () => {
+    const dir = tmp()
+    expect(profileInUse(dir)).toBe(false)
+    fs.writeFileSync(path.join(dir, 'lockfile'), '')
+    expect(profileInUse(dir)).toBe(true)
+    fs.rmSync(dir, { recursive: true })
+  })
+
+  it.skipIf(process.platform === 'win32')('Linux、macOS：SingletonLock 指向的程序還在才算開著', () => {
+    const dir = tmp()
+    fs.symlinkSync(`host-${process.pid}`, path.join(dir, 'SingletonLock'))
+    expect(profileInUse(dir)).toBe(true)
+    fs.rmSync(path.join(dir, 'SingletonLock'))
+    // 瀏覽器被強制結束時留下來的
+    fs.symlinkSync('host-999999999', path.join(dir, 'SingletonLock'))
+    expect(profileInUse(dir)).toBe(false)
+    fs.rmSync(dir, { recursive: true })
+  })
+})
