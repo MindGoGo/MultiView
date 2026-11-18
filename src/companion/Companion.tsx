@@ -59,9 +59,18 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
       showNotice(r === true ? '已登入 Google' : LOGIN_FAILURE_TEXT[r])
     })
   }
+  /** 登出前先確認，避免誤觸（R165） */
+  const [confirmLogout, setConfirmLogout] = useState(false)
   const logout = () => {
+    setConfirmLogout(false)
     void window.companion.googleLogout().then(() => showNotice('已登出 Google'))
   }
+  useEffect(() => {
+    if (!confirmLogout) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setConfirmLogout(false)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [confirmLogout])
   const openHistory = () => {
     historyCount.current++
     setSearchUrl(`${MOBILE_HISTORY_URL}?mv=${historyCount.current}`)
@@ -114,7 +123,7 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
             <button className="companion-account" title="觀看紀錄（在搜尋分頁開啟）" onClick={openHistory}>
               紀錄
             </button>
-            <button className="companion-account" title="登出 Google" onClick={logout}>
+            <button className="companion-account" title="登出 Google" onClick={() => setConfirmLogout(true)}>
               登出
             </button>
           </>
@@ -173,6 +182,24 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
           </div>
         )}
         {notice && <div className="companion-notice">{notice}</div>}
+        {confirmLogout && (
+          <div className="companion-confirm-backdrop" onPointerDown={(e) => e.target === e.currentTarget && setConfirmLogout(false)}>
+            <div className="companion-confirm" role="alertdialog" aria-modal="true" aria-labelledby="logout-title">
+              <div id="logout-title" className="companion-confirm-title">
+                要登出 Google 嗎？
+              </div>
+              <div className="companion-confirm-text">小視窗和格子裡的 YouTube 網頁都會登出，之後要再按「登入」重新登入。</div>
+              <div className="companion-confirm-buttons">
+                <button autoFocus onClick={() => setConfirmLogout(false)}>
+                  取消
+                </button>
+                <button className="danger" onClick={logout}>
+                  登出
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
