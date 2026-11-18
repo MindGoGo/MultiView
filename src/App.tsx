@@ -35,6 +35,7 @@ import type { Quality } from './lib/quality'
 import { BRIGHTNESS_DEFAULT } from './lib/brightness'
 import type { YtMode } from './players/YouTubeSource'
 import { SettingsDialog } from './components/SettingsDialog'
+import { NOTICE_MS, type SkipAction } from './lib/sponsorBlock'
 import { canonicalYouTubeUrl, classifyLink, youtubePageUrl } from './lib/links'
 import { skipTarget, resumePosition } from './lib/progress'
 import {
@@ -130,6 +131,23 @@ export default function App({ initial }: { initial: ViewSettings }) {
     (id: number, mode: YtMode) => setYtModes((prev) => (prev[id] === mode ? prev : { ...prev, [id]: mode })),
     []
   )
+  /** SponsorBlock 的設定（R161） */
+  const [sponsorBlock, setSponsorBlock] = useState(initial.sponsorBlock)
+  /** 每一格的跳過提示，依來源 id；n 每次跳過加一，5 秒後只收起同一次的提示（R161） */
+  const [skipNotices, setSkipNotices] = useState<Record<number, { action: SkipAction; n: number }>>({})
+  const skipCount = useRef(0)
+  const onSkipSegment = useCallback((id: number, action: SkipAction) => {
+    const n = ++skipCount.current
+    setSkipNotices((prev) => ({ ...prev, [id]: { action, n } }))
+    setTimeout(() => {
+      setSkipNotices((prev) => {
+        if (prev[id]?.n !== n) return prev
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+    }, NOTICE_MS)
+  }, [])
   /** 工具列的總亮度選單開著時，工具列不自動隱藏（R41 AC4） */
   const [toolbarPopup, setToolbarPopup] = useState(false)
   /** 設定視窗（R96） */
@@ -217,6 +235,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     youtubeMethods,
     webMethod,
     listTab,
+    sponsorBlock,
     slots: slots.map((s) =>
       s
         ? {
@@ -251,7 +270,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
     window.multiview.saveView(viewOf(positions))
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, sponsorBlock])
 
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
@@ -712,6 +731,22 @@ export default function App({ initial }: { initial: ViewSettings }) {
     const s = slots[index]
     if (s) players.current.get(s.id)?.seek(seconds)
   }
+  // SponsorBlock（R161）：進度條的色塊、跳過提示的「取消」
+  const getSegments = (index: number) => {
+    const s = slots[index]
+    return (s && players.current.get(s.id)?.getSegments?.()) || []
+  }
+  const onCancelSkip = (index: number) => {
+    const s = slots[index]
+    const notice = s && skipNotices[s.id]
+    if (!s || !notice) return
+    players.current.get(s.id)?.cancelSkip?.(notice.action.segment)
+    setSkipNotices((prev) => {
+      const next = { ...prev }
+      delete next[s.id]
+      return next
+    })
+  }
 
   // 快轉、倒轉（R51）：維持原本的播放或暫停狀態；跳轉後顯示那一格的操作區，看得到跳轉後的時間
   const [poke, setPoke] = useState({ index: -1, n: 0 })
@@ -926,6 +961,12 @@ export default function App({ initial }: { initial: ViewSettings }) {
         getProgress={getProgress}
         onSeek={onSeek}
         onSkip={onSkip}
+        sponsorBlock={sponsorBlock}
+        onSkipSegment={onSkipSegment}
+        skipNotices={skipNotices}
+        onCancelSkip={onCancelSkip}
+        getSegments={getSegments}
+        toolbarShown={toolbarVisible || toast !== null || listOpen || toolbarPopup || settingsOpen}
         poke={poke}
       />
       <Toolbar
@@ -957,6 +998,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
           onYoutubeMethods={setYoutubeMethods}
           webMethod={webMethod}
           onWebMethod={setWebMethod}
+          sponsorBlock={sponsorBlock}
+          onSponsorBlock={setSponsorBlock}
           onToast={showToast}
         />
       )}

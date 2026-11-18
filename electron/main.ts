@@ -24,6 +24,9 @@ import {
 import { extractStoryboardSpec } from '../src/lib/storyboard'
 import { isVideoId } from '../src/lib/ytdlp'
 import { installStreamCors, ytdlp } from './ytdlp'
+import { createSponsorClient } from './sponsorBlock'
+import { loginWithBrowser } from './googleLogin'
+import { cookieUrl, isGoogleDomain, type LoginFailure } from '../src/lib/googleLogin'
 import {
   channelFeedUrl,
   channelLiveUrl,
@@ -340,6 +343,57 @@ ipcMain.on('companion:tab', (e, tab: unknown) => {
   settings.companion = { ...settings.companion, tab }
   saveSoon()
 })
+// 用外部瀏覽器登入 Google（R165）：cookie 放進網頁來源與小視窗共用的資料區（WEB_PARTITION）
+const webSession = () => session.fromPartition(WEB_PARTITION)
+async function googleLoggedIn(): Promise<boolean> {
+  const cookies = await webSession().cookies.get({ name: 'LOGIN_INFO' })
+  return cookies.some((c) => /(^|\.)youtube\.com$/.test((c.domain ?? '').replace(/^\./, '')))
+}
+function sendAccount(loggedIn: boolean) {
+  companion?.webContents.send('companion:account', loggedIn)
+}
+let loginRunning = false
+ipcMain.handle('google:status', () => googleLoggedIn())
+ipcMain.handle('google:login', async (e): Promise<true | LoginFailure> => {
+  if (e.sender !== companion?.webContents) return 'failed'
+  if (loginRunning) return 'busy'
+  loginRunning = true
+  try {
+    const r = await loginWithBrowser()
+    if (!r.ok) return r.reason
+    const ses = webSession()
+    let saved = 0
+    for (const c of r.cookies) {
+      try {
+        await ses.cookies.set(c)
+        saved++
+      } catch {
+        // 個別 cookie 放不進去（格式不合）時略過
+      }
+    }
+    await ses.cookies.flushStore()
+    if (saved === 0) return 'failed'
+    sendAccount(await googleLoggedIn())
+    if (companion) {
+      if (companion.isMinimized()) companion.restore()
+      companion.focus()
+    }
+    return true
+  } finally {
+    loginRunning = false
+  }
+})
+ipcMain.handle('google:logout', async (e) => {
+  if (e.sender !== companion?.webContents) return
+  const ses = webSession()
+  const cookies = await ses.cookies.get({})
+  for (const c of cookies.filter((c) => c.domain && isGoogleDomain(c.domain))) {
+    await ses.cookies.remove(cookieUrl(c), c.name).catch(() => undefined)
+  }
+  await ses.cookies.flushStore()
+  sendAccount(false)
+})
+
 ipcMain.on('companion:action', (e, action: CompanionAction) => {
   if (e.sender === companion?.webContents) win?.webContents.send('companion:action', action)
 })
@@ -359,7 +413,8 @@ ipcMain.handle('settings:getView', () => ({
   autoYoutubeWeb: settings.autoYoutubeWeb,
   youtubeMethods: settings.youtubeMethods,
   webMethod: settings.webMethod,
-  listTab: settings.listTab
+  listTab: settings.listTab,
+  sponsorBlock: settings.sponsorBlock
 }))
 ipcMain.on('settings:saveView', (_, view: unknown) => {
   settings = { ...settings, ...normalizeView(view) }
@@ -419,6 +474,10 @@ ipcMain.handle('ytdlp:setChannel', (_, channel: unknown) =>
 ipcMain.handle('ytdlp:status', () => ytdlp.getStatus())
 ipcMain.on('ytdlp:check', () => void ytdlp.checkLatest())
 ytdlp.onStatus((s) => win?.webContents.send('ytdlp:status', s))
+
+// SponsorBlock（R161）：在主程序連線（不受畫面的跨網站限制），每部影片只抓一次
+const sponsor = createSponsorClient((url, init) => net.fetch(url, init))
+ipcMain.handle('sponsorblock:segments', (_, videoId: unknown) => (isVideoId(videoId) ? sponsor.segments(videoId) : []))
 
 // YouTube 預覽縮圖的資訊（R50）：從這部影片的 YouTube 網頁取出，每部影片只取得一次
 const storyboardSpecs = new Map<string, Promise<string | null>>()

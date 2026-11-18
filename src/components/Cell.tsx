@@ -19,6 +19,7 @@ import { LoadingCritter, useLoadingVisible } from './LoadingCritter'
 import { loadingKind } from '../lib/loading'
 import { playbackBadge } from '../lib/playbackBadge'
 import { controlsView, HANDLE_COLLAPSE_MS } from '../lib/pointerZones'
+import { categoryInfo, skippedLabel, type SkipAction, type SponsorSegment } from '../lib/sponsorBlock'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
 interface Props {
@@ -82,6 +83,13 @@ interface Props {
   getAudioTracks(index: number): AudioMenu | null
   onBrightness(index: number, brightness: number): void
   getCaptionTracks(index: number): CaptionTrack[] | null
+  /** SponsorBlock 的跳過提示（R161）；沒有時為 null */
+  skipNotice: { action: SkipAction; n: number } | null
+  onCancelSkip(index: number): void
+  /** 要跳過的片段（進度條的色塊，R161） */
+  getSegments(index: number): SponsorSegment[]
+  /** 工具列顯示中：最上面一列的跳過提示往下移，避開工具列 */
+  toolbarShown: boolean
 }
 
 /** 格子裡的選單：字幕、畫質（R31、R32）；亮度、音量的滑桿選單（R40、R42） */
@@ -124,6 +132,9 @@ function Label({ full, icon }: { full: string; icon: string }) {
     </>
   )
 }
+
+/** 工具列的高度（styles.css 的 .toolbar） */
+const TOOLBAR_HEIGHT = 40
 
 /** 滑鼠靜止多久後隱藏操作按鈕（R3 AC2） */
 const CONTROLS_IDLE_MS = 2000
@@ -329,6 +340,19 @@ export function Cell(props: Props) {
 
       {loading && <LoadingCritter kind={loading} />}
 
+      {/* SponsorBlock 的跳過提示（R161）：右上角，5 秒後自動收起 */}
+      {props.skipNotice && !showInput && (
+        <div
+          key={props.skipNotice.n}
+          className="skip-notice"
+          style={props.toolbarShown && cellRef.current && cellRef.current.getBoundingClientRect().top < TOOLBAR_HEIGHT ? { top: TOOLBAR_HEIGHT + 6 } : undefined}
+        >
+          <span className="skip-dot" style={{ background: categoryInfo(props.skipNotice.action.segment.category).color }} />
+          <span>{skippedLabel(props.skipNotice.action.segment.category)}</span>
+          <button onClick={() => props.onCancelSkip(index)}>取消</button>
+        </div>
+      )}
+
       {failed && (
         <div className="cell-center cell-message">
           {source.parsed.kind === 'youtube' ? (
@@ -383,6 +407,7 @@ export function Cell(props: Props) {
             <ProgressBar
               active={hover || seeking || previewing}
               getProgress={() => props.getProgress(index)}
+              getSegments={() => props.getSegments(index)}
               onSeek={(t) => props.onSeek(index, t)}
               onDragChange={setSeeking}
               playing={isPlayingStatus(status)}

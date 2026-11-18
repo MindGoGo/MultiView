@@ -12,7 +12,8 @@
 - **每格亮度與總亮度**、畫質選擇、字幕、進度條預覽縮圖、←／→ 快轉倒轉 5 秒、記住觀看進度。
 - **yt-dlp 播放（選用）**：用內附的 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 取得影片串流，以程式自己的播放器播放，畫面上沒有 YouTube 的按鈕與廣告。播不了時自動退回內嵌播放器或網頁。yt-dlp 會每天自動更新。
 - **網頁模式**：在格子裡直接逛 YouTube 或其他網站，可以只顯示網頁中的影片，內建廣告阻擋。
-- **YouTube 小視窗**：另開一個視窗看推薦影片、留言、直播聊天室，或用手機版 YouTube 搜尋。
+- **SponsorBlock**：用 yt-dlp 播放 YouTube 影片時，自動跳過社群標記的業配、開場等片段，進度條上顯示片段的位置。
+- **YouTube 小視窗**：另開一個視窗看推薦影片、留言、直播聊天室，或用手機版 YouTube 搜尋；可以用 Microsoft Edge 登入 Google，看自己的觀看紀錄與推薦。
 - **程式內的訂閱清單**：可從 Google Takeout 匯入訂閱頻道，顯示最新影片與直播中的頻道。
 - **最愛與歷史**、置頂、全螢幕、單格全螢幕、快捷鍵。
 - 關閉後會記住版型、比例、影片清單與聲音設定。
@@ -78,6 +79,7 @@ npm run dist       # 打包成安裝檔，輸出到 release/
 | [EasyList](https://easylist.to/)（`resources/easylist.txt`） | GPLv3 或 CC BY-SA 3.0 |
 | [@ghostery/adblocker](https://github.com/ghostery/adblocker) | MPL-2.0 |
 | [hls.js](https://github.com/video-dev/hls.js) | Apache-2.0 |
+| [SponsorBlock](https://sponsor.ajay.app/) 的片段資料（執行時向 API 取得） | CC BY-NC-SA 4.0 |
 | [Electron](https://www.electronjs.org/)、[React](https://react.dev/) | MIT |
 
 ## 授權

@@ -2,6 +2,7 @@ import type { Failure } from '../lib/webErrors'
 import type { Progress } from '../lib/progress'
 import type { CaptionTrack } from '../lib/captions'
 import type { AudioOption } from '../lib/audioTracks'
+import type { SponsorSegment } from '../lib/sponsorBlock'
 
 /** 聲音軌選單（R95）：不同的聲音軌，與播放器目前用的聲音軌位置 */
 export interface AudioMenu {
@@ -30,6 +31,10 @@ export interface PlayerHandle {
   getAudioTracks?(): AudioMenu | null
   /** 網頁來源目前的網址（R66：YouTube 網頁模式下網頁上目前的影片） */
   getUrl?(): string | null
+  /** 要跳過的 SponsorBlock 片段（已依設定過濾，R161）；不跳過時是空的 */
+  getSegments?(): SponsorSegment[]
+  /** 跳過提示的「取消」：跳回片段開頭，這個片段之後不再跳（R161） */
+  cancelSkip?(segment: SponsorSegment): void
   /** 網頁來源的上一頁／下一頁（R28） */
   goBack?(): void
   goForward?(): void

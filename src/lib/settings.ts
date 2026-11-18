@@ -7,6 +7,7 @@ import { BRIGHTNESS_DEFAULT, normalizeBrightness } from './brightness'
 import { DEFAULT_COMPANION, normalizeCompanion, type CompanionWindowState } from './companion'
 import { DEFAULT_METHODS, normalizeMethods, normalizeWebMethod, type WebMethod, type YouTubeMethods } from './ytdlp'
 import { normalizeVolume } from './volume'
+import { DEFAULT_SPONSOR_BLOCK, normalizeSponsorBlock, type SponsorBlockSettings } from './sponsorBlock'
 
 export interface WindowState {
   x?: number
@@ -55,6 +56,8 @@ export interface ViewSettings {
   webMethod: WebMethod
   /** 清單面板上次的那一邊和分頁（R58）；舊的設定檔視為 YouTube 的最愛 */
   listTab: { group: 'youtube' | 'other'; tab: 'subscriptions' | 'favorites' | 'history' }
+  /** SponsorBlock（R161）；舊的設定檔沒有這個欄位時開啟、只跳過業配（和手機版相同的格式） */
+  sponsorBlock: SponsorBlockSettings
 }
 
 export interface Settings extends ViewSettings {
@@ -78,7 +81,8 @@ export function defaultSettings(): Settings {
     autoYoutubeWeb: false,
     youtubeMethods: { ...DEFAULT_METHODS },
     webMethod: 'web',
-    listTab: DEFAULT_LIST_TAB
+    listTab: DEFAULT_LIST_TAB,
+    sponsorBlock: { ...DEFAULT_SPONSOR_BLOCK, categories: [...DEFAULT_SPONSOR_BLOCK.categories] }
   }
 }
 
@@ -158,7 +162,8 @@ export function normalizeView(raw: unknown): ViewSettings {
     autoYoutubeWeb: obj.autoYoutubeWeb === true,
     youtubeMethods: normalizeMethods(obj.youtubeMethods),
     webMethod: normalizeWebMethod(obj.webMethod),
-    listTab: normalizeListTab(obj.listTab)
+    listTab: normalizeListTab(obj.listTab),
+    sponsorBlock: normalizeSponsorBlock(obj.sponsorBlock)
   }
 }
 

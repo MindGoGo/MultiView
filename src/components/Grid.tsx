@@ -10,6 +10,7 @@ import type { Quality } from '../lib/quality'
 import { brightnessFilter } from '../lib/brightness'
 import { YouTubeSource, type YtMode } from '../players/YouTubeSource'
 import type { WebMethod, YouTubeMethods } from '../lib/ytdlp'
+import type { SkipAction, SponsorBlockSettings, SponsorSegment } from '../lib/sponsorBlock'
 import { WebSource } from '../players/WebSource'
 import { canBoost, effectiveVolume } from '../lib/volume'
 import { VideoPlayer } from '../players/VideoPlayer'
@@ -112,6 +113,15 @@ interface Props {
   /** 按了「改用網頁」的來源 id（R103） */
   forcedWeb: ReadonlySet<number>
   onUseWebPage(index: number): void
+  /** SponsorBlock（R161） */
+  sponsorBlock: SponsorBlockSettings
+  onSkipSegment(id: number, action: SkipAction): void
+  /** 每一格的跳過提示，依來源 id */
+  skipNotices: Record<number, { action: SkipAction; n: number }>
+  onCancelSkip(index: number): void
+  getSegments(index: number): SponsorSegment[]
+  /** 工具列顯示中：最上面一列的跳過提示往下移 */
+  toolbarShown: boolean
 }
 
 const FULL: FracRect = { x: 0, y: 0, w: 1, h: 1 }
@@ -181,6 +191,8 @@ export function Grid(props: Props) {
                 methods={props.youtubeMethods}
                 onMode={(mode) => props.onYtMode(source.id, mode)}
                 onFallback={() => props.onYtFallback('youtube')}
+                sponsorBlock={props.sponsorBlock}
+                onSkipSegment={(action) => props.onSkipSegment(source.id, action)}
                 {...common}
               />
             ) : source.parsed.kind === 'web' && isOtherSite(source) ? (
@@ -236,6 +248,10 @@ export function Grid(props: Props) {
             onBack={props.onBack}
             onYouTubeMenu={props.onYouTubeMenu}
             onSkip={props.onSkip}
+            skipNotice={source ? (props.skipNotices[source.id] ?? null) : null}
+            onCancelSkip={props.onCancelSkip}
+            getSegments={props.getSegments}
+            toolbarShown={props.toolbarShown}
             poke={props.poke.index === index ? props.poke.n : 0}
             onUseYoutubeWeb={props.onUseYoutubeWeb}
             canMove={layout !== '1' && solo === null}

@@ -4,6 +4,7 @@ import type { WebMode } from '../src/players/webTypes'
 import type { Lists } from '../src/lib/lists'
 import type { FeedVideo } from '../src/lib/youtubeFeed'
 import type { CompanionAction, CompanionLink, CompanionTab } from '../src/lib/companion'
+import type { SponsorSegment } from '../src/lib/sponsorBlock'
 import type { ResolveResult, UpdateOutcome, YtDlpChannel, YtDlpStatus } from '../src/lib/ytdlp'
 
 export interface CursorPos {
@@ -81,6 +82,8 @@ const api = {
   /** 改變 yt-dlp 的更新來源並馬上更新（R160） */
   ytdlpSetChannel: (channel: YtDlpChannel): Promise<{ result: UpdateOutcome; version: string | null }> =>
     ipcRenderer.invoke('ytdlp:setChannel', channel),
+  /** 這部影片的 SponsorBlock 片段（還沒依設定過濾，R161）；沒有或連不到時是空的 */
+  sponsorSegments: (videoId: string): Promise<SponsorSegment[]> => ipcRenderer.invoke('sponsorblock:segments', videoId),
   /** 打開設定選單時查詢最新版（1 小時內查過就不查，R93） */
   ytdlpCheck: () => ipcRenderer.send('ytdlp:check'),
   onYtdlpStatus: (cb: (s: YtDlpStatus) => void) => {

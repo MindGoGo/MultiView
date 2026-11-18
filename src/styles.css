@@ -503,6 +503,23 @@ button.link {
   background: var(--accent);
 }
 
+/* SponsorBlock 的片段（R161）：畫在已播放的部分上面，最窄 2px */
+.progress-segment {
+  position: absolute;
+  top: 7px;
+  height: 3px;
+  min-width: 2px;
+  pointer-events: none;
+}
+
+.progress-preview-segment {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .progress-thumb {
   position: absolute;
   top: 3px;
@@ -1180,6 +1197,11 @@ button.danger {
   font-weight: 600;
 }
 
+.set-subheading {
+  margin-top: 28px;
+  font-size: 15px;
+}
+
 .set-row {
   display: flex;
   align-items: center;
@@ -1447,4 +1469,59 @@ button.danger {
 /* 整頁模式、直接操作時格子不接收滑鼠，小標示仍然可以停留顯示說明（R109） */
 .cell.direct .cell-corner .play-badge {
   pointer-events: auto;
+}
+
+/* ---- SponsorBlock 的跳過提示（R161） ---- */
+.skip-notice {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 12px);
+  padding: 4px 6px 4px 10px;
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.skip-notice button {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.skip-notice button:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.skip-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* 設定視窗的 SponsorBlock 類別（R161） */
+.set-categories {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px 16px;
+  padding: 12px 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.set-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
 }

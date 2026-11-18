@@ -10,6 +10,7 @@ import {
   type YtDlpChannel,
   type YtDlpStatus
 } from '../lib/ytdlp'
+import { SPONSOR_CATEGORIES, type SponsorBlockSettings } from '../lib/sponsorBlock'
 import { CloseIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
 
 export type SettingsCategory = 'youtube' | 'web' | 'ytdlp' | 'about'
@@ -33,6 +34,9 @@ interface Props {
   /** 其他網站的播放方式（R102） */
   webMethod: WebMethod
   onWebMethod(method: WebMethod): void
+  /** SponsorBlock（R161） */
+  sponsorBlock: SponsorBlockSettings
+  onSponsorBlock(settings: SponsorBlockSettings): void
   /** 手動更新 yt-dlp 的結果（R93） */
   onToast(message: string): void
 }
@@ -157,7 +161,45 @@ function YouTubeSection(props: Props) {
       <Row title="無法嵌入時自動改用網頁播放" desc="影片不允許在其他網站播放時，直接改用 YouTube 網頁播放。">
         <Switch label="無法嵌入時自動改用網頁播放" on={props.autoYoutubeWeb} onChange={props.onAutoYoutubeWeb} />
       </Row>
+      <SponsorBlockRows settings={props.sponsorBlock} onChange={props.onSponsorBlock} />
     </section>
+  )
+}
+
+/** SponsorBlock（R161）：改了馬上套用到每一格 */
+function SponsorBlockRows({ settings, onChange }: { settings: SponsorBlockSettings; onChange(s: SponsorBlockSettings): void }) {
+  const toggle = (id: (typeof SPONSOR_CATEGORIES)[number]['id'], on: boolean) => {
+    const set = new Set(settings.categories)
+    if (on) set.add(id)
+    else set.delete(id)
+    onChange({ ...settings, categories: SPONSOR_CATEGORIES.map((c) => c.id).filter((c) => set.has(c)) })
+  }
+  return (
+    <>
+      <h2 className="set-heading set-subheading">SponsorBlock（跳過業配）</h2>
+      <Row
+        title="自動跳過片段"
+        desc={
+          <>
+            只處理用 yt-dlp 播放的 YouTube 一般影片。每部影片只向 SponsorBlock 要一次資料（幾 KB），而且只送出影片代碼雜湊的前 4 碼，伺服器不知道你在看哪一部。
+            片段資料來自 SponsorBlock（sponsor.ajay.app）的社群標記，授權 CC BY-NC-SA 4.0。
+          </>
+        }
+      >
+        <Switch label="自動跳過片段" on={settings.enabled} onChange={(enabled) => onChange({ ...settings, enabled })} />
+      </Row>
+      {settings.enabled && (
+        <div className="set-categories" role="group" aria-label="要跳過的片段">
+          {SPONSOR_CATEGORIES.map((c) => (
+            <label key={c.id} className="set-check">
+              <input type="checkbox" checked={settings.categories.includes(c.id)} onChange={(e) => toggle(c.id, e.target.checked)} />
+              <span className="skip-dot" style={{ background: c.color }} />
+              {c.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 
