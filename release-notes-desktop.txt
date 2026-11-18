@@ -1,10 +1,5 @@
-- 修正 YouTube 小視窗按「登入」後，Edge 才剛開啟就顯示「已取消登入」、在 Edge 登入後也沒有作用的問題（Edge 把視窗交給另一個程序開啟時，程式誤以為 Edge 被關掉；電腦較慢、Edge 還沒開好分頁時也會誤判）。
-- YouTube 小視窗的「登出」會先跳出確認，避免誤觸。
-- 登入的每個步驟會記錄在 %APPDATA%\MultiView\login.log，登入不了時請把這個檔案的內容貼給我。
+- 網址輸入框可以用滑鼠貼上：格子的網址輸入框旁多一個「貼上並開啟」，輸入框按右鍵也有剪下、複製、貼上、全選。
+- YouTube 小視窗登入 Google 時可以選瀏覽器：設定 → YouTube 播放 → Google 登入 →「登入用的瀏覽器」（Edge、Chrome、Brave，只列出電腦上有安裝的）。
+- 0.8.6：修正按「登入」後馬上顯示「已取消登入」；登出前先確認；登入步驟記錄在 %APPDATA%\MultiView\login.log。
 
-0.8.5 的新功能：
-- SponsorBlock：用 yt-dlp 播 YouTube 一般影片時，自動跳過其他觀眾標記的業配片段（設定 → YouTube 播放 → SponsorBlock）。片段資料來自 SponsorBlock（sponsor.ajay.app，CC BY-NC-SA 4.0）。
-- YouTube 小視窗可以用 Microsoft Edge 登入 Google（實驗中）。
-- 免安裝版：下載 MultiView-版本號-win.zip，解壓縮後執行 MultiView.exe。
-
-安裝：下載 MultiView-Setup-版本號.exe 雙擊即可。程式沒有數位簽章，Windows 顯示「Windows 已保護您的電腦」時按「其他資訊」→「仍要執行」。
+安裝：下載 MultiView-Setup-版本號.exe 雙擊即可；免安裝版下載 MultiView-版本號-win.zip，解壓縮後執行 MultiView.exe。程式沒有數位簽章，Windows 顯示「Windows 已保護您的電腦」時按「其他資訊」→「仍要執行」。

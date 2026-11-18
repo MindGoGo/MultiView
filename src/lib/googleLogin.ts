@@ -9,15 +9,39 @@ export const LOGIN_URL =
 /** 等使用者登入最多多久（毫秒） */
 export const LOGIN_TIMEOUT_MS = 15 * 60_000
 
+/** 登入用的瀏覽器：都是 Chromium 核心，支援偵錯連線（Chrome DevTools Protocol） */
+export const LOGIN_BROWSERS = [
+  { id: 'edge', label: 'Microsoft Edge', short: 'Edge', path: 'Microsoft\\Edge\\Application\\msedge.exe' },
+  { id: 'chrome', label: 'Google Chrome', short: 'Chrome', path: 'Google\\Chrome\\Application\\chrome.exe' },
+  { id: 'brave', label: 'Brave', short: 'Brave', path: 'BraveSoftware\\Brave-Browser\\Application\\brave.exe' }
+] as const
+
+export type LoginBrowser = (typeof LOGIN_BROWSERS)[number]['id']
+
+/** 預設用 Edge（Windows 10、11 內建） */
+export const DEFAULT_LOGIN_BROWSER: LoginBrowser = 'edge'
+
+export const normalizeLoginBrowser = (raw: unknown): LoginBrowser =>
+  LOGIN_BROWSERS.some((b) => b.id === raw) ? (raw as LoginBrowser) : DEFAULT_LOGIN_BROWSER
+
+export const loginBrowserInfo = (id: LoginBrowser) => LOGIN_BROWSERS.find((b) => b.id === id)!
+
 /**
- * 依序找這些瀏覽器：Windows 10、11 內建 Edge，找不到時用 Chrome。
- * env 是環境變數（ProgramFiles、ProgramFiles(x86)、LOCALAPPDATA）。
+ * 這個瀏覽器可能的安裝位置：所有使用者（Program Files、Program Files (x86)）、只有自己（LOCALAPPDATA）。
+ * env 是環境變數。
  */
-export function browserCandidates(env: Record<string, string | undefined>): string[] {
+export function browserPaths(id: LoginBrowser, env: Record<string, string | undefined>): string[] {
   const roots = [env['ProgramFiles(x86)'], env['ProgramFiles'], env['LOCALAPPDATA']].filter((r): r is string => !!r)
-  const edge = roots.map((r) => `${r}\\Microsoft\\Edge\\Application\\msedge.exe`)
-  const chrome = roots.map((r) => `${r}\\Google\\Chrome\\Application\\chrome.exe`)
-  return [...edge, ...chrome]
+  return roots.map((r) => `${r}\\${loginBrowserInfo(id).path}`)
+}
+
+/**
+ * 實際要用的瀏覽器：選的那個有安裝就用它，沒有時依 Edge、Chrome、Brave 的順序用有安裝的；都沒有時是 null。
+ * installed 是有安裝的瀏覽器。
+ */
+export function pickLoginBrowser(selected: LoginBrowser, installed: readonly LoginBrowser[]): LoginBrowser | null {
+  if (installed.includes(selected)) return selected
+  return LOGIN_BROWSERS.map((b) => b.id).find((id) => installed.includes(id)) ?? null
 }
 
 /** 瀏覽器寫在資料夾裡的 DevToolsActivePort：第一行是埠號，第二行是瀏覽器的連線路徑 */
@@ -100,13 +124,13 @@ export const cookieUrl = (c: { domain?: string; path?: string }) => `https://${h
 
 export type LoginResult =
   | { ok: true; cookies: CookieDetails[] }
-  /** no-browser：找不到 Edge 或 Chrome；cancelled：使用者關掉瀏覽器；timeout：太久沒有登入；failed：其他原因 */
+  /** no-browser：找不到 Edge、Chrome 或 Brave；cancelled：使用者關掉瀏覽器；timeout：太久沒有登入；failed：其他原因 */
   | { ok: false; reason: 'no-browser' | 'cancelled' | 'timeout' | 'failed' | 'busy' }
 
 export type LoginFailure = Exclude<LoginResult, { ok: true }>['reason']
 
 export const LOGIN_FAILURE_TEXT: Record<LoginFailure, string> = {
-  'no-browser': '找不到 Microsoft Edge 或 Google Chrome，無法登入',
+  'no-browser': '找不到 Microsoft Edge、Google Chrome 或 Brave，無法登入',
   cancelled: '已取消登入',
   timeout: '太久沒有完成登入，已取消',
   failed: '登入失敗，請再試一次',

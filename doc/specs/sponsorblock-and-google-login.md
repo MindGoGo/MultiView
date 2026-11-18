@@ -12,7 +12,7 @@
 
 ## 2. 範圍
 
-**包含**：R161（yt-dlp 播放的 YouTube 一般影片跳過業配等片段）、R165（小視窗用 Microsoft Edge 登入 Google、觀看紀錄、登出）。
+**包含**：R161（yt-dlp 播放的 YouTube 一般影片跳過業配等片段）、R165（小視窗用 Microsoft Edge、Chrome 或 Brave 登入 Google、觀看紀錄、登出）、R166（用滑鼠貼上網址）。
 
 **不包含**：
 - R161：和手機版相同的「不做」（內嵌播放器、網頁格子、直播、`mute`／`poi`／`full`、送出或投票、統計）。背景只播聲音（手機版 R154）桌面版沒有，不適用。
@@ -37,13 +37,14 @@
 - 描述：
   - 小視窗上方、置頂按鈕的左邊：沒有登入時是「登入」；登入後是「紀錄」「登出」。
   - **登入**：
-    1. 按「登入」→ 程式用一個全新的暫存資料夾開啟 Microsoft Edge（找不到 Edge 時用 Google Chrome），打開 Google 的登入頁（登入後回到 YouTube）。使用者平常用的 Edge 和它的資料不受影響。
+    1. 按「登入」→ 程式用一個全新的暫存資料夾開啟登入用的瀏覽器（設定 →「YouTube 播放」→「Google 登入」→「登入用的瀏覽器」：Edge｜Chrome｜Brave，只列出有安裝的，預設 Edge，存在 `settings.json` 的 `loginBrowser`；選的沒有安裝時依 Edge、Chrome、Brave 的順序用有安裝的），打開 Google 的登入頁（登入後回到 YouTube）。使用者平常用的 Edge 和它的資料不受影響。
     2. 小視窗顯示「請在開啟的 Microsoft Edge 視窗登入 Google…」，按鈕變成「登入中…」。
     3. 使用者在 Edge 登入。偵錯連線最多等 90 秒（電腦慢時 Edge 要一陣子才開好）。程式透過 Edge 的偵錯連線（Chrome DevTools Protocol，只聽本機）每 1.5 秒檢查一次，YouTube 有 `LOGIN_INFO` 與 `SID`（或 `__Secure-1PSID`、`__Secure-3PSID`）時算登入完成；再等 2 秒讓 Google 補完其他網域的 cookie。
     4. 每個步驟寫進 `%APPDATA%\MultiView\login.log`（每次登入重寫），登入不了時用來查原因。
     5. 只取 Google（`google.com` 與各地的 `google.xx`）與 YouTube 網域的 cookie，放進網頁來源與小視窗共用的資料區（`persist:web`，R18），然後透過偵錯連線關掉這個 Edge，等它真的關掉再刪暫存資料夾。
     6. 小視窗的每個網頁重新載入，換成登入的樣子；提示「已登入 Google」。
   - **取消與失敗**：使用者關掉 Edge 的視窗（偵錯連線中斷；或 Edge 在背景繼續執行，但已經出現過的分頁連續 3 次檢查都沒有了）。不看程式啟動的那個程序有沒有結束：Edge 可能把視窗交給另一個程序開、自己先結束（0.8.5 實測，按登入後馬上顯示「已取消登入」）→「已取消登入」；15 分鐘沒有完成 →「太久沒有完成登入，已取消」；找不到 Edge 與 Chrome →「找不到 Microsoft Edge 或 Google Chrome，無法登入」；其他 →「登入失敗，請再試一次」。都會關掉 Edge、刪掉暫存資料夾。
+  - 登入中的說明與按鈕提示用實際開啟的瀏覽器名稱。
   - **紀錄**：切到「搜尋」分頁並打開手機版 YouTube 的觀看紀錄（`m.youtube.com/feed/history`）。點影片和搜尋結果一樣放進格子（R82）。
   - **登出**：先跳出確認「要登出 Google 嗎？」（取消／登出，Esc 或點旁邊也是取消），按「登出」才刪掉資料區裡 Google 與 YouTube 的 cookie，小視窗的網頁重新載入；提示「已登出 Google」。
   - 登入狀態和格子的網頁模式共用（R18），所以格子裡的 YouTube 網頁也會是登入的。
@@ -60,16 +61,29 @@
   - AC7：`%TEMP%` 裡沒有留下 `multiview-login-` 開頭的資料夾；平常用的 Edge 照常開啟、帳號不變。
   - AC8：`tests/unit/google-login.test.ts` 全部通過（找瀏覽器、偵錯連線的位置、登入完成的判斷、cookie 的網域與轉換、登出的網址）。
 
+### R166：用滑鼠貼上網址
+
+- 背景：使用者回報（0.8.6）：貼上網址、更換網址只能用鍵盤貼上，滑鼠沒辦法貼上（Electron 的輸入框預設沒有右鍵選單）。
+- 描述：
+  - 格子的網址輸入框右邊多一個「貼上並開啟」：讀剪貼簿的文字，直接開啟；剪貼簿沒有文字時顯示「剪貼簿裡沒有網址」，網址不合法時顯示原本的錯誤訊息。格子太窄時按鈕排到輸入框下面。
+  - 程式畫面（主視窗、YouTube 小視窗）的輸入框按右鍵有「剪下、複製、貼上、全選」（清單面板、訂閱的輸入框也有）；選取了文字時有「複製」。
+- 驗收條件：
+  - AC1：複製一個 YouTube 網址 → 空白格子按「貼上並開啟」→ 開始播放。
+  - AC2：在輸入框按右鍵 →「貼上」→ 網址貼進輸入框；剪下、複製、全選照常。
+  - AC3：剪貼簿是空的時按「貼上並開啟」→ 顯示「剪貼簿裡沒有網址」。
+
 ## 4. 實作
 
 - R161：`src/lib/sponsorBlock.ts`（規則）、`electron/sponsorBlock.ts`（雜湊前綴、請求與快取）、`electron/main.ts`／`electron/preload.ts`（`sponsorblock:segments`）、`src/players/YouTubeSource.tsx`（抓片段）、`src/players/VideoPlayer.tsx`（檢查、跳過、取消）、`src/components/Cell.tsx`（提示）、`ProgressBar.tsx`／`ProgressPreview.tsx`（色塊、預覽）、`SettingsDialog.tsx`（設定）、`src/lib/settings.ts`（`sponsorBlock` 欄位）。
 - R165：`src/lib/googleLogin.ts`（規則）、`electron/googleLogin.ts`（啟動 Edge、偵錯連線、關閉與清理；在開發環境用 Chromium 測過登入完成、取消、逾時與暫存資料夾的清理）、`electron/main.ts`（`google:login`、`google:status`、`google:logout`）、`electron/companionPreload.ts`、`src/companion/Companion.tsx`、`CompanionWeb.tsx`（`reloadKey`）。
+- R166：`src/components/Cell.tsx`（「貼上並開啟」）、`electron/main.ts`（`installEditMenu`、`clipboard:readText`）。
 - 手動驗收：`tests/manual/sponsorblock-and-google-login.md`。
 
 ## 5. 變更紀錄
 
 | 日期 | 變更 | 原因 |
 |---|---|---|
+| 2026-11-18 | 0.8.7：登入用的瀏覽器可以選 Edge、Chrome、Brave；R166 用滑鼠貼上網址 | 使用者要求 |
 | 2026-11-18 | 登出前先確認 | 使用者實測 0.8.6 登入成功；登出按鈕容易誤觸 |
 | 2026-11-18 | 0.8.6：取消的判斷改看偵錯連線與分頁，不看啟動的程序；等偵錯連線 90 秒；login.log；等 Edge 關掉才刪暫存資料夾 | 使用者實測 0.8.5：按登入後馬上顯示「已取消登入」 |
 | 2026-11-18 | 初版，實作於 0.8.5 | 使用者要求（手機版已經有 SponsorBlock；小視窗想登入看自己的紀錄） |

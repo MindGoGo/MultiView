@@ -314,6 +314,32 @@ button.active {
   user-select: text;
 }
 
+.url-row {
+  display: flex;
+  gap: 6px;
+  width: min(460px, 90%);
+}
+
+.url-row .url-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.paste-open {
+  flex: none;
+  white-space: nowrap;
+  background: #262626;
+  border-color: #3a3a3a;
+}
+
+/* 格子太窄時按鈕換到輸入框下面 */
+@container (max-width: 279px) {
+  .url-row {
+    flex-direction: column;
+  }
+}
+
 .url-input:focus {
   border-color: var(--accent);
 }

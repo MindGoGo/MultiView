@@ -7,6 +7,7 @@ import { BRIGHTNESS_DEFAULT, normalizeBrightness } from './brightness'
 import { DEFAULT_COMPANION, normalizeCompanion, type CompanionWindowState } from './companion'
 import { DEFAULT_METHODS, normalizeMethods, normalizeWebMethod, type WebMethod, type YouTubeMethods } from './ytdlp'
 import { normalizeVolume } from './volume'
+import { DEFAULT_LOGIN_BROWSER, normalizeLoginBrowser, type LoginBrowser } from './googleLogin'
 import { DEFAULT_SPONSOR_BLOCK, normalizeSponsorBlock, type SponsorBlockSettings } from './sponsorBlock'
 
 export interface WindowState {
@@ -58,6 +59,8 @@ export interface ViewSettings {
   listTab: { group: 'youtube' | 'other'; tab: 'subscriptions' | 'favorites' | 'history' }
   /** SponsorBlock（R161）；舊的設定檔沒有這個欄位時開啟、只跳過業配（和手機版相同的格式） */
   sponsorBlock: SponsorBlockSettings
+  /** 登入 Google 用的瀏覽器（R165）；舊的設定檔沒有時是 Edge */
+  loginBrowser: LoginBrowser
 }
 
 export interface Settings extends ViewSettings {
@@ -82,7 +85,8 @@ export function defaultSettings(): Settings {
     youtubeMethods: { ...DEFAULT_METHODS },
     webMethod: 'web',
     listTab: DEFAULT_LIST_TAB,
-    sponsorBlock: { ...DEFAULT_SPONSOR_BLOCK, categories: [...DEFAULT_SPONSOR_BLOCK.categories] }
+    sponsorBlock: { ...DEFAULT_SPONSOR_BLOCK, categories: [...DEFAULT_SPONSOR_BLOCK.categories] },
+    loginBrowser: DEFAULT_LOGIN_BROWSER
   }
 }
 
@@ -163,7 +167,8 @@ export function normalizeView(raw: unknown): ViewSettings {
     youtubeMethods: normalizeMethods(obj.youtubeMethods),
     webMethod: normalizeWebMethod(obj.webMethod),
     listTab: normalizeListTab(obj.listTab),
-    sponsorBlock: normalizeSponsorBlock(obj.sponsorBlock)
+    sponsorBlock: normalizeSponsorBlock(obj.sponsorBlock),
+    loginBrowser: normalizeLoginBrowser(obj.loginBrowser)
   }
 }
 

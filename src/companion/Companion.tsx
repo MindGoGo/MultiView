@@ -16,7 +16,7 @@ import {
 import { parseSource } from '../lib/source'
 import { CompanionWeb } from './CompanionWeb'
 import { PinIcon } from '../components/icons'
-import { LOGIN_FAILURE_TEXT, MOBILE_HISTORY_URL } from '../lib/googleLogin'
+import { LOGIN_FAILURE_TEXT, loginBrowserInfo, MOBILE_HISTORY_URL } from '../lib/googleLogin'
 
 export const NO_VIDEO = '這一格沒有 YouTube 影片'
 export const NO_CHAT = '這部影片沒有聊天室（只有直播有）'
@@ -30,9 +30,9 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
   /** 開過的分頁才建立網頁，之後一直保留（R78）；推薦和留言共用影片網頁 */
   const [opened, setOpened] = useState(() => new Set([initial.tab]))
 
-  /** Google 帳號（R165）：null 是還不知道；loggingIn 時顯示「請在 Edge 視窗登入」 */
+  /** Google 帳號（R165）：null 是還不知道；loggingIn 是登入用的瀏覽器名稱（顯示「請在 ○○ 視窗登入」） */
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
-  const [loggingIn, setLoggingIn] = useState(false)
+  const [loggingIn, setLoggingIn] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   /** 登入、登出後每個網頁重新載入 */
   const [reloadKey, setReloadKey] = useState(0)
@@ -52,10 +52,11 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
     setNotice(text)
     noticeTimer.current = setTimeout(() => setNotice(null), 4000)
   }
-  const login = () => {
-    setLoggingIn(true)
+  const login = async () => {
+    const { picked } = await window.companion.googleBrowsers()
+    setLoggingIn(picked ? loginBrowserInfo(picked).label : '瀏覽器')
     void window.companion.googleLogin().then((r) => {
-      setLoggingIn(false)
+      setLoggingIn(null)
       showNotice(r === true ? '已登入 Google' : LOGIN_FAILURE_TEXT[r])
     })
   }
@@ -114,7 +115,7 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
         </div>
         {/* Google 帳號（R165）：沒登入時「登入」，登入後「紀錄」「登出」 */}
         {loggedIn === false && (
-          <button className="companion-account" disabled={loggingIn} title="用 Microsoft Edge 登入 Google，登入後可以看自己的紀錄、推薦與訂閱" onClick={login}>
+          <button className="companion-account" disabled={!!loggingIn} title="開啟瀏覽器登入 Google（設定 → YouTube 播放 → Google 登入可以選瀏覽器），登入後可以看自己的紀錄、推薦與訂閱" onClick={() => void login()}>
             {loggingIn ? '登入中…' : '登入'}
           </button>
         )}
@@ -176,9 +177,9 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
         {message && <div className="companion-message">{message}</div>}
         {loggingIn && (
           <div className="companion-message companion-login">
-            請在開啟的 Microsoft Edge 視窗登入 Google。登入完成後 Edge 會自動關閉，這裡會換成你的帳號。
+            請在開啟的 {loggingIn} 視窗登入 Google。登入完成後 {loggingIn} 會自動關閉，這裡會換成你的帳號。
             <br />
-            不想登入時關掉 Edge 視窗即可。
+            不想登入時關掉 {loggingIn} 視窗即可。
           </div>
         )}
         {notice && <div className="companion-notice">{notice}</div>}

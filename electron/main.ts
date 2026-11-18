@@ -25,8 +25,8 @@ import { extractStoryboardSpec } from '../src/lib/storyboard'
 import { isVideoId } from '../src/lib/ytdlp'
 import { installStreamCors, ytdlp } from './ytdlp'
 import { createSponsorClient } from './sponsorBlock'
-import { loginWithBrowser } from './googleLogin'
-import { cookieUrl, isGoogleDomain, type LoginFailure } from '../src/lib/googleLogin'
+import { installedBrowsers, loginWithBrowser } from './googleLogin'
+import { cookieUrl, isGoogleDomain, pickLoginBrowser, type LoginBrowser, type LoginFailure } from '../src/lib/googleLogin'
 import {
   channelFeedUrl,
   channelLiveUrl,
@@ -209,6 +209,7 @@ async function createWindow() {
   })
 
   secureWebviews(win.webContents)
+  installEditMenu(win.webContents)
   win.webContents.on('did-attach-webview', (_, guest) => attachWebGuest(guest))
 
   const devUrl = process.env['ELECTRON_RENDERER_URL']
@@ -290,6 +291,7 @@ function openCompanion(tab: CompanionTab | null) {
   // 小視窗不開新視窗
   companion.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   secureWebviews(companion.webContents)
+  installEditMenu(companion.webContents)
   companion.webContents.on('did-attach-webview', (_, guest) => {
     const id = guest.id
     guest.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -343,6 +345,31 @@ ipcMain.on('companion:tab', (e, tab: unknown) => {
   settings.companion = { ...settings.companion, tab }
   saveSoon()
 })
+/**
+ * 程式畫面上輸入框的右鍵選單（剪下、複製、貼上、全選）：Electron 預設沒有，只能用鍵盤貼上（使用者回報，0.8.6）。
+ * 只在可以輸入的地方或選取了文字時出現
+ */
+function installEditMenu(contents: WebContents) {
+  contents.on('context-menu', (_, params) => {
+    if (!params.isEditable && !params.selectionText) return
+    const f = params.editFlags
+    const owner = BrowserWindow.fromWebContents(contents) ?? undefined
+    Menu.buildFromTemplate(
+      params.isEditable
+        ? [
+            { label: '剪下', role: 'cut', enabled: f.canCut },
+            { label: '複製', role: 'copy', enabled: f.canCopy },
+            { label: '貼上', role: 'paste', enabled: f.canPaste },
+            { type: 'separator' },
+            { label: '全選', role: 'selectAll', enabled: f.canSelectAll }
+          ]
+        : [{ label: '複製', role: 'copy', enabled: f.canCopy }]
+    ).popup({ window: owner })
+  })
+}
+// 「貼上並開啟」按鈕讀剪貼簿（只有文字）
+ipcMain.handle('clipboard:readText', (e) => (e.sender === win?.webContents ? clipboard.readText() : ''))
+
 // 用外部瀏覽器登入 Google（R165）：cookie 放進網頁來源與小視窗共用的資料區（WEB_PARTITION）
 const webSession = () => session.fromPartition(WEB_PARTITION)
 async function googleLoggedIn(): Promise<boolean> {
@@ -353,6 +380,17 @@ function sendAccount(loggedIn: boolean) {
   companion?.webContents.send('companion:account', loggedIn)
 }
 let loginRunning = false
+/** 有安裝的登入用瀏覽器，與依設定實際會用的那一個（R165） */
+function loginBrowsers() {
+  const exes = installedBrowsers()
+  const installed = Object.keys(exes) as LoginBrowser[]
+  const picked = pickLoginBrowser(settings.loginBrowser, installed)
+  return { exes, installed, picked }
+}
+ipcMain.handle('google:browsers', () => {
+  const { installed, picked } = loginBrowsers()
+  return { installed, picked }
+})
 ipcMain.handle('google:status', () => googleLoggedIn())
 ipcMain.handle('google:login', async (e): Promise<true | LoginFailure> => {
   if (e.sender !== companion?.webContents) return 'failed'
@@ -370,7 +408,10 @@ ipcMain.handle('google:login', async (e): Promise<true | LoginFailure> => {
         // 寫不進去就算了
       }
     }
-    const r = await loginWithBrowser({ log })
+    const { exes, picked } = loginBrowsers()
+    log(`設定：${settings.loginBrowser}，使用：${picked ?? '沒有'}`)
+    if (!picked) return 'no-browser'
+    const r = await loginWithBrowser({ executable: exes[picked], log })
     log(r.ok ? '結果：成功' : `結果：${r.reason}`)
     if (!r.ok) return r.reason
     const ses = webSession()
@@ -427,7 +468,8 @@ ipcMain.handle('settings:getView', () => ({
   youtubeMethods: settings.youtubeMethods,
   webMethod: settings.webMethod,
   listTab: settings.listTab,
-  sponsorBlock: settings.sponsorBlock
+  sponsorBlock: settings.sponsorBlock,
+  loginBrowser: settings.loginBrowser
 }))
 ipcMain.on('settings:saveView', (_, view: unknown) => {
   settings = { ...settings, ...normalizeView(view) }

@@ -8,7 +8,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
-  browserCandidates,
+  browserPaths,
+  LOGIN_BROWSERS,
+  type LoginBrowser,
   isYouTubeLoggedIn,
   LOGIN_TIMEOUT_MS,
   LOGIN_URL,
@@ -19,7 +21,7 @@ import {
 } from '../src/lib/googleLogin'
 
 export interface LoginOptions {
-  /** 瀏覽器的執行檔；沒有時依序找 Edge、Chrome */
+  /** 瀏覽器的執行檔；沒有時依序找 Edge、Chrome、Brave */
   executable?: string
   url?: string
   /** 判斷登入完成；預設是 YouTube 有登入的 cookie */
@@ -35,8 +37,18 @@ export interface LoginOptions {
   log?(message: string): void
 }
 
-export function findBrowser(): string | null {
-  return browserCandidates(process.env).find((p) => fs.existsSync(p)) ?? null
+/** 電腦上有安裝的登入用瀏覽器與它的執行檔 */
+export function installedBrowsers(): Partial<Record<LoginBrowser, string>> {
+  const out: Partial<Record<LoginBrowser, string>> = {}
+  for (const b of LOGIN_BROWSERS) {
+    const exe = browserPaths(b.id, process.env).find((p) => fs.existsSync(p))
+    if (exe) out[b.id] = exe
+  }
+  return out
+}
+
+function findBrowser(): string | null {
+  return Object.values(installedBrowsers())[0] ?? null
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))

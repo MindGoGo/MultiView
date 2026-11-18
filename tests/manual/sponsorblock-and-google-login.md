@@ -1,6 +1,6 @@
 # SponsorBlock 與用 Edge 登入 Google：手動驗收步驟
 
-對應規格：`doc/specs/sponsorblock-and-google-login.md`（R161、R165）。單元測試見 `tests/unit/sponsor-block.test.ts`、`tests/unit/google-login.test.ts`。
+對應規格：`doc/specs/sponsorblock-and-google-login.md`（R161、R165、R166）。單元測試見 `tests/unit/sponsor-block.test.ts`、`tests/unit/google-login.test.ts`。
 
 先在設定 →「YouTube 播放」把「一般影片的播放方式」設成 yt-dlp。找一部有業配標記的影片：在瀏覽器裝 SponsorBlock 擴充功能時進度條上有綠色色塊的影片（例如科技類 YouTuber 的影片）。
 
@@ -23,3 +23,7 @@
 | R165 AC6 | 按「登出」→ 確認視窗按「取消」；再按「登出」→「登出」 | 按取消時仍然是登入的；確認後網頁換成沒有登入的樣子，按鈕回到「登入」 |
 | R165 AC7 | 登入或取消後，打開 `%TEMP%`；開啟平常用的 Edge | 沒有 `multiview-login-` 開頭的資料夾；平常的 Edge 分頁、帳號不變 |
 | R165 風險 | 如果 Edge 顯示「這個瀏覽器或應用程式可能不安全」或「無法登入」 | 記錄畫面與文字（代表 Google 擋了開著偵錯連線的瀏覽器，要換做法） |
+| R165 瀏覽器 | 設定 → YouTube 播放 → Google 登入，選 Chrome（或 Brave）→ 小視窗按「登入」 | 開啟的是 Chrome（或 Brave），說明文字也是那個瀏覽器的名稱；登入完成後自動關閉 |
+| R166 AC1 | 複製 YouTube 網址 → 空白格子按「貼上並開啟」 | 開始播放 |
+| R166 AC2 | 在網址輸入框（格子、清單面板）按右鍵 →「貼上」 | 網址貼進輸入框；剪下、複製、全選照常 |
+| R166 AC3 | 剪貼簿是空的時按「貼上並開啟」 | 顯示「剪貼簿裡沒有網址」 |

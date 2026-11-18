@@ -1,7 +1,9 @@
 // 用外部瀏覽器登入 Google（R165）的規則
 import { describe, expect, it } from 'vitest'
 import {
-  browserCandidates,
+  browserPaths,
+  normalizeLoginBrowser,
+  pickLoginBrowser,
   cookieUrl,
   isGoogleDomain,
   isYouTubeLoggedIn,
@@ -10,6 +12,7 @@ import {
   toCookieDetails,
   type CdpCookie
 } from '../../src/lib/googleLogin'
+import { normalizeSettings } from '../../src/lib/settings'
 
 const cookie = (over: Partial<CdpCookie>): CdpCookie => ({
   name: 'SID',
@@ -24,15 +27,34 @@ const cookie = (over: Partial<CdpCookie>): CdpCookie => ({
 })
 
 describe('找瀏覽器', () => {
-  it('先 Edge 再 Chrome，略過沒有的環境變數', () => {
-    expect(browserCandidates({ ProgramFiles: 'C:\\Program Files', LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' })).toEqual([
+  it('每個瀏覽器的安裝位置，略過沒有的環境變數', () => {
+    const env = { ProgramFiles: 'C:\\Program Files', LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' }
+    expect(browserPaths('edge', env)).toEqual([
       'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-      'C:\\Users\\a\\AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe',
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Users\\a\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe'
+      'C:\\Users\\a\\AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe'
     ])
-    expect(browserCandidates({ 'ProgramFiles(x86)': 'X' })[0]).toBe('X\\Microsoft\\Edge\\Application\\msedge.exe')
-    expect(browserCandidates({})).toEqual([])
+    expect(browserPaths('chrome', env)[0]).toBe('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe')
+    expect(browserPaths('brave', env)).toEqual([
+      'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+      'C:\\Users\\a\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe'
+    ])
+    expect(browserPaths('edge', { 'ProgramFiles(x86)': 'X' })).toEqual(['X\\Microsoft\\Edge\\Application\\msedge.exe'])
+    expect(browserPaths('edge', {})).toEqual([])
+  })
+
+  it('選的瀏覽器沒有安裝時，依 Edge、Chrome、Brave 的順序用有安裝的', () => {
+    expect(pickLoginBrowser('brave', ['edge', 'chrome', 'brave'])).toBe('brave')
+    expect(pickLoginBrowser('chrome', ['edge', 'brave'])).toBe('edge')
+    expect(pickLoginBrowser('edge', ['brave', 'chrome'])).toBe('chrome')
+    expect(pickLoginBrowser('edge', [])).toBeNull()
+  })
+
+  it('設定檔的瀏覽器：不認得時是 Edge', () => {
+    expect(normalizeLoginBrowser('brave')).toBe('brave')
+    expect(normalizeLoginBrowser('firefox')).toBe('edge')
+    expect(normalizeLoginBrowser(undefined)).toBe('edge')
+    expect(normalizeSettings({ version: 1, loginBrowser: 'chrome' })!.loginBrowser).toBe('chrome')
+    expect(normalizeSettings({ version: 1 })!.loginBrowser).toBe('edge')
   })
 
   it('讀 DevToolsActivePort', () => {

@@ -269,6 +269,18 @@ export function Cell(props: Props) {
     setError(null)
   }
 
+  const pasteAndOpen = async () => {
+    const clip = (await window.multiview.readClipboard()).trim()
+    if (!clip) {
+      setError('剪貼簿裡沒有網址')
+      return
+    }
+    setText(clip)
+    const err = onSubmitUrl(index, clip)
+    if (err) setError(err)
+    else closeInput()
+  }
+
   const submit = () => {
     if (text.trim() === '') return // R2 AC5
     const err = onSubmitUrl(index, text)
@@ -308,21 +320,31 @@ export function Cell(props: Props) {
       )}
       {showInput && (
         <div className="cell-center">
-          <input
-            className="url-input"
-            autoFocus={editing}
-            value={text}
-            placeholder="貼上 YouTube、mp4、m3u8 或影片網頁的網址"
-            onChange={(e) => {
-              setText(e.target.value)
-              setError(null)
-            }}
-            onKeyDown={(e) => {
-              e.stopPropagation()
-              if (e.key === 'Enter') submit()
-              else if (e.key === 'Escape') closeInput()
-            }}
-          />
+          <div className="url-row">
+            <input
+              className="url-input"
+              autoFocus={editing}
+              value={text}
+              placeholder="貼上 YouTube、mp4、m3u8 或影片網頁的網址"
+              onChange={(e) => {
+                setText(e.target.value)
+                setError(null)
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Enter') submit()
+                else if (e.key === 'Escape') closeInput()
+              }}
+            />
+            {/* 用滑鼠貼上剪貼簿的網址並開啟；網址不對時顯示原因 */}
+            <button
+              className="paste-open"
+              title="貼上剪貼簿裡的網址並開啟（輸入框也可以按右鍵貼上）"
+              onClick={() => void pasteAndOpen()}
+            >
+              貼上並開啟
+            </button>
+          </div>
           {error && <div className="url-error">{error}</div>}
           {/* 空白格子直接開啟 YouTube 首頁（R71）；更換網址時不顯示 */}
           {!source && (

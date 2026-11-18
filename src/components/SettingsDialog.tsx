@@ -10,6 +10,7 @@ import {
   type YtDlpChannel,
   type YtDlpStatus
 } from '../lib/ytdlp'
+import { LOGIN_BROWSERS, type LoginBrowser } from '../lib/googleLogin'
 import { SPONSOR_CATEGORIES, type SponsorBlockSettings } from '../lib/sponsorBlock'
 import { CloseIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
 
@@ -37,6 +38,9 @@ interface Props {
   /** SponsorBlock（R161） */
   sponsorBlock: SponsorBlockSettings
   onSponsorBlock(settings: SponsorBlockSettings): void
+  /** 登入 Google 用的瀏覽器（R165） */
+  loginBrowser: LoginBrowser
+  onLoginBrowser(browser: LoginBrowser): void
   /** 手動更新 yt-dlp 的結果（R93） */
   onToast(message: string): void
 }
@@ -162,7 +166,37 @@ function YouTubeSection(props: Props) {
         <Switch label="無法嵌入時自動改用網頁播放" on={props.autoYoutubeWeb} onChange={props.onAutoYoutubeWeb} />
       </Row>
       <SponsorBlockRows settings={props.sponsorBlock} onChange={props.onSponsorBlock} />
+      <LoginBrowserRow value={props.loginBrowser} onChange={props.onLoginBrowser} />
     </section>
+  )
+}
+
+/** 登入 Google 用的瀏覽器（R165）：只列出電腦上有安裝的 */
+function LoginBrowserRow({ value, onChange }: { value: LoginBrowser; onChange(b: LoginBrowser): void }) {
+  const [installed, setInstalled] = useState<LoginBrowser[] | null>(null)
+  useEffect(() => {
+    void window.multiview.loginBrowsers().then((r) => setInstalled(r.installed))
+  }, [])
+  const options = LOGIN_BROWSERS.filter((b) => installed?.includes(b.id)).map((b) => ({ value: b.id, label: b.short }))
+  // 選的瀏覽器沒有安裝時，實際用第一個有安裝的（和登入時的規則相同）
+  const shown = installed?.includes(value) ? value : (options[0]?.value ?? value)
+  return (
+    <>
+      <h2 className="set-heading set-subheading">Google 登入</h2>
+      <Row
+        title="登入用的瀏覽器"
+        desc={
+          installed === null
+            ? '讀取中…'
+            : options.length === 0
+              ? '找不到 Microsoft Edge、Google Chrome 或 Brave，YouTube 小視窗無法登入。'
+              : 'YouTube 小視窗按「登入」時開啟這個瀏覽器（全新的視窗，不會用到你平常在這個瀏覽器的帳號和資料），登入完成後自動關閉。'
+        }
+      >
+        {options.length > 1 && <Choice label="登入用的瀏覽器" value={shown} options={options} onChange={onChange} />}
+        {options.length === 1 && <span className="set-desc">{LOGIN_BROWSERS.find((b) => b.id === options[0].value)!.label}</span>}
+      </Row>
+    </>
   )
 }
 

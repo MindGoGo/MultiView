@@ -133,6 +133,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   )
   /** SponsorBlock 的設定（R161） */
   const [sponsorBlock, setSponsorBlock] = useState(initial.sponsorBlock)
+  /** 登入 Google 用的瀏覽器（R165） */
+  const [loginBrowser, setLoginBrowser] = useState(initial.loginBrowser)
   /** 每一格的跳過提示，依來源 id；n 每次跳過加一，5 秒後只收起同一次的提示（R161） */
   const [skipNotices, setSkipNotices] = useState<Record<number, { action: SkipAction; n: number }>>({})
   const skipCount = useRef(0)
@@ -236,6 +238,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     webMethod,
     listTab,
     sponsorBlock,
+    loginBrowser,
     slots: slots.map((s) =>
       s
         ? {
@@ -270,7 +273,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
     window.multiview.saveView(viewOf(positions))
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, sponsorBlock])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, sponsorBlock, loginBrowser])
 
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
@@ -1000,6 +1003,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
           onWebMethod={setWebMethod}
           sponsorBlock={sponsorBlock}
           onSponsorBlock={setSponsorBlock}
+          loginBrowser={loginBrowser}
+          onLoginBrowser={setLoginBrowser}
           onToast={showToast}
         />
       )}
