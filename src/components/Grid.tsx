@@ -255,6 +255,7 @@ export function Grid(props: Props) {
             poke={props.poke.index === index ? props.poke.n : 0}
             onUseYoutubeWeb={props.onUseYoutubeWeb}
             canMove={layout !== '1' && solo === null}
+            singleView={layout === '1' || solo !== null}
             moving={props.move?.from === index}
             dropTarget={
               (props.move !== null && props.move.over === index && props.move.from !== index) || props.listOver === index

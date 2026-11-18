@@ -72,18 +72,25 @@
   - AC2：在輸入框按右鍵 →「貼上」→ 網址貼進輸入框；剪下、複製、全選照常。
   - AC3：剪貼簿是空的時按「貼上並開啟」→ 顯示「剪貼簿裡沒有網址」。
 
+### R162（桌面版）：只有一格時不顯示小喇叭
+
+- 背景：手機版的 R162（`Phone` 分支）已經有這一條；使用者要求桌面版也一樣（2026-11-18）。只做小喇叭這一部分（上下排的小視窗是手機版才有的）。
+- 描述：版型 `1`、單格全螢幕時，格子左上角不顯示「有聲音」的小喇叭（R7 AC5 的例外：畫面上只有一格，看得到也聽得到）。播放方式的小標示（R109）照常顯示。
+- 驗收條件：AC1：版型 `1` 與單格全螢幕時，有聲音的格子左上角沒有小喇叭；版型 `2` 時照常顯示。
+
 ## 4. 實作
 
 - R161：`src/lib/sponsorBlock.ts`（規則）、`electron/sponsorBlock.ts`（雜湊前綴、請求與快取）、`electron/main.ts`／`electron/preload.ts`（`sponsorblock:segments`）、`src/players/YouTubeSource.tsx`（抓片段）、`src/players/VideoPlayer.tsx`（檢查、跳過、取消）、`src/components/Cell.tsx`（提示）、`ProgressBar.tsx`／`ProgressPreview.tsx`（色塊、預覽）、`SettingsDialog.tsx`（設定）、`src/lib/settings.ts`（`sponsorBlock` 欄位）。
 - R165：`src/lib/googleLogin.ts`（規則）、`electron/googleLogin.ts`（啟動 Edge、偵錯連線、關閉與清理；在開發環境用 Chromium 測過登入完成、取消、逾時與暫存資料夾的清理）、`electron/main.ts`（`google:login`、`google:status`、`google:logout`）、`electron/companionPreload.ts`、`src/companion/Companion.tsx`、`CompanionWeb.tsx`（`reloadKey`）。
 - R166：`src/components/Cell.tsx`（「貼上並開啟」）、`electron/main.ts`（`installEditMenu`、`clipboard:readText`）。
+- R162（桌面版）：`src/components/Grid.tsx`、`Cell.tsx`（`singleView`）。
 - 手動驗收：`tests/manual/sponsorblock-and-google-login.md`。
 
 ## 5. 變更紀錄
 
 | 日期 | 變更 | 原因 |
 |---|---|---|
-| 2026-11-18 | 0.8.7：登入用的瀏覽器可以選 Edge、Chrome、Brave；R166 用滑鼠貼上網址 | 使用者要求 |
+| 2026-11-18 | 0.8.7：登入用的瀏覽器可以選 Edge、Chrome、Brave；R166 用滑鼠貼上網址；R162 只有一格時不顯示小喇叭 | 使用者要求 |
 | 2026-11-18 | 登出前先確認 | 使用者實測 0.8.6 登入成功；登出按鈕容易誤觸 |
 | 2026-11-18 | 0.8.6：取消的判斷改看偵錯連線與分頁，不看啟動的程序；等偵錯連線 90 秒；login.log；等 Edge 關掉才刪暫存資料夾 | 使用者實測 0.8.5：按登入後馬上顯示「已取消登入」 |
 | 2026-11-18 | 初版，實作於 0.8.5 | 使用者要求（手機版已經有 SponsorBlock；小視窗想登入看自己的紀錄） |

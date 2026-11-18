@@ -90,6 +90,8 @@ interface Props {
   getSegments(index: number): SponsorSegment[]
   /** 工具列顯示中：最上面一列的跳過提示往下移，避開工具列 */
   toolbarShown: boolean
+  /** 畫面上只有這一格（版型 1、單格全螢幕）：不顯示「有聲音」的小喇叭（R162，和手機版相同） */
+  singleView: boolean
 }
 
 /** 格子裡的選單：字幕、畫質（R31、R32）；亮度、音量的滑桿選單（R40、R42） */
@@ -303,9 +305,9 @@ export function Cell(props: Props) {
       }}
     >
       {/* 左上角：有聲音（R7）與播放方式的小標示（R109，和操作區同時出現） */}
-      {source && !showInput && (isAudible(source) || (badge && view === 'bar')) && (
+      {source && !showInput && ((isAudible(source) && !props.singleView) || (badge && view === 'bar')) && (
         <div className="cell-corner">
-          {isAudible(source) && (
+          {isAudible(source) && !props.singleView && (
             <div className="audio-indicator" title="有聲音">
               🔊
             </div>
