@@ -39,10 +39,11 @@
   - **登入**：
     1. 按「登入」→ 程式用一個全新的暫存資料夾開啟 Microsoft Edge（找不到 Edge 時用 Google Chrome），打開 Google 的登入頁（登入後回到 YouTube）。使用者平常用的 Edge 和它的資料不受影響。
     2. 小視窗顯示「請在開啟的 Microsoft Edge 視窗登入 Google…」，按鈕變成「登入中…」。
-    3. 使用者在 Edge 登入。程式透過 Edge 的偵錯連線（Chrome DevTools Protocol，只聽本機）每 1.5 秒檢查一次，YouTube 有 `LOGIN_INFO` 與 `SID`（或 `__Secure-1PSID`、`__Secure-3PSID`）時算登入完成；再等 2 秒讓 Google 補完其他網域的 cookie。
-    4. 只取 Google（`google.com` 與各地的 `google.xx`）與 YouTube 網域的 cookie，放進網頁來源與小視窗共用的資料區（`persist:web`，R18），然後關掉這個 Edge、刪掉暫存資料夾。
-    5. 小視窗的每個網頁重新載入，換成登入的樣子；提示「已登入 Google」。
-  - **取消與失敗**：使用者關掉 Edge 的視窗（Edge 在背景繼續執行也算，看還有沒有分頁）→「已取消登入」；15 分鐘沒有完成 →「太久沒有完成登入，已取消」；找不到 Edge 與 Chrome →「找不到 Microsoft Edge 或 Google Chrome，無法登入」；其他 →「登入失敗，請再試一次」。都會關掉 Edge、刪掉暫存資料夾。
+    3. 使用者在 Edge 登入。偵錯連線最多等 90 秒（電腦慢時 Edge 要一陣子才開好）。程式透過 Edge 的偵錯連線（Chrome DevTools Protocol，只聽本機）每 1.5 秒檢查一次，YouTube 有 `LOGIN_INFO` 與 `SID`（或 `__Secure-1PSID`、`__Secure-3PSID`）時算登入完成；再等 2 秒讓 Google 補完其他網域的 cookie。
+    4. 每個步驟寫進 `%APPDATA%\MultiView\login.log`（每次登入重寫），登入不了時用來查原因。
+    5. 只取 Google（`google.com` 與各地的 `google.xx`）與 YouTube 網域的 cookie，放進網頁來源與小視窗共用的資料區（`persist:web`，R18），然後透過偵錯連線關掉這個 Edge，等它真的關掉再刪暫存資料夾。
+    6. 小視窗的每個網頁重新載入，換成登入的樣子；提示「已登入 Google」。
+  - **取消與失敗**：使用者關掉 Edge 的視窗（偵錯連線中斷；或 Edge 在背景繼續執行，但已經出現過的分頁連續 3 次檢查都沒有了）。不看程式啟動的那個程序有沒有結束：Edge 可能把視窗交給另一個程序開、自己先結束（0.8.5 實測，按登入後馬上顯示「已取消登入」）→「已取消登入」；15 分鐘沒有完成 →「太久沒有完成登入，已取消」；找不到 Edge 與 Chrome →「找不到 Microsoft Edge 或 Google Chrome，無法登入」；其他 →「登入失敗，請再試一次」。都會關掉 Edge、刪掉暫存資料夾。
   - **紀錄**：切到「搜尋」分頁並打開手機版 YouTube 的觀看紀錄（`m.youtube.com/feed/history`）。點影片和搜尋結果一樣放進格子（R82）。
   - **登出**：刪掉資料區裡 Google 與 YouTube 的 cookie，小視窗的網頁重新載入；提示「已登出 Google」。
   - 登入狀態和格子的網頁模式共用（R18），所以格子裡的 YouTube 網頁也會是登入的。
@@ -69,4 +70,5 @@
 
 | 日期 | 變更 | 原因 |
 |---|---|---|
+| 2026-11-18 | 0.8.6：取消的判斷改看偵錯連線與分頁，不看啟動的程序；等偵錯連線 90 秒；login.log；等 Edge 關掉才刪暫存資料夾 | 使用者實測 0.8.5：按登入後馬上顯示「已取消登入」 |
 | 2026-11-18 | 初版，實作於 0.8.5 | 使用者要求（手機版已經有 SponsorBlock；小視窗想登入看自己的紀錄） |

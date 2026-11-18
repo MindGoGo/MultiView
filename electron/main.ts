@@ -359,7 +359,19 @@ ipcMain.handle('google:login', async (e): Promise<true | LoginFailure> => {
   if (loginRunning) return 'busy'
   loginRunning = true
   try {
-    const r = await loginWithBrowser()
+    // 每一步寫進 %APPDATA%\MultiView\login.log（每次登入重寫），登入不了時用來查原因
+    const logFile = path.join(app.getPath('userData'), 'login.log')
+    fs.writeFileSync(logFile, `MultiView ${app.getVersion()} ${new Date().toISOString()}\n`)
+    const t0 = Date.now()
+    const log = (m: string) => {
+      try {
+        fs.appendFileSync(logFile, `${((Date.now() - t0) / 1000).toFixed(1)}s ${m}\n`)
+      } catch {
+        // 寫不進去就算了
+      }
+    }
+    const r = await loginWithBrowser({ log })
+    log(r.ok ? '結果：成功' : `結果：${r.reason}`)
     if (!r.ok) return r.reason
     const ses = webSession()
     let saved = 0
@@ -372,6 +384,7 @@ ipcMain.handle('google:login', async (e): Promise<true | LoginFailure> => {
       }
     }
     await ses.cookies.flushStore()
+    log(`寫入 ${saved}／${r.cookies.length} 個 cookie`)
     if (saved === 0) return 'failed'
     sendAccount(await googleLoggedIn())
     if (companion) {
