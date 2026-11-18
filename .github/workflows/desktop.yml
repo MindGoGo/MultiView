@@ -74,6 +74,10 @@ jobs:
 
       - run: npm ci
 
+      # Electron 44 安裝套件時不再自動下載執行檔，要先下載（打包時用 node_modules/electron/dist）
+      - name: 下載 Electron
+        run: node node_modules/electron/install.js && test -f node_modules/electron/dist/electron.exe
+
       - name: 型別檢查
         run: npm run typecheck
 
