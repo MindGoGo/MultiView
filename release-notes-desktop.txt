@@ -1,0 +1,6 @@
+- SponsorBlock：用 yt-dlp 播 YouTube 一般影片時，自動跳過其他觀眾標記的業配片段。跳過時格子右上角顯示「已跳過業配」，按「取消」回到業配開頭、這一段不再跳；自己把進度條拖進業配裡也不會被跳走。進度條上用顏色標出片段的位置。
+- 設定 → YouTube 播放 → SponsorBlock：可以關閉，或多勾開場、片尾、訂閱提醒等其他片段。內嵌播放器、網頁、直播不處理。片段資料來自 SponsorBlock（sponsor.ajay.app，CC BY-NC-SA 4.0）。
+- YouTube 小視窗可以登入 Google（實驗中）：按右上的「登入」，在開啟的 Microsoft Edge 視窗登入，完成後 Edge 自動關閉，小視窗換成你的帳號。「紀錄」打開觀看紀錄，「登出」清除登入狀態。
+- 新增免安裝版：下載 MultiView-版本號-win.zip，解壓縮後執行 MultiView.exe（設定和安裝版一樣存在 %APPDATA%\MultiView）。
+
+安裝：下載 MultiView-Setup-版本號.exe 雙擊即可。程式沒有數位簽章，Windows 顯示「Windows 已保護您的電腦」時按「其他資訊」→「仍要執行」。

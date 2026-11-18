@@ -22,6 +22,8 @@
 
 到 [Releases](https://github.com/MindGoGo/MultiView/releases) 下載 `MultiView-Setup-版本號.exe`，雙擊執行即可安裝，不需要系統管理員權限。
 
+也可以下載免安裝版 `MultiView-版本號-win.zip`，解壓縮後執行裡面的 `MultiView.exe`（設定一樣存在 `%APPDATA%\MultiView`）。
+
 - 支援 Windows 10、11（64 位元）。
 - 程式沒有數位簽章，第一次執行時 Windows 可能顯示「Windows 已保護您的電腦」，按「其他資訊」→「仍要執行」。
 
@@ -46,7 +48,7 @@ npm install
 npm run dev        # 開發模式（第一次會自動下載 yt-dlp 到 vendor/）
 npm test           # 單元測試
 npm run typecheck  # 型別檢查
-npm run dist       # 打包成安裝檔，輸出到 release/
+npm run dist       # 打包成安裝檔與免安裝 zip，輸出到 release/
 ```
 
 其他指令：
