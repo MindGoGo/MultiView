@@ -30,6 +30,16 @@ struct SettingsView: View {
 
                 sponsorBlockSection
 
+                Section("YouTube 小視窗") {
+                    Toggle("開啟 App 時打開小視窗", isOn: Binding(
+                        get: { model.companionOnLaunch },
+                        set: { model.setCompanionOnLaunch($0) }
+                    ))
+                    Text("iPhone 直向、畫面上只有一格時，開啟 App 就把小視窗打開在影片下面。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("其他網站的播放方式") {
                     Picker("其他網站", selection: Binding(get: { model.webMethod }, set: { model.setWebMethod($0) })) {
                         Text("網頁").tag(WebMethod.web)

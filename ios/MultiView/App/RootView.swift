@@ -11,6 +11,8 @@ struct RootView: View {
     @State private var screenSize: CGSize = .zero
     /// 正在拖曳上下排的小視窗（R163）：從按下的位置算起的垂直移動距離（往下為正）。
     @State private var stackDrag: CGFloat = 0
+    /// 開啟 App 後已經判斷過要不要自動打開小視窗（R165），只判斷一次。
+    @State private var launchCompanionChecked = false
 
     /// iPhone（小螢幕）直向、畫面上只有一格（版型 `1` 或單格全螢幕）時打開小視窗：上面影片、下面小視窗（R162）。
     private var companionStacked: Bool {
@@ -173,6 +175,14 @@ struct RootView: View {
         }
         .onChange(of: stackAvailable, initial: true) { _, value in
             model.companionStackAvailable = value
+        }
+        // 開啟 App 時自動打開小視窗（R165）：第一次量到畫面大小、回報過會不會上下排之後才判斷
+        .onChange(of: screenSize) { _, size in
+            guard !launchCompanionChecked, size.width > 0, size.height > 0 else { return }
+            launchCompanionChecked = true
+            Task { @MainActor in
+                model.openCompanionOnLaunchIfNeeded()
+            }
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)

@@ -72,10 +72,10 @@ public enum CompanionRules {
         return .play(url: watchPageURL(videoID: videoID))
     }
 
-    /// 小視窗上方「第 N 格：影片名稱」（R78）。
+    /// 小視窗上方的影片名稱（R78；iOS 版 R165 拿掉「第 N 格：」）。還不知道名稱時顯示「第 N 格」。
     public static func header(cell: Int?, title: String?) -> String {
         guard let cell else { return "點一下 YouTube 的格子，這裡會顯示它的推薦影片、留言和聊天室" }
         guard let title, !title.isEmpty else { return "第 \(cell + 1) 格" }
-        return "第 \(cell + 1) 格：\(title)"
+        return title
     }
 }

@@ -73,14 +73,12 @@ struct CellView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(source.muted ? "取消靜音" : "靜音")
 
-                // 播放方式的小標示（R109），放在喇叭按鈕右邊
+                // 播放方式的小標示（R109），放在喇叭按鈕右邊。用 yt-dlp 播放時只顯示一個綠色小圓點（R165）
                 if let badge = model.badge(of: source) {
-                    Text(badge)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(.black.opacity(0.55), in: Capsule())
-                        .fixedSize()
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 8, height: 8)
+                        .accessibilityLabel(badge)
                         .allowsHitTesting(false)
                 }
                 }
@@ -219,9 +217,10 @@ struct CellView: View {
         Button {
             model.togglePlay(index)
         } label: {
+            // 比原本小一點（64 → 52，R165）
             Image(systemName: icon)
-                .font(.title)
-                .frame(width: 64, height: 64)
+                .font(.title2)
+                .frame(width: 52, height: 52)
                 .background(.black.opacity(0.45), in: Circle())
                 .contentShape(Circle())
         }

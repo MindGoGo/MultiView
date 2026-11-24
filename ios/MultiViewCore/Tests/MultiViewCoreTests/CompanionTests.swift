@@ -43,7 +43,7 @@ final class CompanionTests: XCTestCase {
     }
 
     func testHeaderAndURLs() {
-        XCTAssertEqual(CompanionRules.header(cell: 1, title: "標題"), "第 2 格：標題")
+        XCTAssertEqual(CompanionRules.header(cell: 1, title: "標題"), "標題")
         XCTAssertEqual(CompanionRules.header(cell: 0, title: nil), "第 1 格")
         XCTAssertTrue(CompanionRules.header(cell: nil, title: "x").contains("點一下"))
         XCTAssertEqual(CompanionRules.liveChatURL(videoID: id), "https://www.youtube.com/live_chat?v=\(id)&is_popout=1")

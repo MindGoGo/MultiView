@@ -576,6 +576,18 @@
   - **往上滑打開**（`Cell/CellView.swift`）：點擊攔截層加一個 `simultaneousGesture(DragGesture(minimumDistance: 30))`，放開時往上超過 60pt、而且垂直距離超過水平的 2 倍，就呼叫 `model.swipeUpCell()`。是否會上下排（`companionStackAvailable`）由 RootView 回報。
   - **關閉按鈕**（`Panels/CompanionPanel.swift`）：有 `drag`（上下排）時不顯示 X。
 
+### R165：介面微調（只有 iOS 版，0.0.39）
+- 背景：使用者實測 0.0.38 後要求，先只改 iOS 版。
+- 描述：
+  - **中央的播放／暫停鈕**（`Cell/CellView.swift`）：從 64pt、`.title` 縮小成 52pt、`.title2`。
+  - **yt-dlp 的小標示**（`Cell/CellView.swift`）：喇叭按鈕右邊原本的「yt-dlp」文字改成 8pt 的綠色小圓點（VoiceOver 仍讀出「yt-dlp」）。
+  - **小視窗的標題**（`MultiViewCore/Companion.swift`）：`CompanionRules.header` 只顯示影片名稱，拿掉「第 N 格：」；還不知道名稱時仍顯示「第 N 格」。
+  - **開啟 App 時打開小視窗**（`App/AppModel.swift`、`App/RootView.swift`、`Panels/SettingsView.swift`）：設定新增「YouTube 小視窗 → 開啟 App 時打開小視窗」（預設關，存在 `UserDefaults` 的 `companionOnLaunch`，不寫進和桌面版共用的設定檔）。RootView 第一次量到畫面大小後判斷一次：設定打開、會上下排（iPhone 直向、畫面上只有一格）而且小視窗沒開，就打開小視窗。
+- 驗收條件：
+  - AC1：打開設定後重新開啟 App（iPhone 直向、版型 `1`）：小視窗直接打開在影片下面；橫向、多格時不打開。
+  - AC2：用 yt-dlp 播放的格子，點影片後喇叭按鈕右邊只有綠色小圓點。
+  - AC3：小視窗上方只顯示影片名稱。
+
 ## 5. 對前置規格的影響
 
 桌面版的程式與行為都不變。下表是桌面版需求在 iOS 版的處理方式；沒有列出的需求，iOS 版和桌面版相同。
@@ -705,6 +717,7 @@
 
 | 日期 | 變更 | 原因 |
 |---|---|---|
+| 2026-11-24 | 新增 R165（0.0.39，只有 iOS 版）：中央播放鈕縮小、yt-dlp 標示改成綠色小圓點、小視窗標題只顯示影片名稱、設定新增開啟 App 時打開小視窗 | 使用者要求 |
 | 2026-11-17 | R164（0.0.38）：上下排時按全螢幕關掉小視窗並轉成橫向全螢幕、上下排的小視窗上下滑動、往下拉關掉、在影片上往上滑打開、上下排時不顯示 X；記錄 R163 的實測結果 | 使用者實測 0.0.37 後選擇建議的做法 |
 | 2026-11-17 | R163（0.0.37）：上下排的小視窗可以往上拉成占滿畫面、上下排時點影片只出現一列的操作列、AirPlay 移到 YouTube 小視窗後面；記錄 R162 的實測結果 | 使用者實測 0.0.36 後要求 |
 | 2026-11-13 | 初版草稿 | 依 2026-11-13 使用者的選擇（iPad 為主、SideStore、第一版四大功能、同一個 repo） |

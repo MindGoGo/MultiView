@@ -73,6 +73,8 @@ final class AppModel {
     /// 搜尋分頁點影片的方式（R162）：false 放進格子（原本的做法）；true 在小視窗裡直接看（網頁照常換頁、播放）。
     /// 是 App 自己的偏好設定（UserDefaults），不寫進和桌面版共用格式的設定檔。
     private(set) var companionBrowse = UserDefaults.standard.bool(forKey: AppModel.companionBrowseKey)
+    /// 開啟 App 時，只有一格而且會上下排（iPhone 直向）就自動打開小視窗（R165）。App 自己的偏好設定（UserDefaults）。
+    private(set) var companionOnLaunch = UserDefaults.standard.bool(forKey: AppModel.companionOnLaunchKey)
     /// 小視窗和影片上下排（R162：iPhone 直向、畫面上只有一格），由畫面回報。這時工具列照常自動隱藏；
     /// 點影片只出現格子的操作列，不出現上方的工具列（R163：工具列會蓋住大半部影片）。
     var companionStacked = false {
@@ -160,6 +162,7 @@ final class AppModel {
     private static let saveDelay: Duration = .milliseconds(300)
     /// 搜尋分頁點影片的方式（R162）存在 UserDefaults 的名稱。
     private static let companionBrowseKey = "companionBrowse"
+    private static let companionOnLaunchKey = "companionOnLaunch"
 
     init(directory: URL? = nil) {
         let folder = directory ?? AppModel.defaultDirectory()
@@ -657,6 +660,18 @@ final class AppModel {
 
     func closeCompanion() {
         hideCompanion()
+    }
+
+    func setCompanionOnLaunch(_ value: Bool) {
+        guard companionOnLaunch != value else { return }
+        companionOnLaunch = value
+        UserDefaults.standard.set(value, forKey: AppModel.companionOnLaunchKey)
+    }
+
+    /// 開啟 App 後第一次量到畫面大小時呼叫（R165）：設定打開、而且會上下排（iPhone 直向、只有一格）就打開小視窗。
+    func openCompanionOnLaunchIfNeeded() {
+        guard companionOnLaunch, !companionOpen, companionStackAvailable else { return }
+        toggleCompanion()
     }
 
     /// 在影片上往上滑（R164）：會上下排而且小視窗沒開時打開小視窗。
