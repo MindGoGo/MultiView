@@ -35,11 +35,15 @@ struct CompanionPanel: View {
                 // 上下排時標題上面也有小把手：點一下切換占滿畫面／回到影片下面（R163）。
                 // 小把手、標題與分頁整條都可以拖曳（R167）
                 VStack(spacing: 0) {
-                    if drag != nil {
-                        PanelHandle(label: model.companionExpanded ? "小視窗回到影片下面" : "小視窗占滿畫面", drag: nil) {
-                            withAnimation(.easeOut(duration: 0.25)) { model.companionExpanded.toggle() }
-                        }
+                    // 一直留著、不是上下排時高度 0：不要在打開小視窗的那一刻才插入（同上，會不跟著滑動）
+                    PanelHandle(label: model.companionExpanded ? "小視窗回到影片下面" : "小視窗占滿畫面", drag: nil) {
+                        withAnimation(.easeOut(duration: 0.25)) { model.companionExpanded.toggle() }
                     }
+                    .frame(height: drag == nil ? 0 : nil, alignment: .top)
+                    .clipped()
+                    .opacity(drag == nil ? 0 : 1)
+                    .allowsHitTesting(drag != nil)
+                    .accessibilityHidden(drag == nil)
                     header(tab: tab, browsing: browsing, canGoBack: browser.canGoBack, currentVideo: currentVideo)
                 }
                 .contentShape(Rectangle())
@@ -428,17 +432,15 @@ struct PanelDrag {
 extension View {
     /// 有 drag 時可以上下拖曳。和裡面的按鈕、分頁同時作用：手指移動超過 minimumDistance 才算拖曳，點一下照常是按按鈕。
     /// 拖曳時小視窗本身也在移動：用整個畫面的座標，移動距離才不會跳動。
-    @ViewBuilder
+    /// 沒有 drag 時只關掉手勢，不換成另一個畫面元件：換的話打開小視窗時標題列會被當成新插入的，
+    /// 直接出現在最後的位置、不跟著小視窗滑上來（0.0.40 實測）。
     func panelDrag(_ drag: PanelDrag?, minimumDistance: CGFloat) -> some View {
-        if let drag {
-            simultaneousGesture(
-                DragGesture(minimumDistance: minimumDistance, coordinateSpace: .global)
-                    .onChanged { value in drag.changed(value.translation.height) }
-                    .onEnded { value in drag.ended(value.translation.height, value.predictedEndTranslation.height) }
-            )
-        } else {
-            self
-        }
+        simultaneousGesture(
+            DragGesture(minimumDistance: minimumDistance, coordinateSpace: .global)
+                .onChanged { value in drag?.changed(value.translation.height) }
+                .onEnded { value in drag?.ended(value.translation.height, value.predictedEndTranslation.height) },
+            including: drag == nil ? .subviews : .all
+        )
     }
 }
 
