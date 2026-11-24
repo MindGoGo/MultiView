@@ -23,6 +23,11 @@ struct CellView: View {
     /// 在影片上往上滑超過這個距離就打開小視窗（R164）。
     private static let swipeUpDistance: CGFloat = 60
 
+    /// 左上、右上角按鈕上方要留的距離：避開瀏海，工具列顯示時再避開工具列。
+    private var topPadding: CGFloat {
+        insets.top + (touchesTop && model.toolbarVisible ? Self.toolbarHeight : 0)
+    }
+
     var body: some View {
         let player = model.player(for: source)
         let status = model.status(of: source)
@@ -55,9 +60,10 @@ struct CellView: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            if model.toolbarVisible {
+            if model.toolbarVisible || active {
                 // 工具列顯示時，每一格左上角都有喇叭按鈕：只切換這一格的聲音，
-                // 不像點格子那樣把其他格子靜音，用來讓多格同時出聲（R128）
+                // 不像點格子那樣把其他格子靜音，用來讓多格同時出聲（R128）。
+                // 操作列顯示時也有（R166：操作列不再有喇叭按鈕，上下排時也沒有工具列）
                 HStack(spacing: 4) {
                 Button {
                     model.toggleMute(index)
@@ -82,7 +88,7 @@ struct CellView: View {
                         .allowsHitTesting(false)
                 }
                 }
-                .padding(.top, insets.top + (touchesTop ? Self.toolbarHeight : 0))
+                .padding(.top, topPadding)
                 .padding(.leading, insets.leading)
             } else if source.isAudible, model.solo == nil, model.displayedLayout != .one {
                 // 有聲音的格子一直顯示小喇叭（R7 AC5）。畫面上只有一格（版型 `1`、單格全螢幕）時不顯示（R162）
@@ -103,15 +109,17 @@ struct CellView: View {
                     model.undoSkip(index)
                 }
                 .padding(6)
-                .padding(.top, insets.top + (touchesTop && model.toolbarVisible ? Self.toolbarHeight : 0))
+                // 操作列顯示時在右上角按鈕的下面
+                .padding(.top, topPadding + (active ? ChipStyle.size + 2 * ChipStyle.padding : 0))
                 .padding(.trailing, insets.trailing)
                 .transition(.opacity)
             }
         }
         .overlay(alignment: .bottom) {
             if active {
-                // 直向上下排時上面的影片很矮：操作列只排一列（R163）
-                ControlsBar(index: index, source: source, supportsVolume: player.supportsVolume, insets: insets, compact: model.companionStacked)
+                // 浮在影片上的按鈕（R166）
+                ControlsBar(index: index, source: source, supportsVolume: player.supportsVolume, insets: insets, topPadding: topPadding)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .transition(.opacity)
             } else if interactive {
                 // 整頁模式：點網頁就是操作網頁，用小把手叫出操作列（R127）
@@ -249,12 +257,12 @@ struct CellView: View {
                 .allowsHitTesting(false)
             }
         case .paused, .ended:
-            if !interactive {
-                // 暫停時一直顯示播放鈕
+            // 暫停時一直顯示播放鈕；整頁模式只在操作列顯示時（R166：操作列不再有播放鈕）
+            if !interactive || active {
                 centerButton(icon: "play.fill", label: "播放")
             }
         case .playing:
-            if !interactive, active {
+            if active {
                 // 播放中：點一下格子、操作列顯示時才出現暫停鈕
                 centerButton(icon: "pause.fill", label: "暫停")
             }

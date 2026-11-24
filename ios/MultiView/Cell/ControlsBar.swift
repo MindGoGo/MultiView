@@ -2,7 +2,9 @@ import MultiViewCore
 import SwiftUI
 import UIKit
 
-/// 每一格下方的操作列（R127）：播放／暫停、喇叭、音量、亮度、更換網址、移除，以及進度條（R129）。
+/// 每一格的操作按鈕（R127；R166 改成像 YouTube App 一樣浮在影片上）：
+/// 右上角子母畫面與齒輪選單、左下時間、右下移動與全螢幕、貼著影片底部的細進度條（R129）。
+/// 左上角的喇叭與中間的播放／暫停鈕由 CellView 畫。
 struct ControlsBar: View {
     @Environment(AppModel.self) private var model
     let index: Int
@@ -10,8 +12,8 @@ struct ControlsBar: View {
     let supportsVolume: Bool
     /// 這一格貼著畫面邊緣時，按鈕要避開的範圍。
     var insets = EdgeInsets()
-    /// 只排一列：播放、喇叭、進度條、全螢幕、「⋯」（直向上下排時上面的影片很矮，R163）。
-    var compact = false
+    /// 右上角按鈕上方要留的距離（避開瀏海與上方的工具列）。
+    var topPadding: CGFloat = 0
 
     @State private var showsVolume = false
     @State private var showsBrightness = false
@@ -22,7 +24,7 @@ struct ControlsBar: View {
     @ViewBuilder private var progressBar: some View {
         if let progress = model.progress[source.id], ProgressRules.view(progress).kind != .live {
             ProgressBar(
-                progress: progress, source: source, segments: model.segments(of: source),
+                progress: progress, source: source, segments: model.segments(of: source), thin: true,
                 onDragging: { model.holdControls($0) }
             ) { fraction in
                 model.seek(index, fraction: fraction)
@@ -30,70 +32,57 @@ struct ControlsBar: View {
         }
     }
 
-    private var showsProgress: Bool {
-        guard let progress = model.progress[source.id] else { return false }
-        return ProgressRules.view(progress).kind != .live
-    }
-
-    /// 一般的操作列：格子太窄放不下時，次要按鈕收進「⋯」選單（R127）。
-    private var fullRows: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 2) {
-                playButton
-                muteButton
-                if supportsVolume { volumeButton }
-                brightnessButton
-                if model.supportsQuality(source) { qualityButton }
-                if let audio = model.audioMenu(source) { audioButton(audio) }
-                if let captions = model.captionMenu(source) { captionButton(captions) }
-                Spacer(minLength: 8)
-                if model.canSwap { moveHandle }
-                soloButton
-                if model.supportsPictureInPicture(source) { pictureInPictureButton }
-                if let mode = model.webMode(of: source) {
-                    webModeButton(mode)
-                    adblockButton
-                }
-                favoriteButton
-                editButton
-                removeButton
-            }
-            HStack(spacing: 2) {
-                playButton
-                muteButton
-                Spacer(minLength: 0)
-                if model.canSwap { moveHandle }
-                soloButton
-                moreMenu
-            }
-        }
-    }
-
     var body: some View {
-        VStack(spacing: 4) {
-            if compact {
-                HStack(spacing: 2) {
-                    playButton
-                    muteButton
-                    if showsProgress {
-                        progressBar
-                    } else {
-                        Spacer(minLength: 0)
+        ZStack {
+            // 上下兩層淡淡的漸層，讓白色按鈕在亮的畫面上也看得清楚
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.45), location: 0),
+                    .init(color: .clear, location: 0.3),
+                    .init(color: .clear, location: 0.6),
+                    .init(color: .black.opacity(0.55), location: 1),
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+
+            // Spacer 不接收點擊：按鈕以外的地方照常交給影片（點一下收起、雙擊快轉）或網頁
+            VStack(spacing: 0) {
+                HStack(spacing: 4) {
+                    Spacer(minLength: 0)
+                    if model.supportsPictureInPicture(source) {
+                        ChipButton(icon: "pip.enter", label: "子母畫面") {
+                            model.startPictureInPicture(index)
+                        }
                     }
-                    soloButton
                     moreMenu
                 }
-            } else {
+                // 和左上角的喇叭按鈕對齊
+                .padding(.top, topPadding + 2)
+                .padding(.trailing, 2)
+
+                Spacer(minLength: 0)
+
+                // 格子太窄放不下時間時只留右邊的按鈕
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 4) {
+                        timeLabel
+                        Spacer(minLength: 8)
+                        bottomButtons
+                    }
+                    HStack(spacing: 4) {
+                        Spacer(minLength: 0)
+                        bottomButtons
+                    }
+                }
+                .padding(.horizontal, 4)
+
                 progressBar
-                fullRows
             }
+            .padding(.leading, insets.leading)
+            .padding(.trailing, insets.trailing)
+            .padding(.bottom, insets.bottom)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .padding(.leading, insets.leading)
-        .padding(.trailing, insets.trailing)
-        .padding(.bottom, insets.bottom)
-        .background(.ultraThinMaterial)
         .sheet(isPresented: $showsEdit) {
             EditURLSheet(index: index, url: source.url)
                 .presentationDetents([.height(230)])
@@ -108,64 +97,44 @@ struct ControlsBar: View {
         }
     }
 
-    private var playButton: some View {
-        let showsPause = model.status(of: source).showsPause
-        return BarButton(icon: showsPause ? "pause.fill" : "play.fill", label: showsPause ? "暫停" : "播放") {
-            model.togglePlay(index)
+    @ViewBuilder private var bottomButtons: some View {
+        if model.canSwap { moveHandle }
+        soloButton
+    }
+
+    /// 左下角的時間膠囊：「目前 / 長度」；可回放的直播顯示距離最新位置多久，直播只顯示「直播」。
+    @ViewBuilder private var timeLabel: some View {
+        if let progress = model.progress[source.id] {
+            let display = ProgressRules.view(progress)
+            Text(Self.timeText(progress, kind: display.kind))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.black.opacity(0.55), in: Capsule())
+                .fixedSize()
+                .allowsHitTesting(false)
         }
     }
 
-    private var muteButton: some View {
-        BarButton(
-            icon: source.muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-            label: source.muted ? "取消靜音" : "靜音",
-            highlighted: !source.muted
-        ) {
-            model.toggleMute(index)
-        }
-    }
-
-    private var volumeButton: some View {
-        BarButton(icon: "slider.horizontal.3", label: "音量") {
-            showsVolume = true
-        }
-        .popover(isPresented: $showsVolume) {
-            SliderPopup(
-                title: "音量",
-                value: Double(source.volume),
-                range: 0...Double(Volume.max),
-                step: 1,
-                resetValue: nil
-            ) { value in
-                model.setVolume(index, value)
-            }
-        }
-    }
-
-    private var brightnessButton: some View {
-        BarButton(icon: "sun.max.fill", label: "亮度", highlighted: source.brightness != Brightness.default) {
-            showsBrightness = true
-        }
-        .popover(isPresented: $showsBrightness) {
-            SliderPopup(
-                title: "亮度",
-                value: Double(source.brightness),
-                range: Double(Brightness.min)...Double(Brightness.max),
-                step: Double(Brightness.step),
-                resetValue: Double(Brightness.default)
-            ) { value in
-                model.setBrightness(index, value)
-            }
+    static func timeText(_ progress: PlaybackProgress, kind: MultiViewCore.ProgressKind) -> String {
+        switch kind {
+        case .live:
+            return "直播"
+        case .dvr:
+            let behind = progress.end - progress.current
+            return behind <= ProgressRules.liveEdgeSeconds ? "直播" : ProgressRules.formatBehind(behind)
+        case .vod:
+            return "\(ProgressRules.formatTime(progress.current)) / \(ProgressRules.formatTime(progress.end - progress.start))"
         }
     }
 
     /// 「移動」：長按後拖到另一格放開，兩格互換（R125）。
     private var moveHandle: some View {
         Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-            .font(.body)
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-            .foregroundStyle(model.swapFrom == index ? Color.accentColor : Color.primary)
+            .font(.callout)
+            .foregroundStyle(model.swapFrom == index ? Color.accentColor : Color.white)
+            .chip()
             .accessibilityLabel("移動（長按後拖到另一格）")
             .gesture(
                 LongPressGesture(minimumDuration: 0.3)
@@ -194,70 +163,23 @@ struct ControlsBar: View {
     private var soloButton: some View {
         // 上下排時是「進入全螢幕」（R164）
         let isSolo = model.solo == index && !model.companionStacked
-        return BarButton(
+        return ChipButton(
             icon: isSolo ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-            label: isSolo ? "離開全螢幕" : "全螢幕",
-            highlighted: isSolo
+            label: isSolo ? "離開全螢幕" : "全螢幕"
         ) {
             model.toggleSolo(index)
         }
     }
 
-    /// 子母畫面（只有原生播放器，R132）。
-    private var pictureInPictureButton: some View {
-        BarButton(icon: "pip.enter", label: "子母畫面") {
-            model.startPictureInPicture(index)
-        }
-    }
-
-    /// 「顯示整個網頁」／「只顯示影片」（R14）。
-    private func webModeButton(_ mode: WebMode) -> some View {
-        BarButton(
-            icon: mode == .page ? "play.rectangle" : "doc.richtext",
-            label: mode == .page ? "只顯示影片" : "顯示整個網頁",
-            highlighted: mode == .page
-        ) {
-            model.toggleWebMode(index)
-        }
-    }
-
-    /// 廣告阻擋的開關（R17、R138）。
-    private var adblockButton: some View {
-        BarButton(
-            icon: source.adblock ? "shield.lefthalf.filled" : "shield.slash",
-            label: source.adblock ? "廣告阻擋：開" : "廣告阻擋：關",
-            highlighted: source.adblock
-        ) {
-            model.toggleAdblock(index)
-        }
-    }
-
-    /// 加入或移出最愛（R22）。
-    private var favoriteButton: some View {
-        let favorite = model.isFavorite(source)
-        return BarButton(icon: favorite ? "star.fill" : "star", label: favorite ? "從最愛移除" : "加入最愛", highlighted: favorite) {
-            model.toggleFavorite(index)
-        }
-    }
-
-    private var editButton: some View {
-        BarButton(icon: "link", label: "更換網址") {
-            beginEdit()
-        }
-    }
-
-    private var removeButton: some View {
-        BarButton(icon: "xmark", label: "移除") {
-            model.removeSource(at: index)
-        }
-    }
-
-    /// 「⋯」：放不下的按鈕（R127）。用系統的浮動選單；選單開著時操作列不自動收起。
+    /// 齒輪：音量、亮度、畫質、語音、字幕、網頁、最愛、更換網址、移除（R166）。
+    /// 用系統的浮動選單；選單開著時操作列不自動收起。
     private var moreMenu: some View {
-        MenuButton(systemImage: "ellipsis", accessibilityLabel: "更多", items: moreItems) { open in
+        MenuButton(systemImage: "gearshape.fill", accessibilityLabel: "設定", items: moreItems) { open in
             showsMore = open
         }
-        .frame(width: 44, height: 44)
+        .frame(width: ChipStyle.size, height: ChipStyle.size)
+        .background(.black.opacity(ChipStyle.opacity), in: Circle())
+        .padding(ChipStyle.padding)
         .popover(isPresented: $showsVolume) {
             SliderPopup(title: "音量", value: Double(source.volume), range: 0...Double(Volume.max), step: 1, resetValue: nil) { value in
                 model.setVolume(index, value)
@@ -289,14 +211,6 @@ struct ControlsBar: View {
         )
     }
 
-    /// 畫質按鈕（寬的操作列）。
-    private var qualityButton: some View {
-        MenuButton(systemImage: "tv", accessibilityLabel: "畫質", items: { qualityMenu.children }) { open in
-            showsMore = open
-        }
-        .frame(width: 44, height: 44)
-    }
-
     /// 語音（聲音軌）的子選單（R135、桌面版 R95）。
     private func audioMenu(_ audio: AudioMenu) -> MenuItem {
         let current = audio.options.first { $0.index == audio.current }
@@ -309,14 +223,6 @@ struct ControlsBar: View {
                 }
             }
         )
-    }
-
-    /// 語音按鈕（寬的操作列）。
-    private func audioButton(_ audio: AudioMenu) -> some View {
-        MenuButton(systemImage: "waveform", accessibilityLabel: "語音", items: { audioMenu(audio).children }) { open in
-            showsMore = open
-        }
-        .frame(width: 44, height: 44)
     }
 
     /// 字幕的子選單（R131；規則同桌面版 R31）：「關閉」和各軌，目前的打勾。
@@ -337,21 +243,7 @@ struct ControlsBar: View {
         )
     }
 
-    /// 字幕按鈕（寬的操作列）：開著時用強調色。
-    private func captionButton(_ captions: CaptionMenu) -> some View {
-        let on = captions.tracks.contains { $0.key == captions.current }
-        return MenuButton(
-            systemImage: on ? "captions.bubble.fill" : "captions.bubble",
-            accessibilityLabel: "字幕",
-            items: { captionMenu(captions).children },
-            highlighted: on
-        ) { open in
-            showsMore = open
-        }
-        .frame(width: 44, height: 44)
-    }
-
-    /// 「⋯」選單的項目。
+    /// 齒輪選單的項目。
     private func moreItems() -> [MenuItem] {
         var items: [MenuItem] = []
         if supportsVolume {
@@ -367,9 +259,6 @@ struct ControlsBar: View {
         if let captions = model.captionMenu(source) {
             items.append(captionMenu(captions))
         }
-        if model.supportsPictureInPicture(source) {
-            items.append(MenuItem(title: "子母畫面", systemImage: "pip.enter") { model.startPictureInPicture(index) })
-        }
         if let mode = model.webMode(of: source) {
             items.append(MenuItem(
                 title: mode == .page ? "只顯示影片" : "顯示整個網頁",
@@ -384,13 +273,46 @@ struct ControlsBar: View {
         items.append(MenuItem(title: favorite ? "從最愛移除" : "加入最愛", systemImage: favorite ? "star.fill" : "star") {
             model.toggleFavorite(index)
         })
-        items.append(MenuItem(title: "更換網址", systemImage: "link") { beginEdit() })
+        items.append(MenuItem(title: "更換網址", systemImage: "link") { showsEdit = true })
         items.append(MenuItem(title: "移除", systemImage: "xmark", destructive: true) { model.removeSource(at: index) })
         return items
     }
+}
 
-    private func beginEdit() {
-        showsEdit = true
+/// 浮在影片上的圓形按鈕的大小（R166）：和左上角的喇叭按鈕相同。
+enum ChipStyle {
+    static let size: CGFloat = 40
+    static let opacity: Double = 0.55
+    /// 按鈕外圍留的距離；加上按鈕本身，可以點的範圍是 44pt。
+    static let padding: CGFloat = 2
+}
+
+extension View {
+    /// 半透明黑色圓形底的浮動按鈕外觀（R166）。
+    func chip() -> some View {
+        frame(width: ChipStyle.size, height: ChipStyle.size)
+            .background(.black.opacity(ChipStyle.opacity), in: Circle())
+            .padding(ChipStyle.padding)
+            .contentShape(Rectangle())
+    }
+}
+
+/// 浮在影片上的圓形圖示按鈕（R166）。
+struct ChipButton: View {
+    let icon: String
+    let label: String
+    var highlighted = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.callout)
+                .foregroundStyle(highlighted ? Color.accentColor : Color.white)
+                .chip()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
@@ -464,6 +386,8 @@ struct ProgressBar: View {
     let source: CellSource
     /// SponsorBlock 的片段（R161）：一般影片的進度條上畫出色塊。
     var segments: [SponsorSegment] = []
+    /// 浮動操作列的細進度條（R166）：不顯示兩邊的時間（時間在左下角的膠囊），線條細、有圓點，拖曳時變粗。
+    var thin = false
     /// 開始拖曳（true）、放開（false）：拖曳中操作列不自動收起（iOS 0.0.31 實測會收起，Android 沒有這個問題）。
     let onDragging: (Bool) -> Void
     let onSeek: (Double) -> Void
@@ -475,9 +399,13 @@ struct ProgressBar: View {
         let display = ProgressRules.view(progress)
         let fraction = dragFraction ?? display.fraction
 
+        let lineHeight: CGFloat = thin ? (dragFraction == nil ? 3 : 6) : 4
+
         HStack(spacing: 8) {
-            Text(leadingText(fraction: fraction, display: display))
-                .font(.caption2.monospacedDigit())
+            if !thin {
+                Text(leadingText(fraction: fraction, display: display))
+                    .font(.caption2.monospacedDigit())
+            }
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -496,7 +424,19 @@ struct ProgressBar: View {
                         }
                     }
                 }
-                .frame(height: 4)
+                .frame(height: lineHeight)
+                .clipShape(Capsule())
+                .overlay(alignment: .leading) {
+                    if thin {
+                        // 目前位置的圓點
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 12, height: 12)
+                            .offset(x: CGFloat(max(0, min(1, fraction))) * geometry.size.width - 6)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .animation(.easeOut(duration: 0.12), value: lineHeight)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .overlay(alignment: .topLeading) {
@@ -531,12 +471,14 @@ struct ProgressBar: View {
                         }
                 )
             }
-            .frame(height: 28)
+            .frame(height: thin ? 24 : 28)
 
-            Text(trailingText(display: display))
-                .font(.caption2.monospacedDigit())
+            if !thin {
+                Text(trailingText(display: display))
+                    .font(.caption2.monospacedDigit())
+            }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, thin ? 12 : 6)
     }
 
     private func leadingText(fraction: Double, display: ProgressDisplay) -> String {
