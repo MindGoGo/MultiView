@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatBehind, formatTime, progressView, seekTarget, timeChip, type Progress } from '../lib/progress'
 import { ProgressPreview, type PreviewSource } from './ProgressPreview'
+import { categoryInfo, segmentAt, segmentMarks, type SponsorSegment } from '../lib/sponsorBlock'
 
 interface Props {
   /** 操作區顯示中才更新進度 */
   active: boolean
   getProgress(): Progress | null
+  /** SponsorBlock 要跳過的片段（R161）：一般影片的進度條畫出色塊 */
+  getSegments?(): SponsorSegment[]
   onSeek(seconds: number): void
   /** 拖曳中操作區不隱藏 */
   onDragChange(dragging: boolean): void
@@ -21,8 +24,9 @@ interface Props {
 
 const POLL_MS = 250
 
-export function ProgressBar({ active, getProgress, onSeek, onDragChange, onAvailable, preview, onHoverChange }: Props) {
+export function ProgressBar({ active, getProgress, getSegments, onSeek, onDragChange, onAvailable, preview, onHoverChange }: Props) {
   const [progress, setProgress] = useState<Progress | null>(null)
+  const [segments, setSegments] = useState<SponsorSegment[]>([])
   /** 拖曳中游標所在的比例；沒有拖曳時為 null */
   const [drag, setDrag] = useState<number | null>(null)
   /** 游標在進度條上時的視窗座標 x（R50）；不在進度條上時為 null */
@@ -30,10 +34,17 @@ export function ProgressBar({ active, getProgress, onSeek, onDragChange, onAvail
   const trackRef = useRef<HTMLDivElement>(null)
   const getRef = useRef(getProgress)
   getRef.current = getProgress
+  const getSegmentsRef = useRef(getSegments)
+  getSegmentsRef.current = getSegments
 
   useEffect(() => {
     if (!active) return
-    const update = () => setProgress(getRef.current())
+    const update = () => {
+      setProgress(getRef.current())
+      // 同一份陣列時不重新畫
+      const next = getSegmentsRef.current?.() ?? []
+      setSegments((prev) => (prev === next || (prev.length === 0 && next.length === 0) ? prev : next))
+    }
     update()
     const timer = setInterval(update, POLL_MS)
     return () => clearInterval(timer)
@@ -109,12 +120,21 @@ export function ProgressBar({ active, getProgress, onSeek, onDragChange, onAvail
       >
         <div className="progress-rail" />
         <div className="progress-fill" style={{ width: `${shown * 100}%` }} />
+        {view.kind === 'vod' &&
+          segmentMarks(segments, progress.end).map((m) => (
+            <div
+              key={`${m.start}-${m.end}`}
+              className="progress-segment"
+              style={{ left: `${m.start * 100}%`, width: `${(m.end - m.start) * 100}%`, background: categoryInfo(m.category).color }}
+            />
+          ))}
         <div className="progress-thumb" style={{ left: `${shown * 100}%` }} />
       </div>
       {hoverX !== null && trackRef.current && (() => {
         const track = trackRef.current.getBoundingClientRect()
         const cell = trackRef.current.closest('.cell')?.getBoundingClientRect() ?? track
         const t = seekTarget(progress, fractionAt(hoverX))
+        const inSegment = view.kind === 'vod' ? segmentAt(segments, t) : null
         return (
           <ProgressPreview
             clientX={hoverX}
@@ -123,6 +143,7 @@ export function ProgressBar({ active, getProgress, onSeek, onDragChange, onAvail
             label={view.kind === 'vod' ? formatTime(t) : formatBehind(progress.end - t)}
             seconds={t}
             duration={progress.end}
+            segment={inSegment ? categoryInfo(inSegment.category) : null}
             // 可回放的直播沒有預覽縮圖（R50）
             source={view.kind === 'vod' ? preview : null}
           />

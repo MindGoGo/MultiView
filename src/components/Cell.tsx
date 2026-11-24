@@ -19,6 +19,8 @@ import { LoadingCritter, useLoadingVisible } from './LoadingCritter'
 import { loadingKind } from '../lib/loading'
 import { playbackBadge } from '../lib/playbackBadge'
 import { controlsView } from '../lib/pointerZones'
+import { categoryInfo, skippedLabel, type SkipAction, type SponsorSegment } from '../lib/sponsorBlock'
+import type { SplitBlock, SplitDir } from '../lib/layoutTree'
 import { ExitFullscreenIcon, FullscreenIcon, GearIcon, MuteIcon, SpeakerIcon, YouTubeLogo } from './icons'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
@@ -85,6 +87,25 @@ interface Props {
   getAudioTracks(index: number): AudioMenu | null
   onBrightness(index: number, brightness: number): void
   getCaptionTracks(index: number): CaptionTrack[] | null
+  /** SponsorBlock 的跳過提示（R161）；沒有時為 null */
+  skipNotice: { action: SkipAction; n: number } | null
+  onCancelSkip(index: number): void
+  /** 要跳過的片段（進度條的色塊，R161） */
+  getSegments(index: number): SponsorSegment[]
+  /** 工具列顯示中：最上面一列的跳過提示往下移，避開工具列 */
+  toolbarShown: boolean
+  /** 畫面上只有這一格（版型 1、單格全螢幕）：不顯示「有聲音」的小喇叭（R162，和手機版相同） */
+  singleView: boolean
+  /** 編輯版型中（R170）：能不能左右切（row）、上下切（col）、刪除；不在編輯時是 null */
+  edit: { row: SplitBlock; col: SplitBlock; canRemove: boolean } | null
+  onSplit(index: number, dir: SplitDir): void
+  onRemoveCell(index: number): void
+}
+
+/** 切開的按鈕停用時的原因（R170） */
+const SPLIT_BLOCK_TEXT: Record<Exclude<SplitBlock, null>, string> = {
+  max: '最多 9 格',
+  small: '這一格太小，不能再切'
 }
 
 /** 格子裡的選單：字幕、畫質（R31、R32）；亮度、音量的滑桿選單（R40、R42） */
@@ -117,6 +138,12 @@ function audioItems(menu: AudioMenu, selected: string | null): PopupItem[] {
     ...menu.options.map((o) => ({ key: String(o.index), label: o.label, checked: !!selected && o.index === menu.current }))
   ]
 }
+
+/** 工具列的高度（styles.css 的 .toolbar） */
+const TOOLBAR_HEIGHT = 40
+/** 浮動按鈕的大小與上緣（R166，styles.css 的 .chip、.chip-row.top-right） */
+const CHIP_SIZE = 40
+const CHIP_TOP = 8
 
 /** 滑鼠靜止多久後隱藏操作按鈕（R3 AC2） */
 const CONTROLS_IDLE_MS = 2000
@@ -297,10 +324,29 @@ export function Cell(props: Props) {
     else if (key === 'remove') onRemove(index)
   }
 
+  /** 跳過提示的位置（R161、R166） */
+  const skipNoticeTop = (): CSSProperties | undefined => {
+    const atTop = props.topRow || (!!cellRef.current && cellRef.current.getBoundingClientRect().top < TOOLBAR_HEIGHT)
+    if (view === 'bar') return { top: (props.topRow ? TOOLBAR_HEIGHT + CHIP_TOP : CHIP_TOP) + CHIP_SIZE + 6 }
+    return props.toolbarShown && atTop ? { top: TOOLBAR_HEIGHT + 6 } : undefined
+  }
+
   const closeInput = () => {
     setEditing(false)
     setText('')
     setError(null)
+  }
+
+  const pasteAndOpen = async () => {
+    const clip = (await window.multiview.readClipboard()).trim()
+    if (!clip) {
+      setError('剪貼簿裡沒有網址')
+      return
+    }
+    setText(clip)
+    const err = onSubmitUrl(index, clip)
+    if (err) setError(err)
+    else closeInput()
   }
 
   const submit = () => {
@@ -312,7 +358,7 @@ export function Cell(props: Props) {
 
   return (
     <div
-      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''} ${props.direct || pageMode ? 'direct' : ''} ${props.topRow ? 'top-row' : ''}`}
+      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''} ${props.direct || pageMode ? 'direct' : ''} ${props.topRow ? 'top-row' : ''} ${props.edit ? 'editing' : ''}`}
       ref={cellRef}
       style={style}
       data-index={index}
@@ -324,9 +370,40 @@ export function Cell(props: Props) {
         if (e.target === e.currentTarget) props.onFocusAudio(index)
       }}
     >
+      {/* 編輯版型（R170）：格子編號與切開、刪除的按鈕，蓋住格子的其他操作 */}
+      {props.edit && (
+        <div className="cell-edit">
+          <div className="cell-edit-number">{index + 1}</div>
+          <div className="cell-edit-buttons">
+            {(['row', 'col'] as const).map((dir) => {
+              const block = props.edit![dir]
+              const label = dir === 'row' ? '左右切' : '上下切'
+              return (
+                <button
+                  key={dir}
+                  disabled={block !== null}
+                  title={block ? SPLIT_BLOCK_TEXT[block] : dir === 'row' ? '把這一格分成左右兩格' : '把這一格分成上下兩格'}
+                  onClick={() => props.onSplit(index, dir)}
+                >
+                  <span className={`split-icon ${dir}`} aria-hidden="true" />
+                  {label}
+                </button>
+              )
+            })}
+            <button
+              className="danger"
+              disabled={!props.edit.canRemove}
+              title={props.edit.canRemove ? '拿掉這一格，空間交給旁邊的格子（影片變成暫時隱藏）' : '只剩一格，不能刪除'}
+              onClick={() => props.onRemoveCell(index)}
+            >
+              刪除這格
+            </button>
+          </div>
+        </div>
+      )}
       {/* 左上角（R166）：操作區顯示時是聲音按鈕＋yt-dlp 綠點（R165）；平常只在有聲音時顯示小標示（R7）。
           滑鼠停在角落上說明這一格的播放方式（R109、R165） */}
-      {source && !showInput && (view === 'bar' || isAudible(source)) && (
+      {source && !showInput && (view === 'bar' || (isAudible(source) && !props.singleView)) && (
         <div
           className={`cell-corner ${view === 'bar' ? 'chips' : ''}`}
           title={view === 'bar' ? undefined : badge?.tip}
@@ -349,21 +426,31 @@ export function Cell(props: Props) {
       )}
       {showInput && (
         <div className="cell-center">
-          <input
-            className="url-input"
-            autoFocus={editing}
-            value={text}
-            placeholder="貼上 YouTube、mp4、m3u8 或影片網頁的網址"
-            onChange={(e) => {
-              setText(e.target.value)
-              setError(null)
-            }}
-            onKeyDown={(e) => {
-              e.stopPropagation()
-              if (e.key === 'Enter') submit()
-              else if (e.key === 'Escape') closeInput()
-            }}
-          />
+          <div className="url-row">
+            <input
+              className="url-input"
+              autoFocus={editing}
+              value={text}
+              placeholder="貼上 YouTube、mp4、m3u8 或影片網頁的網址"
+              onChange={(e) => {
+                setText(e.target.value)
+                setError(null)
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Enter') submit()
+                else if (e.key === 'Escape') closeInput()
+              }}
+            />
+            {/* 用滑鼠貼上剪貼簿的網址並開啟；網址不對時顯示原因 */}
+            <button
+              className="paste-open"
+              title="貼上剪貼簿裡的網址並開啟（輸入框也可以按右鍵貼上）"
+              onClick={() => void pasteAndOpen()}
+            >
+              貼上並開啟
+            </button>
+          </div>
           {error && <div className="url-error">{error}</div>}
           {/* 空白格子直接開啟 YouTube 首頁（R71）；更換網址時不顯示 */}
           {!source && (
@@ -380,6 +467,16 @@ export function Cell(props: Props) {
       )}
 
       {loading && <LoadingCritter kind={loading} />}
+
+      {/* SponsorBlock 的跳過提示（R161）：右上角，5 秒後自動收起。浮動按鈕顯示時移到右上按鈕的下面（R166，和 iOS 相同）；
+          最上排的格子在工具列顯示時也往下移 */}
+      {props.skipNotice && !showInput && (
+        <div key={props.skipNotice.n} className="skip-notice" style={skipNoticeTop()}>
+          <span className="skip-dot" style={{ background: categoryInfo(props.skipNotice.action.segment.category).color }} />
+          <span>{skippedLabel(props.skipNotice.action.segment.category)}</span>
+          <button onClick={() => props.onCancelSkip(index)}>取消</button>
+        </div>
+      )}
 
       {failed && (
         <div className="cell-center cell-message">
@@ -504,6 +601,7 @@ export function Cell(props: Props) {
             <ProgressBar
               active={hover || seeking || previewing}
               getProgress={() => props.getProgress(index)}
+              getSegments={() => props.getSegments(index)}
               onSeek={(t) => props.onSeek(index, t)}
               onDragChange={setSeeking}
               onAvailable={setHasProgress}

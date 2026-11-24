@@ -1,0 +1,128 @@
+# 桌面版（Windows）的測試、打包、發佈
+# - 推送到 main 而且有改到桌面版的檔案：型別檢查、單元測試、打包安裝檔與免安裝 zip
+#   （放在 Actions 的 Artifacts）
+# - 自動發佈：如果 package.json 的版本號還沒有 desktop-v<版本號> 的 Release，自動建立標籤與 Release，
+#   放上安裝檔與 zip（升版本號再推送就會發佈新版）。說明文字讀 release-notes-desktop.txt
+# - 也可以手動推送 desktop-v<版本號> 標籤，或在 Actions 頁面按「Run workflow」
+name: Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    # 2026-11-24 已合併到 main，拿掉先前實測用的 claude/compassionate-lovelace-y0uqpb
+    branches: ['main']
+    tags: ['desktop-v*']
+    paths:
+      - 'electron/**'
+      - 'src/**'
+      - 'resources/**'
+      - 'build/**'
+      - 'scripts/**'
+      - 'tests/unit/**'
+      - 'index.html'
+      - 'companion.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'electron.vite.config.ts'
+      - 'tsconfig.json'
+      - 'release-notes-desktop.txt'
+      - '.github/workflows/desktop.yml'
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 測試、打包、發佈
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: 判斷要不要發佈
+        id: plan
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            if [ "${GITHUB_REF_NAME#desktop-v}" != "$VERSION" ]; then
+              echo "::error::標籤是 $GITHUB_REF_NAME，但 package.json 的版本是 $VERSION"
+              exit 1
+            fi
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          elif gh release view "desktop-v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null \
+              | grep -qx "MultiView-Setup-$VERSION.exe"; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "desktop-v$VERSION 已經發佈過，這次只測試與打包（要發佈新版請升 package.json 的版本）"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "desktop-v$VERSION 還沒有發佈：測試通過後自動發佈"
+          fi
+
+      - run: npm ci
+
+      # Electron 44 安裝套件時不再自動下載執行檔，要先下載（打包時用 node_modules/electron/dist）
+      - name: 下載 Electron
+        run: node node_modules/electron/install.js && test -f node_modules/electron/dist/electron.exe
+
+      - name: 型別檢查
+        run: npm run typecheck
+
+      - name: 單元測試
+        run: npm test
+
+      # predist 會下載內附的 yt-dlp（檢查 SHA-256）
+      - name: 打包（安裝檔與免安裝 zip）
+        run: npm run dist
+
+      - name: 檢查打包結果
+        id: files
+        run: |
+          VERSION="${{ steps.plan.outputs.version }}"
+          SETUP="release/MultiView-Setup-$VERSION.exe"
+          ZIP="release/MultiView-$VERSION-win.zip"
+          test -f "$SETUP"
+          test -f "$ZIP"
+          ls -lh "$SETUP" "$ZIP"
+          # 內附的 yt-dlp 與廣告清單有放進去
+          FOUND="$(7z l "$ZIP" | tr -d '\r' | grep -cE 'resources[\\/](bin[\\/]yt-dlp\.exe|easylist\.txt|app\.asar)$' || true)"
+          if [ "$FOUND" != "3" ]; then echo "::error::zip 裡少了 yt-dlp.exe、easylist.txt 或 app.asar"; exit 1; fi
+          echo "setup=$SETUP" >> "$GITHUB_OUTPUT"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MultiView-Desktop-${{ steps.plan.outputs.version }}
+          path: |
+            ${{ steps.files.outputs.setup }}
+            ${{ steps.files.outputs.zip }}
+          retention-days: 14
+
+      - name: 發佈到 GitHub Releases
+        if: steps.plan.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          TAG: desktop-v${{ steps.plan.outputs.version }}
+        run: |
+          FILES=("${{ steps.files.outputs.setup }}" "${{ steps.files.outputs.zip }}")
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "MultiView 桌面版 $VERSION" --notes-file release-notes-desktop.txt --latest
+            gh release upload "$TAG" "${FILES[@]}" --clobber
+          else
+            # 桌面版標成「最新版本」：README 的下載連結指向這裡
+            gh release create "$TAG" "${FILES[@]}" --title "MultiView 桌面版 $VERSION" \
+              --notes-file release-notes-desktop.txt --latest --target "$GITHUB_SHA"
+          fi

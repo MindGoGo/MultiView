@@ -1,5 +1,5 @@
 // YouTube 小視窗（R78–R82）：分頁「推薦」「留言」「聊天室」「搜尋」
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   COMPANION_TAB_LABELS,
   COMPANION_TABS,
@@ -16,6 +16,7 @@ import {
 import { parseSource } from '../lib/source'
 import { CompanionWeb } from './CompanionWeb'
 import { PinIcon } from '../components/icons'
+import { LOGIN_FAILURE_TEXT, loginBrowserInfo, MOBILE_HISTORY_URL } from '../lib/googleLogin'
 
 export const NO_VIDEO = '這一格沒有 YouTube 影片'
 export const NO_CHAT = '這部影片沒有聊天室（只有直播有）'
@@ -28,6 +29,59 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
   const [pinned, setPinned] = useState(initial.pinned)
   /** 開過的分頁才建立網頁，之後一直保留（R78）；推薦和留言共用影片網頁 */
   const [opened, setOpened] = useState(() => new Set([initial.tab]))
+
+  /** Google 帳號（R168）：null 是還不知道；loggingIn 是登入用的瀏覽器名稱（顯示「請在 ○○ 視窗登入」） */
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
+  const [loggingIn, setLoggingIn] = useState<string | null>(null)
+  /** 使用者關掉登入的瀏覽器後，讀取登入狀態中 */
+  const [reading, setReading] = useState(false)
+  useEffect(() => window.companion.onLoginReading(() => setReading(true)), [])
+  const [notice, setNotice] = useState<string | null>(null)
+  /** 登入、登出後每個網頁重新載入 */
+  const [reloadKey, setReloadKey] = useState(0)
+  /** 搜尋分頁的網址：按「紀錄」時換成觀看紀錄（每次加上不同的參數，才會重新載入） */
+  const [searchUrl, setSearchUrl] = useState(MOBILE_YOUTUBE_HOME)
+  const historyCount = useRef(0)
+  useEffect(() => {
+    void window.companion.googleStatus().then(setLoggedIn)
+    return window.companion.onAccount((on) => {
+      setLoggedIn(on)
+      setReloadKey((k) => k + 1)
+    })
+  }, [])
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const showNotice = (text: string) => {
+    clearTimeout(noticeTimer.current)
+    setNotice(text)
+    noticeTimer.current = setTimeout(() => setNotice(null), 4000)
+  }
+  const login = async () => {
+    const { picked } = await window.companion.googleBrowsers()
+    setLoggingIn(picked ? loginBrowserInfo(picked).label : '瀏覽器')
+    setReading(false)
+    void window.companion.googleLogin().then((r) => {
+      setLoggingIn(null)
+      setReading(false)
+      showNotice(r === true ? '已登入 Google' : LOGIN_FAILURE_TEXT[r])
+    })
+  }
+  /** 登出前先確認，避免誤觸（R168） */
+  const [confirmLogout, setConfirmLogout] = useState(false)
+  const logout = () => {
+    setConfirmLogout(false)
+    void window.companion.googleLogout().then(() => showNotice('已登出 Google'))
+  }
+  useEffect(() => {
+    if (!confirmLogout) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setConfirmLogout(false)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [confirmLogout])
+  const openHistory = () => {
+    historyCount.current++
+    setSearchUrl(`${MOBILE_HISTORY_URL}?mv=${historyCount.current}`)
+    setTab('search')
+  }
 
   useEffect(() => window.companion.onLink(setLink), [])
   useEffect(() => window.companion.onTab(setTab), [])
@@ -64,6 +118,22 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
             </button>
           ))}
         </div>
+        {/* Google 帳號（R168）：沒登入時「登入」，登入後「紀錄」「登出」 */}
+        {loggedIn === false && (
+          <button className="companion-account" disabled={!!loggingIn} title="開啟瀏覽器登入 Google（設定 → YouTube 播放 → Google 登入可以選瀏覽器），登入後可以看自己的紀錄、推薦與訂閱" onClick={() => void login()}>
+            {loggingIn ? '登入中…' : '登入'}
+          </button>
+        )}
+        {loggedIn && (
+          <>
+            <button className="companion-account" title="觀看紀錄（在搜尋分頁開啟）" onClick={openHistory}>
+              紀錄
+            </button>
+            <button className="companion-account" title="登出 Google" onClick={() => setConfirmLogout(true)}>
+              登出
+            </button>
+          </>
+        )}
         <button
           className={`companion-pin ${pinned ? 'active' : ''}`}
           title={pinned ? '置頂：開（小視窗永遠在最上層）' : '置頂：關'}
@@ -79,6 +149,7 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
         {watchOpened && (
           <CompanionWeb
             url={video ? watchPageUrl(video.id) : null}
+            reloadKey={reloadKey}
             shown={onWatchTab && !message}
             section={tab === 'comments' ? 'comments' : 'related'}
             // 推薦、留言裡的影片：同一部影片帶時間就跳過去，其他影片在連結的格子播放（R79、R80）
@@ -94,11 +165,12 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
             }}
           />
         )}
-        {opened.has('chat') && <CompanionWeb url={chatUrl} shown={tab === 'chat' && !message} />}
+        {opened.has('chat') && <CompanionWeb url={chatUrl} shown={tab === 'chat' && !message} reloadKey={reloadKey} />}
         {opened.has('search') && (
           <CompanionWeb
-            url={MOBILE_YOUTUBE_HOME}
+            url={searchUrl}
             shown={tab === 'search'}
+            reloadKey={reloadKey}
             userAgent={MOBILE_USER_AGENT}
             // 搜尋到的影片依「放入格子的規則」放進格子，網頁不換頁（R82）
             onVideo={(href) => {
@@ -108,6 +180,43 @@ export function Companion({ initial }: { initial: { tab: CompanionTab; link: Com
           />
         )}
         {message && <div className="companion-message">{message}</div>}
+        {loggingIn && (
+          <div className="companion-message companion-login">
+            {reading ? (
+              '正在讀取登入狀態…'
+            ) : (
+              <div>
+                請在開啟的 {loggingIn} 視窗登入 Google，
+                <br />
+                <b>登入完成後關閉 {loggingIn} 視窗</b>，這裡就會換成你的帳號。
+                <br />
+                不想登入時直接關掉 {loggingIn} 視窗即可。
+                <div className="companion-login-cancel">
+                  <button onClick={() => window.companion.cancelLogin()}>取消登入</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {notice && <div className="companion-notice">{notice}</div>}
+        {confirmLogout && (
+          <div className="companion-confirm-backdrop" onPointerDown={(e) => e.target === e.currentTarget && setConfirmLogout(false)}>
+            <div className="companion-confirm" role="alertdialog" aria-modal="true" aria-labelledby="logout-title">
+              <div id="logout-title" className="companion-confirm-title">
+                要登出 Google 嗎？
+              </div>
+              <div className="companion-confirm-text">小視窗和格子裡的 YouTube 網頁都會登出，之後要再按「登入」重新登入。</div>
+              <div className="companion-confirm-buttons">
+                <button autoFocus onClick={() => setConfirmLogout(false)}>
+                  取消
+                </button>
+                <button className="danger" onClick={logout}>
+                  登出
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

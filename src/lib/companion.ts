@@ -1,6 +1,5 @@
 // YouTube 小視窗（R78–R82）。主程序、主畫面、小視窗共用，不依賴 Electron。
 import { parseSource } from './source'
-import { cellCount, type LayoutId } from './layout'
 
 export type CompanionTab = 'related' | 'comments' | 'chat' | 'search'
 export const COMPANION_TABS: CompanionTab[] = ['related', 'comments', 'chat', 'search']
@@ -149,11 +148,12 @@ export function createMinimizeFollower() {
 }
 
 /**
- * 開啟程式時要不要打開小視窗、連結哪一格（R165）：設定打開，而且畫面上只有一格（版型 `1` 或單格全螢幕）。
+ * 開啟程式時要不要打開小視窗、連結哪一格（R165）：設定打開，而且畫面上只有一格
+ * （版型 `1`、只有一格的自訂版型，或單格全螢幕）。cells 是版型的格數。
  * 回傳要連結的格子（從 0 開始），不打開時回傳 null。
  */
-export function companionOnLaunchCell(on: boolean, layout: LayoutId, solo: number | null): number | null {
+export function companionOnLaunchCell(on: boolean, cells: number, solo: number | null): number | null {
   if (!on) return null
   if (solo !== null) return solo
-  return cellCount(layout) === 1 ? 0 : null
+  return cells === 1 ? 0 : null
 }

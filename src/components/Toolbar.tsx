@@ -1,6 +1,7 @@
 import type { WinState } from '../../electron/preload'
 import { useState } from 'react'
-import { LAYOUT_IDS, LAYOUT_LABELS, type LayoutId } from '../lib/layout'
+import { LAYOUT_IDS, LAYOUT_LABELS, type LayoutKey } from '../lib/layout'
+import { CUSTOM_PREFIX, customLabel, type CustomLayout } from '../lib/layoutTree'
 import { BRIGHTNESS_DEFAULT, BRIGHTNESS_MAX, BRIGHTNESS_MIN, BRIGHTNESS_STEP } from '../lib/brightness'
 import { SliderPopup } from './SliderPopup'
 import {
@@ -12,6 +13,8 @@ import {
   ListIcon,
   MinimizeIcon,
   MuteIcon,
+  PencilIcon,
+  TreeLayoutIcon,
   PauseIcon,
   PinIcon,
   PlayIcon,
@@ -22,8 +25,15 @@ import {
 interface Props {
   visible: boolean
   win: WinState
-  layout: LayoutId
-  onLayout(layout: LayoutId): void
+  layout: LayoutKey
+  onLayout(layout: LayoutKey): void
+  /** 自訂版型（R170） */
+  customLayouts: CustomLayout[]
+  /** 編輯版型中：「編輯版型」變成「完成」，旁邊多「刪除這個版型」 */
+  editing: boolean
+  onEditLayout(): void
+  onFinishEdit(): void
+  onDeleteLayout(): void
   toast: string | null
   /** 有可以控制的來源（R8 AC5） */
   canControl: boolean
@@ -71,11 +81,42 @@ export function Toolbar(props: Props) {
             title={`版型：${LAYOUT_LABELS[id]}`}
             aria-label={`版型：${LAYOUT_LABELS[id]}`}
             aria-pressed={id === layout}
+            disabled={props.editing}
             onClick={() => onLayout(id)}
           >
             <LayoutIcon id={id} />
           </button>
         ))}
+        {props.customLayouts.map((c) => {
+          const key: LayoutKey = `${CUSTOM_PREFIX}${c.id}`
+          return (
+            <button
+              key={c.id}
+              className={`seg-btn ${key === layout ? 'active' : ''}`}
+              title={`版型：${customLabel(c.id)}`}
+              aria-label={`版型：${customLabel(c.id)}`}
+              aria-pressed={key === layout}
+              disabled={props.editing && key !== layout}
+              onClick={() => onLayout(key)}
+            >
+              <TreeLayoutIcon tree={c.tree} />
+            </button>
+          )
+        })}
+        {props.editing ? (
+          <>
+            <button className="seg-btn seg-text active" title="完成編輯版型（Esc）" onClick={props.onFinishEdit}>
+              完成
+            </button>
+            <button className="seg-btn seg-text danger" title="刪除這個自訂版型" onClick={props.onDeleteLayout}>
+              刪除這個版型
+            </button>
+          </>
+        ) : (
+          <button className="seg-btn" title="編輯版型：自己切格子" aria-label="編輯版型" onClick={props.onEditLayout}>
+            <PencilIcon />
+          </button>
+        )}
       </div>
       <div className="seg" role="group" aria-label="全部的格子">
         <button className="seg-btn" disabled={!canControl} title="全部播放" aria-label="全部播放" onClick={props.onPlayAll}>

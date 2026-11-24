@@ -6,13 +6,14 @@
 
 ## 功能
 
-- **分割版型**：1、2、2×2、3×3、1+3（左邊大畫面、右邊三個小畫面），可拖曳分隔線調整大小、拖曳交換格子位置，換位不中斷播放。
+- **分割版型**：1、2、2×2、3×3、1+3（左邊大畫面、右邊三個小畫面），也可以自己左右、上下切格子做出自訂版型（例如直螢幕的上中下 3 格）；可拖曳分隔線調整大小、拖曳交換格子位置，換位不中斷播放。
 - **支援的來源**：YouTube 影片與直播、`.mp4`、`.m3u8`（HLS），以及 Twitch、新聞台官網等一般影片網頁。
 - **聲音控制**：點一下畫面就只聽那一格；也可以多格同時出聲、各自調整音量（最高 200%，並防止爆音）。
 - **每格亮度與總亮度**、畫質選擇、字幕、進度條預覽縮圖、←／→ 快轉倒轉 5 秒、記住觀看進度。
 - **yt-dlp 播放（選用）**：用內附的 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 取得影片串流，以程式自己的播放器播放，畫面上沒有 YouTube 的按鈕與廣告。播不了時自動退回內嵌播放器或網頁。yt-dlp 會每天自動更新。
 - **網頁模式**：在格子裡直接逛 YouTube 或其他網站，可以只顯示網頁中的影片，內建廣告阻擋。
-- **YouTube 小視窗**：另開一個視窗看推薦影片、留言、直播聊天室，或用手機版 YouTube 搜尋。
+- **SponsorBlock**：用 yt-dlp 播放 YouTube 影片時，自動跳過社群標記的業配、開場等片段，進度條上顯示片段的位置。
+- **YouTube 小視窗**：另開一個視窗看推薦影片、留言、直播聊天室，或用手機版 YouTube 搜尋；可以用 Microsoft Edge 登入 Google，看自己的觀看紀錄與推薦。
 - **程式內的訂閱清單**：可從 Google Takeout 匯入訂閱頻道，顯示最新影片與直播中的頻道。
 - **最愛與歷史**、置頂、全螢幕、單格全螢幕、快捷鍵。
 - 關閉後會記住版型、比例、影片清單與聲音設定。
@@ -20,6 +21,8 @@
 ## 安裝
 
 到 [Releases](https://github.com/MindGoGo/MultiView/releases) 下載 `MultiView-Setup-版本號.exe`，雙擊執行即可安裝，不需要系統管理員權限。
+
+也可以下載免安裝版 `MultiView-版本號-win.zip`，解壓縮後執行裡面的 `MultiView.exe`（設定一樣存在 `%APPDATA%\MultiView`）。
 
 - 支援 Windows 10、11（64 位元）。
 - 程式沒有數位簽章，第一次執行時 Windows 可能顯示「Windows 已保護您的電腦」，按「其他資訊」→「仍要執行」。
@@ -45,7 +48,7 @@ npm install
 npm run dev        # 開發模式（第一次會自動下載 yt-dlp 到 vendor/）
 npm test           # 單元測試
 npm run typecheck  # 型別檢查
-npm run dist       # 打包成安裝檔，輸出到 release/
+npm run dist       # 打包成安裝檔與免安裝 zip，輸出到 release/
 ```
 
 其他指令：
@@ -78,6 +81,7 @@ npm run dist       # 打包成安裝檔，輸出到 release/
 | [EasyList](https://easylist.to/)（`resources/easylist.txt`） | GPLv3 或 CC BY-SA 3.0 |
 | [@ghostery/adblocker](https://github.com/ghostery/adblocker) | MPL-2.0 |
 | [hls.js](https://github.com/video-dev/hls.js) | Apache-2.0 |
+| [SponsorBlock](https://sponsor.ajay.app/) 的片段資料（執行時向 API 取得） | CC BY-NC-SA 4.0 |
 | [Electron](https://www.electronjs.org/)、[React](https://react.dev/) | MIT |
 
 ## 授權

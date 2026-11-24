@@ -24,6 +24,9 @@ import {
 import { extractStoryboardSpec } from '../src/lib/storyboard'
 import { isVideoId } from '../src/lib/ytdlp'
 import { installStreamCors, ytdlp } from './ytdlp'
+import { createSponsorClient } from './sponsorBlock'
+import { installedBrowsers, loginWithBrowser } from './googleLogin'
+import { cookieUrl, isGoogleDomain, pickLoginBrowser, type LoginBrowser, type LoginFailure } from '../src/lib/googleLogin'
 import {
   channelFeedUrl,
   channelLiveUrl,
@@ -206,6 +209,7 @@ async function createWindow() {
   })
 
   secureWebviews(win.webContents)
+  installEditMenu(win.webContents)
   win.webContents.on('did-attach-webview', (_, guest) => attachWebGuest(guest))
 
   const devUrl = process.env['ELECTRON_RENDERER_URL']
@@ -287,6 +291,7 @@ function openCompanion(tab: CompanionTab | null) {
   // 小視窗不開新視窗
   companion.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   secureWebviews(companion.webContents)
+  installEditMenu(companion.webContents)
   companion.webContents.on('did-attach-webview', (_, guest) => {
     const id = guest.id
     guest.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -340,6 +345,121 @@ ipcMain.on('companion:tab', (e, tab: unknown) => {
   settings.companion = { ...settings.companion, tab }
   saveSoon()
 })
+/**
+ * 程式畫面上輸入框的右鍵選單（剪下、複製、貼上、全選）：Electron 預設沒有，只能用鍵盤貼上（使用者回報，0.8.6）。
+ * 只在可以輸入的地方或選取了文字時出現
+ */
+function installEditMenu(contents: WebContents) {
+  contents.on('context-menu', (_, params) => {
+    if (!params.isEditable && !params.selectionText) return
+    const f = params.editFlags
+    const owner = BrowserWindow.fromWebContents(contents) ?? undefined
+    Menu.buildFromTemplate(
+      params.isEditable
+        ? [
+            { label: '剪下', role: 'cut', enabled: f.canCut },
+            { label: '複製', role: 'copy', enabled: f.canCopy },
+            { label: '貼上', role: 'paste', enabled: f.canPaste },
+            { type: 'separator' },
+            { label: '全選', role: 'selectAll', enabled: f.canSelectAll }
+          ]
+        : [{ label: '複製', role: 'copy', enabled: f.canCopy }]
+    ).popup({ window: owner })
+  })
+}
+// 「貼上並開啟」按鈕讀剪貼簿（只有文字）
+ipcMain.handle('clipboard:readText', (e) => (e.sender === win?.webContents ? clipboard.readText() : ''))
+
+// 用外部瀏覽器登入 Google（R168）：cookie 放進網頁來源與小視窗共用的資料區（WEB_PARTITION）
+const webSession = () => session.fromPartition(WEB_PARTITION)
+async function googleLoggedIn(): Promise<boolean> {
+  const cookies = await webSession().cookies.get({ name: 'LOGIN_INFO' })
+  return cookies.some((c) => /(^|\.)youtube\.com$/.test((c.domain ?? '').replace(/^\./, '')))
+}
+function sendAccount(loggedIn: boolean) {
+  companion?.webContents.send('companion:account', loggedIn)
+}
+let loginRunning = false
+/** 登入中按「取消」（R168） */
+let loginAbort: AbortController | null = null
+ipcMain.on('google:cancelLogin', (e) => {
+  if (e.sender === companion?.webContents) loginAbort?.abort()
+})
+/** 有安裝的登入用瀏覽器，與依設定實際會用的那一個（R168） */
+function loginBrowsers() {
+  const exes = installedBrowsers()
+  const installed = Object.keys(exes) as LoginBrowser[]
+  const picked = pickLoginBrowser(settings.loginBrowser, installed)
+  return { exes, installed, picked }
+}
+ipcMain.handle('google:browsers', () => {
+  const { installed, picked } = loginBrowsers()
+  return { installed, picked }
+})
+ipcMain.handle('google:status', () => googleLoggedIn())
+ipcMain.handle('google:login', async (e): Promise<true | LoginFailure> => {
+  if (e.sender !== companion?.webContents) return 'failed'
+  if (loginRunning) return 'busy'
+  loginRunning = true
+  try {
+    // 每一步寫進 %APPDATA%\MultiView\login.log（每次登入重寫），登入不了時用來查原因
+    const logFile = path.join(app.getPath('userData'), 'login.log')
+    fs.writeFileSync(logFile, `MultiView ${app.getVersion()} ${new Date().toISOString()}\n`)
+    const t0 = Date.now()
+    const log = (m: string) => {
+      try {
+        fs.appendFileSync(logFile, `${((Date.now() - t0) / 1000).toFixed(1)}s ${m}\n`)
+      } catch {
+        // 寫不進去就算了
+      }
+    }
+    const { exes, picked } = loginBrowsers()
+    log(`設定：${settings.loginBrowser}，使用：${picked ?? '沒有'}`)
+    if (!picked) return 'no-browser'
+    loginAbort = new AbortController()
+    const r = await loginWithBrowser({
+      executable: exes[picked],
+      log,
+      signal: loginAbort.signal,
+      onReading: () => companion?.webContents.send('companion:loginReading')
+    })
+    log(r.ok ? '結果：成功' : `結果：${r.reason}`)
+    if (!r.ok) return r.reason
+    const ses = webSession()
+    let saved = 0
+    for (const c of r.cookies) {
+      try {
+        await ses.cookies.set(c)
+        saved++
+      } catch {
+        // 個別 cookie 放不進去（格式不合）時略過
+      }
+    }
+    await ses.cookies.flushStore()
+    log(`寫入 ${saved}／${r.cookies.length} 個 cookie`)
+    if (saved === 0) return 'failed'
+    sendAccount(await googleLoggedIn())
+    if (companion) {
+      if (companion.isMinimized()) companion.restore()
+      companion.focus()
+    }
+    return true
+  } finally {
+    loginRunning = false
+    loginAbort = null
+  }
+})
+ipcMain.handle('google:logout', async (e) => {
+  if (e.sender !== companion?.webContents) return
+  const ses = webSession()
+  const cookies = await ses.cookies.get({})
+  for (const c of cookies.filter((c) => c.domain && isGoogleDomain(c.domain))) {
+    await ses.cookies.remove(cookieUrl(c), c.name).catch(() => undefined)
+  }
+  await ses.cookies.flushStore()
+  sendAccount(false)
+})
+
 ipcMain.on('companion:action', (e, action: CompanionAction) => {
   if (e.sender === companion?.webContents) win?.webContents.send('companion:action', action)
 })
@@ -353,13 +473,16 @@ ipcMain.on('win:focus', () => {
 // 畫面這一側的設定（版型、比例、來源）（R10）
 ipcMain.handle('settings:getView', () => ({
   layout: settings.layout,
+  customLayouts: settings.customLayouts,
   ratios: settings.ratios,
   slots: settings.slots,
   brightness: settings.brightness,
   autoYoutubeWeb: settings.autoYoutubeWeb,
   youtubeMethods: settings.youtubeMethods,
   webMethod: settings.webMethod,
-  listTab: settings.listTab
+  listTab: settings.listTab,
+  sponsorBlock: settings.sponsorBlock,
+  loginBrowser: settings.loginBrowser
 }))
 ipcMain.on('settings:saveView', (_, view: unknown) => {
   settings = { ...settings, ...normalizeView(view) }
@@ -419,6 +542,10 @@ ipcMain.handle('ytdlp:setChannel', (_, channel: unknown) =>
 ipcMain.handle('ytdlp:status', () => ytdlp.getStatus())
 ipcMain.on('ytdlp:check', () => void ytdlp.checkLatest())
 ytdlp.onStatus((s) => win?.webContents.send('ytdlp:status', s))
+
+// SponsorBlock（R161）：在主程序連線（不受畫面的跨網站限制），每部影片只抓一次
+const sponsor = createSponsorClient((url, init) => net.fetch(url, init))
+ipcMain.handle('sponsorblock:segments', (_, videoId: unknown) => (isVideoId(videoId) ? sponsor.segments(videoId) : []))
 
 // YouTube 預覽縮圖的資訊（R50）：從這部影片的 YouTube 網頁取出，每部影片只取得一次
 const storyboardSpecs = new Map<string, Promise<string | null>>()

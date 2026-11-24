@@ -10,6 +10,8 @@ import {
   type YtDlpChannel,
   type YtDlpStatus
 } from '../lib/ytdlp'
+import { LOGIN_BROWSERS, type LoginBrowser } from '../lib/googleLogin'
+import { SPONSOR_CATEGORIES, type SponsorBlockSettings } from '../lib/sponsorBlock'
 import { CloseIcon, CompanionIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
 
 export type SettingsCategory = 'youtube' | 'companion' | 'web' | 'ytdlp' | 'about'
@@ -37,6 +39,12 @@ interface Props {
   /** 開啟程式時打開小視窗（R165） */
   companionOnLaunch: boolean
   onCompanionOnLaunch(on: boolean): void
+  /** SponsorBlock（R161） */
+  sponsorBlock: SponsorBlockSettings
+  onSponsorBlock(settings: SponsorBlockSettings): void
+  /** 登入 Google 用的瀏覽器（R168） */
+  loginBrowser: LoginBrowser
+  onLoginBrowser(browser: LoginBrowser): void
   /** 手動更新 yt-dlp 的結果（R93） */
   onToast(message: string): void
 }
@@ -162,6 +170,8 @@ function YouTubeSection(props: Props) {
       <Row title="無法嵌入時自動改用網頁播放" desc="影片不允許在其他網站播放時，直接改用 YouTube 網頁播放。">
         <Switch label="無法嵌入時自動改用網頁播放" on={props.autoYoutubeWeb} onChange={props.onAutoYoutubeWeb} />
       </Row>
+      <SponsorBlockRows settings={props.sponsorBlock} onChange={props.onSponsorBlock} />
+      <LoginBrowserRow value={props.loginBrowser} onChange={props.onLoginBrowser} />
     </section>
   )
 }
@@ -174,6 +184,72 @@ function CompanionSection(props: Props) {
         <Switch label="開啟 App 時打開小視窗" on={props.companionOnLaunch} onChange={props.onCompanionOnLaunch} />
       </Row>
     </section>
+  )
+}
+
+/** 登入 Google 用的瀏覽器（R168）：只列出電腦上有安裝的 */
+function LoginBrowserRow({ value, onChange }: { value: LoginBrowser; onChange(b: LoginBrowser): void }) {
+  const [installed, setInstalled] = useState<LoginBrowser[] | null>(null)
+  useEffect(() => {
+    void window.multiview.loginBrowsers().then((r) => setInstalled(r.installed))
+  }, [])
+  const options = LOGIN_BROWSERS.filter((b) => installed?.includes(b.id)).map((b) => ({ value: b.id, label: b.short }))
+  // 選的瀏覽器沒有安裝時，實際用第一個有安裝的（和登入時的規則相同）
+  const shown = installed?.includes(value) ? value : (options[0]?.value ?? value)
+  return (
+    <>
+      <h2 className="set-heading set-subheading">Google 登入</h2>
+      <Row
+        title="登入用的瀏覽器"
+        desc={
+          installed === null
+            ? '讀取中…'
+            : options.length === 0
+              ? '找不到 Microsoft Edge、Google Chrome 或 Brave，YouTube 小視窗無法登入。'
+              : 'YouTube 小視窗按「登入」時開啟這個瀏覽器（全新的視窗，不會用到你平常在這個瀏覽器的帳號和資料）；登入後關掉那個視窗即可。'
+        }
+      >
+        {options.length > 1 && <Choice label="登入用的瀏覽器" value={shown} options={options} onChange={onChange} />}
+        {options.length === 1 && <span className="set-desc">{LOGIN_BROWSERS.find((b) => b.id === options[0].value)!.label}</span>}
+      </Row>
+    </>
+  )
+}
+
+/** SponsorBlock（R161）：改了馬上套用到每一格 */
+function SponsorBlockRows({ settings, onChange }: { settings: SponsorBlockSettings; onChange(s: SponsorBlockSettings): void }) {
+  const toggle = (id: (typeof SPONSOR_CATEGORIES)[number]['id'], on: boolean) => {
+    const set = new Set(settings.categories)
+    if (on) set.add(id)
+    else set.delete(id)
+    onChange({ ...settings, categories: SPONSOR_CATEGORIES.map((c) => c.id).filter((c) => set.has(c)) })
+  }
+  return (
+    <>
+      <h2 className="set-heading set-subheading">SponsorBlock（跳過業配）</h2>
+      <Row
+        title="自動跳過片段"
+        desc={
+          <>
+            只處理用 yt-dlp 播放的 YouTube 一般影片。每部影片只向 SponsorBlock 要一次資料（幾 KB），而且只送出影片代碼雜湊的前 4 碼，伺服器不知道你在看哪一部。
+            片段資料來自 SponsorBlock（sponsor.ajay.app）的社群標記，授權 CC BY-NC-SA 4.0。
+          </>
+        }
+      >
+        <Switch label="自動跳過片段" on={settings.enabled} onChange={(enabled) => onChange({ ...settings, enabled })} />
+      </Row>
+      {settings.enabled && (
+        <div className="set-categories" role="group" aria-label="要跳過的片段">
+          {SPONSOR_CATEGORIES.map((c) => (
+            <label key={c.id} className="set-check">
+              <input type="checkbox" checked={settings.categories.includes(c.id)} onChange={(e) => toggle(c.id, e.target.checked)} />
+              <span className="skip-dot" style={{ background: c.color }} />
+              {c.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 

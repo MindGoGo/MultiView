@@ -14,6 +14,8 @@ interface Props {
   seconds: number
   duration: number
   source: PreviewSource
+  /** 游標在 SponsorBlock 的片段上：多一行類別（R161） */
+  segment?: { label: string; color: string } | null
 }
 
 /** 預覽縮圖的寬度 */
@@ -34,7 +36,7 @@ function loadStoryboard(videoId: string): Promise<Storyboard | null> {
   return p
 }
 
-export function ProgressPreview({ clientX, track, bounds, label, seconds, duration, source }: Props) {
+export function ProgressPreview({ clientX, track, bounds, label, seconds, duration, source, segment }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   // 格子放不下縮圖時只顯示時間
@@ -53,6 +55,12 @@ export function ProgressPreview({ clientX, track, bounds, label, seconds, durati
         <YouTubeFrame videoId={source.videoId} seconds={seconds} duration={duration} />
       )}
       {showImage && source.kind === 'video' && <VideoFrame url={source.url} seconds={seconds} />}
+      {segment && (
+        <span className="progress-preview-segment">
+          <span className="skip-dot" style={{ background: segment.color }} />
+          {segment.label}
+        </span>
+      )}
       <span className="progress-preview-time">{label}</span>
     </div>
   )

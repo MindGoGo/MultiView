@@ -1,9 +1,10 @@
 # 介面微調與浮在影片上的操作按鈕（桌面版）規格
 
 - 功能代號：`floating-controls`
-- 狀態：已確認、已實作（桌面版 0.8.5，2026-11-24），待使用者實測
-- 前置規格：[ytdlp-update-channel](ytdlp-update-channel.md)（R160）、[page-mode-overlays](page-mode-overlays.md)（R116–R118）、[ytdlp-badge-and-site-fixes](ytdlp-badge-and-site-fixes.md)（R109）、[cell-play-and-page-menu](cell-play-and-page-menu.md)、[youtube-companion-window](youtube-companion-window.md)、[companion-window-fixes](companion-window-fixes.md)
+- 狀態：已確認、已實作（桌面版 0.9.1，2026-11-24），待使用者實測
+- 前置規格：[custom-layouts](custom-layouts.md)（R170）、[sponsorblock-and-google-login](sponsorblock-and-google-login.md)（R161、R162 桌面版、R168、R169）、[ytdlp-update-channel](ytdlp-update-channel.md)（R160）、[page-mode-overlays](page-mode-overlays.md)（R116–R118）、[ytdlp-badge-and-site-fixes](ytdlp-badge-and-site-fixes.md)（R109）、[cell-play-and-page-menu](cell-play-and-page-menu.md)、[youtube-companion-window](youtube-companion-window.md)、[companion-window-fixes](companion-window-fixes.md)
 - 需求編號：R165、R166，和 iOS 版、Android 版共用（`Phone` 分支的 `doc/specs/ios-app.md`、`doc/specs/android-app.md`）。iOS 版 0.0.39 先做、使用者實測通過。R167（往下拉關掉上下排的小視窗）桌面版用不到，不做。
+- **編號調整（2026-11-24）**：桌面版在 `claude/compassionate-lovelace-y0uqpb` 分支原本也用了 R165（用 Edge 登入 Google）、R166（用滑鼠貼上網址）、R167（自訂版型），和手機共用的編號重複。使用者選擇保留共用編號，桌面版那三項改成 R168、R169、R170（規格、程式註解、測試已改；舊的 commit 說明仍是舊編號）。
 
 ## 1. 背景與目標
 
@@ -13,15 +14,14 @@
 1. **小標示**：只有 yt-dlp 播放時顯示 8px 綠色小圓點。「內嵌播放器」「網頁」與 yt-dlp 播不了時改用的標示都不顯示；滑鼠移到聲音圖示（或那個角落）上，提示仍說明播放方式。
 2. **開啟 App 時打開小視窗**：只在畫面上只有一格（版型 `1` 或單格全螢幕）時打開，多格時不打開。
 3. **按鈕的去向**：第 4 節的表，使用者確認（2026-11-24）：YouTube ▾ 與整頁模式的上一頁／下一頁放右上、「直接操作」收進齒輪、點時間膠囊回到直播。
-4. **分支**：桌面版直接在 `main` 實作（2026-11-24）。
+4. **分支**：桌面版直接在 `main` 實作（2026-11-24）。推上 `main` 後發現桌面版的 GitHub Actions（`desktop.yml`）與已發佈的 0.8.5–0.9.0 都在 `claude/compassionate-lovelace-y0uqpb`、還沒合併；使用者選擇把它合併到 `main`，版本改成 0.9.1（0.8.5 已經發佈過）。
 
 ## 2. 範圍
 
-**包含：** R165（介面微調）、R166（浮在影片上的操作按鈕）、版本號 0.8.5。
+**包含：** R165（介面微調）、R166（浮在影片上的操作按鈕）、版本號 0.9.1。
 
 **不包含：**
 - R167（手機上下排的小視窗往下拉關掉）。
-- SponsorBlock 的色塊：桌面版沒有 SponsorBlock。
 - 子母畫面：桌面版沒有，右上角改放 YouTube ▾。
 - 上方工具列、快捷鍵、清單面板、小視窗本身的操作：不變。
 
@@ -34,7 +34,7 @@
   - **小視窗的標題**（`src/lib/companion.ts` 的 `companionHeader`）：只顯示影片名稱，拿掉「第 N 格：」。還不知道名稱時照原本顯示「第 N 格：（讀取中）」；格子沒有 YouTube 影片時照原本顯示「第 N 格」。
   - **開啟 App 時打開小視窗**：
     - 設定視窗新增分類「YouTube 小視窗」，裡面一列「開啟 App 時打開小視窗」（開關），預設關閉。說明：「畫面上只有一格（版型 1）時，開啟程式就打開 YouTube 小視窗；多格時不打開。」
-    - 判斷（`companionOnLaunchCell`）：設定打開，而且畫面上只有一格（版型 `1`，或單格全螢幕）時，打開小視窗並連結那一格；只在開啟程式時判斷一次。單格全螢幕不保存，所以開啟時實際上只有版型 `1` 會打開。
+    - 判斷（`companionOnLaunchCell`）：設定打開，而且畫面上只有一格（版型 `1`、只有一格的自訂版型（R170），或單格全螢幕）時，打開小視窗並連結那一格；只在開啟程式時判斷一次。單格全螢幕不保存，所以開啟時實際上只有版型 `1` 會打開。
     - **設定檔**：存在 `settings.json` 最上層的 `companionOnLaunch`（布林值）。這是桌面版自己的欄位：沒有這個欄位（舊的設定檔）或不是 `true` 時視為關閉。iOS、Android 版照原本存在自己的偏好設定（`UserDefaults`／`SharedPreferences` 的 `companionOnLaunch`），匯入桌面版設定檔（iOS R144）時不讀這個欄位，所以不放進共用格式，共用格式不變。
 - 驗收條件：
   - AC1：打開設定後重新開啟程式（版型 `1`）→ 小視窗直接打開，連結第 1 格；版型 `2x2` → 不打開；設定關閉 → 不打開。
@@ -46,7 +46,7 @@
   - **拿掉整塊底**：原本格子下方的半透明操作列（`.cell-controls` 的整塊底與換行排列、窄格子只顯示圖示的 `Label`）拿掉。
   - **漸層**：操作區顯示時，影片上面 45%、下面 55% 各一層淡淡的黑色漸層，中間透明。
   - **按鈕**：40px 的半透明黑色圓形（`.chip`）。浮動按鈕層、漸層都不接收滑鼠（`pointer-events: none`），只有按鈕、進度條、可以按的時間膠囊接收，其他地方的點擊照常交給格子（點影片切換聲音、R7）或整頁模式的網頁。
-  - **左上**：聲音按鈕（靜音／開聲音）＋yt-dlp 綠點。操作區沒顯示時照舊：有聲音的格子顯示小小的 🔊。
+  - **左上**：聲音按鈕（靜音／開聲音）＋yt-dlp 綠點。操作區沒顯示時照舊：有聲音的格子顯示小小的 🔊（畫面上只有一格時不顯示，R162 桌面版）；操作區顯示時只有一格也有聲音按鈕。
   - **中間**：只有播放／暫停（R165 的大小），沒有快轉、倒轉按鈕（←／→ 快捷鍵照舊）。整頁模式的網頁格子在浮動按鈕叫出來時也有；「直接操作」時沒有。格子高度不到 160px 時不顯示。
   - **右上**：整頁模式的上一頁、下一頁 → YouTube ▾（嵌入播放的 YouTube 與 YouTube 網頁模式，選單內容不變）→ 齒輪。
   - **齒輪選單**（`PopupMenu`，出現在齒輪下方）：依來源只列出可以用的項目，順序：
@@ -65,7 +65,8 @@
   - 齒輪選單或從它打開的選單、滑桿開著時，齒輪是藍色，再按一下齒輪就關閉。
   - **左下**：時間膠囊（`timeChip`）。一般影片「目前 / 長度」；可回放的直播顯示距離最新位置多久（例如 `-1:23`），在最新位置 10 秒內顯示「直播」；沒有回放範圍的直播顯示「直播」。落後最新位置時按膠囊回到最新位置（取代原本的「回到直播」按鈕）。拖曳進度條時顯示拖到的位置。格子寬度不到 360px 時不顯示。
   - **右下**：移動（可以換位時，拖曳的方式不變）、全螢幕／離開全螢幕。
-  - **最下面**：貼著影片底部的細進度條：3px 的線加 12px 的圓點，滑鼠移上去或拖曳時線變 6px、圓點 14px；可以點、拖曳的高度 18px，左右留 12px。預覽縮圖、時間提示照舊；放開才跳轉照舊。
+  - **最下面**：貼著影片底部的細進度條：3px 的線加 12px 的圓點，滑鼠移上去或拖曳時線變 6px、圓點 14px；可以點、拖曳的高度 18px，左右留 12px。預覽縮圖、時間提示、SponsorBlock 的色塊（R161，跟著變粗）照舊；放開才跳轉照舊。
+  - **SponsorBlock 的跳過提示**（R161，右上角）：浮動按鈕顯示時往下移到右上按鈕的下面（和 iOS 相同）；按鈕沒顯示時照原本，最上排的格子在工具列顯示時往下移。
   - **最上排的格子**：上方的按鈕（左上、右上）往下移到 48px，避開工具列的 40px 感應區，滑鼠移過去時不會被工具列蓋住、按鈕也不會跳動（iOS、Android 也是讓開工具列）。
   - **窄格子**（寬度不到 360px）：按鈕縮成 32px，時間膠囊不顯示。
   - **其他行為不變**：滑鼠移入才顯示、靜止 2 秒後隱藏、選單或滑桿開著、拖曳進度條或換位時不隱藏、快捷鍵、點影片切換聲音。
@@ -108,6 +109,8 @@
 | R78（小視窗標題「第 N 格：影片名稱」） | 只顯示影片名稱（R165） |
 | R109（播放方式的小標示） | 只有 yt-dlp 的綠點；說明移到聲音圖示的提示（R165） |
 | R117（整頁模式的小把手） | 展開後滑鼠靜止或離開格子才收回，不再是離開操作列 0.3 秒 |
+| R161（SponsorBlock） | 色塊畫在細進度條上；跳過提示在浮動按鈕顯示時移到右上按鈕下面 |
+| R168、R169、R170（原桌面版 R165–R167） | 只改編號，行為不變 |
 
 ## 6. 實作
 
@@ -119,10 +122,12 @@
 - `src/components/SettingsDialog.tsx`、`src/components/icons.tsx`：「YouTube 小視窗」分類、`CompanionIcon`、`SpeakerIcon`
 - `src/components/Cell.tsx`、`src/components/ProgressBar.tsx`、`src/components/PopupMenu.tsx`（`detail`、`danger`）、`src/components/Grid.tsx`（`topRow`）、`src/styles.css`
 - 手動驗收：`tests/manual/floating-controls.md`
-- 版本：`package.json` 0.8.5
+- 版本：`package.json` 0.9.1；發佈說明 `release-notes-desktop.txt`
+- 合併 `claude/compassionate-lovelace-y0uqpb`：`.github/workflows/desktop.yml` 的觸發分支只留 `main`
 
 ## 變更紀錄
 
 | 日期 | 變更 | 原因 |
 |---|---|---|
+| 2026-11-24 | 合併 `claude/compassionate-lovelace-y0uqpb` 到 `main`；版本改成 0.9.1；細進度條加上 SponsorBlock 色塊、跳過提示避開浮動按鈕；只有一格的自訂版型也會打開小視窗；桌面版原本的 R165–R167 改成 R168–R170 | 推上 `main` 後沒有觸發 GitHub Actions：桌面版的 workflow 與 0.8.5–0.9.0 都在那條分支；使用者選擇合併、桌面舊的改號 |
 | 2026-11-24 | 初版：R165（0.8.5 前先推上 `main`）、R166、版本 0.8.5 | 使用者要求把 iOS 版實測通過的 R165、R166 搬到桌面版；按鈕去向表經使用者確認 |

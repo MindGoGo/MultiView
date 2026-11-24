@@ -152,3 +152,104 @@ body,
 :hover::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.26);
 }
+
+/* Google 帳號的按鈕（R168） */
+.companion-tabs button.companion-account {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+.companion-tabs button.companion-account:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.companion-login {
+  z-index: 5;
+  background: #0f0f0f;
+}
+.companion-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  z-index: 6;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(40, 40, 40, 0.95);
+  font-size: 12.5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 登出的確認（R168） */
+.companion-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.companion-confirm {
+  width: 100%;
+  max-width: 300px;
+  padding: 16px;
+  border-radius: 10px;
+  background: #212121;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+.companion-confirm-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.companion-confirm-text {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #b8b8bc;
+}
+.companion-confirm-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.companion-confirm-buttons button {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e8e8ea;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.companion-confirm-buttons button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.companion-confirm-buttons button.danger {
+  background: #c62828;
+  color: #fff;
+}
+.companion-confirm-buttons button.danger:hover {
+  background: #d84040;
+}
+
+.companion-login-cancel {
+  margin-top: 14px;
+}
+.companion-login-cancel button {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e8e8ea;
+  font: inherit;
+  cursor: pointer;
+}
+.companion-login-cancel button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}

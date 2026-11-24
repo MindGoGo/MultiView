@@ -6,6 +6,7 @@ import type { Failure } from '../lib/webErrors'
 import { needsResolve, type YouTubeMethods, type YtStream } from '../lib/ytdlp'
 import { YouTubePlayer } from './YouTubePlayer'
 import { VideoPlayer, type Renew } from './VideoPlayer'
+import { selectSegments, sponsorActive, type SkipAction, type SponsorBlockSettings, type SponsorSegment } from '../lib/sponsorBlock'
 
 /**
  * 格子要知道的播放方式：解析中、原本的方式（YouTube 是內嵌播放器、其他網站是網頁）、
@@ -23,6 +24,10 @@ interface Props extends PlayerProps {
   onMode(mode: YtMode): void
   /** 這一格退回內嵌播放器（R90） */
   onFallback(): void
+  /** SponsorBlock 的設定（R161） */
+  sponsorBlock: SponsorBlockSettings
+  /** 自動跳過了一個片段（R161 跳過提示） */
+  onSkipSegment?(action: SkipAction): void
 }
 
 type Plan =
@@ -41,7 +46,8 @@ const modeOf = (plan: Plan): YtMode =>
       : plan.kind
 
 export const YouTubeSource = forwardRef<PlayerHandle, Props>(function YouTubeSource(props, ref) {
-  const { videoId, quality, captions, audioLang, methods, onStatus, onMode, onFallback, startAt, autoplay, ...rest } = props
+  const { videoId, quality, captions, audioLang, methods, onStatus, onMode, onFallback, startAt, autoplay, sponsorBlock, onSkipSegment, ...rest } =
+    props
   const [plan, setPlan] = useState<Plan>(() =>
     needsResolve(methods) ? { kind: 'resolving' } : { kind: 'embed', fallback: false, live: null }
   )
@@ -128,6 +134,28 @@ export const YouTubeSource = forwardRef<PlayerHandle, Props>(function YouTubeSou
     latest.current.onStatus(s, f)
   }
 
+  // SponsorBlock（R161）：開啟、一般影片用 yt-dlp 播放時，建立時就在背景抓片段（和 yt-dlp 解析同時）。
+  // 失敗、逾時當作沒有片段，不影響播放；關閉後再開啟時，還沒抓過的影片才去抓（主程序有快取）
+  const [rawSegments, setRawSegments] = useState<SponsorSegment[]>([])
+  const wantSegments = sponsorActive(sponsorBlock) && methods.vod === 'ytdlp'
+  useEffect(() => {
+    if (!wantSegments) return
+    let cancelled = false
+    void window.multiview
+      .sponsorSegments(videoId)
+      .then((list) => !cancelled && setRawSegments(list))
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [videoId, wantSegments])
+  // 只有 yt-dlp 播放的一般影片才跳過；直播、內嵌播放器不處理。改設定馬上套用
+  const vodByYtdlp = plan.kind === 'ytdlp' && !plan.stream.isLive
+  const segments = useMemo(
+    () => (vodByYtdlp ? selectSegments(rawSegments, sponsorBlock) : []),
+    [vodByYtdlp, rawSegments, sponsorBlock]
+  )
+
   const renew = useMemo<Renew | undefined>(() => {
     if (plan.kind !== 'ytdlp') return undefined
     return {
@@ -155,7 +183,9 @@ export const YouTubeSource = forwardRef<PlayerHandle, Props>(function YouTubeSou
     getQualityOptions: () => childRef.current?.getQualityOptions?.() ?? [],
     // yt-dlp 播放不支援字幕（R89）
     getAudioTracks: () => (planRef.current.kind === 'ytdlp' ? (childRef.current?.getAudioTracks?.() ?? null) : null),
-    getCaptionTracks: () => (planRef.current.kind === 'ytdlp' ? null : (childRef.current?.getCaptionTracks?.() ?? null))
+    getCaptionTracks: () => (planRef.current.kind === 'ytdlp' ? null : (childRef.current?.getCaptionTracks?.() ?? null)),
+    getSegments: () => childRef.current?.getSegments?.() ?? [],
+    cancelSkip: (segment) => childRef.current?.cancelSkip?.(segment)
   }))
 
   const key = `${plan.kind}-${start.n}`
@@ -163,7 +193,7 @@ export const YouTubeSource = forwardRef<PlayerHandle, Props>(function YouTubeSou
   if (plan.kind === 'resolving') return <div className="player" />
   const common = { ...rest, startAt: start.startAt, autoplay: playingRef.current, onStatus: childStatus, ref: childRef }
   return plan.kind === 'ytdlp' ? (
-    <VideoPlayer key={key} kind={plan.stream.kind} url={plan.stream.url} quality={quality} renew={renew} audioLang={audioLang} {...common} />
+    <VideoPlayer key={key} kind={plan.stream.kind} url={plan.stream.url} quality={quality} renew={renew} audioLang={audioLang} segments={segments} onSkip={onSkipSegment} {...common} />
   ) : (
     <YouTubePlayer key={key} videoId={videoId} quality={quality} captions={captions} {...common} />
   )

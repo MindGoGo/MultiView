@@ -33,9 +33,11 @@ interface Props {
   onVideo?(href: string): void
   /** 網頁標題改變（網頁目前的網址、標題） */
   onTitle?(url: string, title: string): void
+  /** 改變時重新載入網頁（登入、登出 Google 後，R168） */
+  reloadKey?: number
 }
 
-export function CompanionWeb({ url, shown, section, userAgent, onVideo, onTitle }: Props) {
+export function CompanionWeb({ url, shown, section, userAgent, onVideo, onTitle, reloadKey = 0 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<WebviewTag | null>(null)
   /** 設定好廣告阻擋、可以載入網址了；loaded 是目前載入的網址 */
@@ -130,6 +132,16 @@ export function CompanionWeb({ url, shown, section, userAgent, onVideo, onTitle 
   }, [])
 
   useEffect(load, [url])
+  // 登入、登出後重新載入，網頁才會換成登入（或登出）的樣子（R168）
+  const firstReload = useRef(true)
+  useEffect(() => {
+    if (firstReload.current) {
+      firstReload.current = false
+      return
+    }
+    const view = viewRef.current
+    if (view && page.current.ready && page.current.loaded) view.reload()
+  }, [reloadKey])
   useEffect(sendState, [section, fallback])
 
   // 讀取畫面蓋在網頁上面，網頁在背後照常載入（留言要在畫面上才會開始載入）（R86）

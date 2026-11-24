@@ -7,6 +7,7 @@ import type { Quality } from '../lib/slots'
 import { capLevelFor, hlsHeights, pickHlsLevel } from '../lib/quality'
 import { audioOptions, currentOption, pickAudioTrack } from '../lib/audioTracks'
 import { volumeParts } from '../lib/volume'
+import { checkSkip, CHECK_INTERVAL_MS, markHandled, userSeeked, type SkipAction, type SkipState, type SponsorSegment } from '../lib/sponsorBlock'
 
 interface Props extends PlayerProps {
   kind: 'hls' | 'mp4'
@@ -17,7 +18,13 @@ interface Props extends PlayerProps {
   renew?: Renew
   /** 記住的語音語言；null 為自動（R95） */
   audioLang?: string | null
+  /** 要自動跳過的 SponsorBlock 片段（已依設定過濾，R161）；只有 yt-dlp 播放的 YouTube 一般影片有 */
+  segments?: SponsorSegment[]
+  /** 自動跳過了一個片段（R161 跳過提示） */
+  onSkip?(action: SkipAction): void
 }
+
+const NO_SEGMENTS: SponsorSegment[] = []
 
 export interface Renew {
   expiresAt: number
@@ -36,7 +43,7 @@ export const HLS_BUFFER = { maxBufferLength: 60, maxMaxBufferLength: 60, backBuf
 const RENEW_BEFORE_MS = 60_000
 
 export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
-  { kind, url, quality, muted, volume, autoplay, active, startAt, onStatus, renew, audioLang = null },
+  { kind, url, quality, muted, volume, autoplay, active, startAt, onStatus, renew, audioLang = null, segments = NO_SEGMENTS, onSkip },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -259,6 +266,33 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
     }
   }, [active])
 
+  // SponsorBlock（R161）：每 250 毫秒檢查播放位置，進入還沒處理過的片段就跳到片段結尾
+  const segmentsRef = useRef(segments)
+  segmentsRef.current = segments
+  const skipState = useRef<SkipState>(new Set())
+  const onSkipRef = useRef(onSkip)
+  onSkipRef.current = onSkip
+  /** 從上次的觀看進度開始（R55）：片段來了之後，那個位置所在的片段當作使用者自己跳進去的，不跳 */
+  const resumeFrom = useRef(startAt)
+  useEffect(() => {
+    if (segments.length === 0) return
+    if (resumeFrom.current) {
+      skipState.current = userSeeked(skipState.current, segments, resumeFrom.current)
+      resumeFrom.current = null
+    }
+    const timer = setInterval(() => {
+      const video = videoRef.current
+      // 暫停時不跳；直播不檢查
+      if (!video || !wantPlay.current || video.paused || video.ended || !Number.isFinite(video.duration)) return
+      const action = checkSkip(segmentsRef.current, skipState.current, video.currentTime, video.duration)
+      if (!action) return
+      skipState.current = markHandled(skipState.current, action.segment)
+      video.currentTime = action.target
+      onSkipRef.current?.(action)
+    }, CHECK_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [segments])
+
   useImperativeHandle(ref, () => ({
     play: () => {
       wantPlay.current = true
@@ -293,7 +327,17 @@ export const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer(
     },
     // 設定 currentTime 不改變播放或暫停狀態；播完的影片跳轉後維持暫停（R19 AC11）
     seek: (seconds) => {
+      // 使用者自己跳進片段裡：這個片段不跳（R161）
+      skipState.current = userSeeked(skipState.current, segmentsRef.current, seconds)
       videoRef.current!.currentTime = seconds
+    },
+    getSegments: () => segmentsRef.current,
+    cancelSkip: (segment) => {
+      skipState.current = markHandled(skipState.current, segment)
+      const video = videoRef.current!
+      video.currentTime = segment.start
+      // 片段在影片結尾、跳過後已經播完時，取消後繼續播放
+      if (wantPlay.current) void video.play().catch(() => undefined)
     }
   }))
 

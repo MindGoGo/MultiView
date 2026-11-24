@@ -1,5 +1,5 @@
 // 9 個固定格位（R4、R6）。移除來源時不往前遞補。
-import { cellCount, type LayoutId } from './layout'
+import { cellCount, type LayoutRef } from './layout'
 import type { ParsedSource } from './source'
 
 export const SLOT_COUNT = 9
@@ -53,7 +53,7 @@ export const emptySlots = (): Slots => Array.from({ length: SLOT_COUNT }, () => 
  * 是否為顯示中的格位。單格全螢幕時（solo 為放大的格位）只有那一格顯示中，
  * 其他都視為隱藏的來源（R20 共用定義）。
  */
-export const isVisible = (index: number, layout: LayoutId, solo: number | null = null) =>
+export const isVisible = (index: number, layout: LayoutRef, solo: number | null = null) =>
   solo !== null ? index === solo : index < cellCount(layout)
 
 export function setSlot(slots: Slots, index: number, source: Source | null): Slots {
@@ -71,6 +71,6 @@ export function swapSlots(slots: Slots, a: number, b: number): Slots {
 }
 
 /** 不在目前版型中、但有來源的格位數（R4 AC4）。 */
-export function hiddenCount(slots: Slots, layout: LayoutId): number {
+export function hiddenCount(slots: Slots, layout: LayoutRef): number {
   return slots.filter((s, i) => s !== null && !isVisible(i, layout)).length
 }
