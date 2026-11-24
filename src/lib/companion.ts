@@ -1,5 +1,6 @@
 // YouTube 小視窗（R78–R82）。主程序、主畫面、小視窗共用，不依賴 Electron。
 import { parseSource } from './source'
+import { cellCount, type LayoutId } from './layout'
 
 export type CompanionTab = 'related' | 'comments' | 'chat' | 'search'
 export const COMPANION_TABS: CompanionTab[] = ['related', 'comments', 'chat', 'search']
@@ -106,11 +107,11 @@ export function companionLinkAction(href: string, currentVideoId: string | null)
   return { type: 'play', url: watchPageUrl(parsed.videoId) }
 }
 
-/** 小視窗上方「第 N 格：影片名稱」（R78） */
+/** 小視窗上方的標題：只顯示影片名稱（R165）；還不知道名稱時照原本顯示「第 N 格：（讀取中）」（R78） */
 export function companionHeader(link: CompanionLink): string {
   if (link.cell === null) return '請從格子的「YouTube ▾」選擇要顯示的格子'
   if (!link.video) return `第 ${link.cell} 格`
-  return `第 ${link.cell} 格：${link.video.title ?? '（讀取中）'}`
+  return link.video.title ?? `第 ${link.cell} 格：（讀取中）`
 }
 
 /** 網頁標題去掉結尾的「 - YouTube」 */
@@ -145,4 +146,14 @@ export function createMinimizeFollower() {
       return r
     }
   }
+}
+
+/**
+ * 開啟程式時要不要打開小視窗、連結哪一格（R165）：設定打開，而且畫面上只有一格（版型 `1` 或單格全螢幕）。
+ * 回傳要連結的格子（從 0 開始），不打開時回傳 null。
+ */
+export function companionOnLaunchCell(on: boolean, layout: LayoutId, solo: number | null): number | null {
+  if (!on) return null
+  if (solo !== null) return solo
+  return cellCount(layout) === 1 ? 0 : null
 }

@@ -434,20 +434,13 @@ button.link {
   gap: 4px;
 }
 
-.play-badge {
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  line-height: 16px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #c9c9cd;
-  white-space: nowrap;
-  cursor: default;
-}
-
-.play-badge.ytdlp {
-  background: rgba(46, 160, 67, 0.85);
-  color: #fff;
+/* yt-dlp 播放的綠色小圓點（R165） */
+.ytdlp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34c759;
+  flex: none;
 }
 
 .audio-indicator {
@@ -455,7 +448,6 @@ button.link {
   border-radius: 4px;
   font-size: 12px;
   background: rgba(0, 0, 0, 0.55);
-  pointer-events: none;
 }
 
 
@@ -633,12 +625,13 @@ button.link {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 64px;
-  height: 64px;
+  /* R165：從 64 縮小約 20% */
+  width: 52px;
+  height: 52px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   padding: 0;
-  font-size: 22px;
+  font-size: 18px;
   color: #fff;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.35);
@@ -1434,17 +1427,7 @@ button.danger {
   display: none;
 }
 
-/* 播放方式的小標示：寬度 180 像素以上都顯示完整文字，更窄才顯示短字（R109） */
-@container (min-width: 180px) {
-  .play-badge .lbl-full {
-    display: inline;
-  }
-  .play-badge .lbl-icon {
-    display: none;
-  }
-}
-
-/* 整頁模式、直接操作時格子不接收滑鼠，小標示仍然可以停留顯示說明（R109） */
-.cell.direct .cell-corner .play-badge {
+/* 整頁模式、直接操作時格子不接收滑鼠，角落仍然可以停留顯示播放方式的說明（R109、R165） */
+.cell.direct .cell-corner {
   pointer-events: auto;
 }

@@ -120,6 +120,14 @@ export const YouTubeIcon = () => (
   </Icon>
 )
 
+/** 主視窗旁邊的小視窗（R165 的設定分類） */
+export const CompanionIcon = () => (
+  <Icon>
+    <rect x="1.5" y="3" width="8.5" height="10" rx="1.6" />
+    <rect x="11.5" y="4.5" width="3" height="7" rx="1" />
+  </Icon>
+)
+
 export const GlobeIcon = () => (
   <Icon>
     <circle cx="8" cy="8" r="6.2" />

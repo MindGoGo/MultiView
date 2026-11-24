@@ -72,9 +72,9 @@ describe('companionLinkAction（R79、R80）', () => {
 })
 
 describe('companionHeader（R78）', () => {
-  it('AC1：第 N 格：影片名稱', () => {
+  it('R165：只顯示影片名稱，不加「第 N 格：」', () => {
     expect(companionHeader({ cell: 2, video: { id: ID, title: '1 A.M Study Session', live: false } })).toBe(
-      '第 2 格：1 A.M Study Session'
+      '1 A.M Study Session'
     )
   })
   it('還不知道名稱時顯示讀取中', () => {

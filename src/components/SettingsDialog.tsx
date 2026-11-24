@@ -10,12 +10,13 @@ import {
   type YtDlpChannel,
   type YtDlpStatus
 } from '../lib/ytdlp'
-import { CloseIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
+import { CloseIcon, CompanionIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
 
-export type SettingsCategory = 'youtube' | 'web' | 'ytdlp' | 'about'
+export type SettingsCategory = 'youtube' | 'companion' | 'web' | 'ytdlp' | 'about'
 
 const CATEGORIES: { id: SettingsCategory; label: string; icon: ReactNode }[] = [
   { id: 'youtube', label: 'YouTube 播放', icon: <YouTubeIcon /> },
+  { id: 'companion', label: 'YouTube 小視窗', icon: <CompanionIcon /> },
   { id: 'web', label: '其他網站', icon: <GlobeIcon /> },
   { id: 'ytdlp', label: 'yt-dlp', icon: <DownloadToolIcon /> },
   { id: 'about', label: '關於', icon: <InfoIcon /> }
@@ -33,6 +34,9 @@ interface Props {
   /** 其他網站的播放方式（R102） */
   webMethod: WebMethod
   onWebMethod(method: WebMethod): void
+  /** 開啟程式時打開小視窗（R165） */
+  companionOnLaunch: boolean
+  onCompanionOnLaunch(on: boolean): void
   /** 手動更新 yt-dlp 的結果（R93） */
   onToast(message: string): void
 }
@@ -82,6 +86,7 @@ export function SettingsDialog(props: Props) {
         </nav>
         <main className="settings-body">
           {category === 'youtube' && <YouTubeSection {...props} />}
+          {category === 'companion' && <CompanionSection {...props} />}
           {category === 'web' && <WebSection {...props} />}
           {category === 'ytdlp' && <YtDlpSection onToast={props.onToast} />}
           {category === 'about' && <AboutSection />}
@@ -156,6 +161,17 @@ function YouTubeSection(props: Props) {
       </Row>
       <Row title="無法嵌入時自動改用網頁播放" desc="影片不允許在其他網站播放時，直接改用 YouTube 網頁播放。">
         <Switch label="無法嵌入時自動改用網頁播放" on={props.autoYoutubeWeb} onChange={props.onAutoYoutubeWeb} />
+      </Row>
+    </section>
+  )
+}
+
+function CompanionSection(props: Props) {
+  return (
+    <section>
+      <h2 className="set-heading">YouTube 小視窗</h2>
+      <Row title="開啟 App 時打開小視窗" desc="畫面上只有一格（版型 1）時，開啟程式就打開 YouTube 小視窗；多格時不打開。">
+        <Switch label="開啟 App 時打開小視窗" on={props.companionOnLaunch} onChange={props.onCompanionOnLaunch} />
       </Row>
     </section>
   )

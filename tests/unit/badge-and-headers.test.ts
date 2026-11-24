@@ -9,21 +9,25 @@ const web = { parsed: parseSource('https://www.twitch.tv/kaicenat')! }
 const mp4 = { parsed: parseSource('https://example.com/a.mp4')! }
 const hls = { parsed: parseSource('https://example.com/live.m3u8')! }
 
-describe('播放方式的小標示（R109）', () => {
-  it('AC1：yt-dlp 播放 → 綠色「yt-dlp」', () => {
-    expect(playbackBadge(yt, 'ytdlp-hls')).toMatchObject({ text: 'yt-dlp', tone: 'ytdlp' })
-    expect(playbackBadge(web, 'ytdlp-mp4')).toMatchObject({ text: 'yt-dlp', tone: 'ytdlp' })
+describe('播放方式的小標示（R109、R165）', () => {
+  it('R165 AC2：yt-dlp 播放 → 只有綠色小圓點', () => {
+    expect(playbackBadge(yt, 'ytdlp-hls')).toMatchObject({ dot: true })
+    expect(playbackBadge(web, 'ytdlp-mp4')).toMatchObject({ dot: true })
   })
-  it('AC2：YouTube 內嵌播放器；退回時加註', () => {
-    expect(playbackBadge(yt, 'embed')).toMatchObject({ text: '內嵌播放器', short: '內嵌', tone: 'plain' })
-    expect(playbackBadge(yt, 'fallback')?.text).toBe('內嵌播放器（yt-dlp 無法播放）')
+  it('R165：內嵌播放器、網頁、yt-dlp 播不了時改用的方式都不顯示標示', () => {
+    for (const m of ['embed', 'fallback', undefined] as const) {
+      expect(playbackBadge(yt, m)?.dot).toBe(false)
+      expect(playbackBadge(web, m)?.dot).toBe(false)
+    }
   })
-  it('AC3：其他網站網頁播放；退回時加註；YouTube 網頁播放（沒有播放方式回報）也是網頁', () => {
-    expect(playbackBadge(web, 'embed')).toMatchObject({ text: '網頁', short: '網頁' })
-    expect(playbackBadge(web, 'fallback')?.text).toBe('網頁（yt-dlp 無法播放）')
-    expect(playbackBadge(web, undefined)?.text).toBe('網頁')
+  it('說明仍分得出播放方式；改用原本的方式時加註', () => {
+    expect(playbackBadge(yt, 'embed')?.tip).toContain('內嵌播放器')
+    expect(playbackBadge(yt, 'fallback')?.tip).toContain('yt-dlp 無法播放')
+    expect(playbackBadge(web, 'embed')?.tip).toContain('網頁')
+    expect(playbackBadge(web, 'fallback')?.tip).toContain('yt-dlp 不支援')
+    expect(playbackBadge(web, 'ytdlp-hls')?.tip).toContain('yt-dlp')
   })
-  it('AC4：mp4、m3u8 網址不顯示；解析中不顯示', () => {
+  it('AC4：mp4、m3u8 網址沒有；解析中沒有', () => {
     expect(playbackBadge(mp4, undefined)).toBeNull()
     expect(playbackBadge(hls, undefined)).toBeNull()
     expect(playbackBadge(yt, 'resolving')).toBeNull()

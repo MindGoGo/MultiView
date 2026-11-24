@@ -55,6 +55,8 @@ export interface ViewSettings {
   webMethod: WebMethod
   /** 清單面板上次的那一邊和分頁（R58）；舊的設定檔視為 YouTube 的最愛 */
   listTab: { group: 'youtube' | 'other'; tab: 'subscriptions' | 'favorites' | 'history' }
+  /** 開啟程式時打開 YouTube 小視窗（R165，只在畫面上只有一格時）；桌面版自己的欄位，舊的設定檔沒有時視為關閉 */
+  companionOnLaunch: boolean
 }
 
 export interface Settings extends ViewSettings {
@@ -78,7 +80,8 @@ export function defaultSettings(): Settings {
     autoYoutubeWeb: false,
     youtubeMethods: { ...DEFAULT_METHODS },
     webMethod: 'web',
-    listTab: DEFAULT_LIST_TAB
+    listTab: DEFAULT_LIST_TAB,
+    companionOnLaunch: false
   }
 }
 
@@ -158,7 +161,8 @@ export function normalizeView(raw: unknown): ViewSettings {
     autoYoutubeWeb: obj.autoYoutubeWeb === true,
     youtubeMethods: normalizeMethods(obj.youtubeMethods),
     webMethod: normalizeWebMethod(obj.webMethod),
-    listTab: normalizeListTab(obj.listTab)
+    listTab: normalizeListTab(obj.listTab),
+    companionOnLaunch: obj.companionOnLaunch === true
   }
 }
 

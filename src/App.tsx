@@ -58,7 +58,7 @@ import {
 } from './lib/lists'
 import { ListPanel, type ListTab } from './components/ListPanel'
 import { CellPicker, type PickerCell } from './components/CellPicker'
-import { isCompanionTab, stripYouTubeSuffix, type CompanionAction, type CompanionLink, type CompanionVideo } from './lib/companion'
+import { companionOnLaunchCell, isCompanionTab, stripYouTubeSuffix, type CompanionAction, type CompanionLink, type CompanionVideo } from './lib/companion'
 
 const TOAST_MS = 3000
 const YT_FALLBACK_TOAST = 'yt-dlp 無法播放，已改用內嵌播放器'
@@ -116,6 +116,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const [autoYoutubeWeb, setAutoYoutubeWeb] = useState(initial.autoYoutubeWeb)
   const autoYoutubeWebRef = useRef(autoYoutubeWeb)
   autoYoutubeWebRef.current = autoYoutubeWeb
+  /** 開啟程式時打開 YouTube 小視窗（R165） */
+  const [companionOnLaunch, setCompanionOnLaunch] = useState(initial.companionOnLaunch)
   /** YouTube 直播、一般影片的播放方式（R88） */
   const [youtubeMethods, setYoutubeMethods] = useState(initial.youtubeMethods)
   /** YouTube 格子目前的播放方式，依來源 id（R89） */
@@ -217,6 +219,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     youtubeMethods,
     webMethod,
     listTab,
+    companionOnLaunch,
     slots: slots.map((s) =>
       s
         ? {
@@ -251,7 +254,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
     window.multiview.saveView(viewOf(positions))
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, companionOnLaunch])
 
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
@@ -566,6 +569,14 @@ export default function App({ initial }: { initial: ViewSettings }) {
     return () => clearInterval(timer)
   }, [])
   useEffect(sendCompanionLink, [slots, companionCell])
+  // 開啟程式時打開小視窗（R165）：只在畫面上只有一格時，連結那一格；只在開啟時判斷一次
+  useEffect(() => {
+    const cell = companionOnLaunchCell(initial.companionOnLaunch, initial.layout, null)
+    if (cell === null) return
+    setCompanionCell(cell)
+    window.multiview.openCompanion(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const onCompanionActionRef = useRef<(a: CompanionAction) => void>(() => undefined)
   onCompanionActionRef.current = (a: CompanionAction) => {
     if (a.type === 'place') {
@@ -957,6 +968,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
           onYoutubeMethods={setYoutubeMethods}
           webMethod={webMethod}
           onWebMethod={setWebMethod}
+          companionOnLaunch={companionOnLaunch}
+          onCompanionOnLaunch={setCompanionOnLaunch}
           onToast={showToast}
         />
       )}

@@ -279,20 +279,11 @@ export function Cell(props: Props) {
         if (e.target === e.currentTarget) props.onFocusAudio(index)
       }}
     >
-      {/* 左上角：有聲音（R7）與播放方式的小標示（R109，和操作區同時出現） */}
-      {source && !showInput && (isAudible(source) || (badge && view === 'bar')) && (
-        <div className="cell-corner">
-          {isAudible(source) && (
-            <div className="audio-indicator" title="有聲音">
-              🔊
-            </div>
-          )}
-          {badge && view === 'bar' && (
-            <div className={`play-badge ${badge.tone}`} title={badge.tip} onClick={(e) => e.stopPropagation()}>
-              <span className="lbl-full">{badge.text}</span>
-              <span className="lbl-icon">{badge.short}</span>
-            </div>
-          )}
+      {/* 左上角：有聲音（R7）與 yt-dlp 的綠色小圓點（R109、R165，和操作區同時出現）；滑鼠停在角落上說明播放方式 */}
+      {source && !showInput && (isAudible(source) || (badge?.dot && view === 'bar')) && (
+        <div className="cell-corner" title={badge ? badge.tip : undefined} onClick={(e) => e.stopPropagation()}>
+          {isAudible(source) && <div className="audio-indicator">🔊</div>}
+          {badge?.dot && view === 'bar' && <span className="ytdlp-dot" aria-label="yt-dlp" />}
         </div>
       )}
       {showInput && (
