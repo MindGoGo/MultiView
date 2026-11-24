@@ -18,12 +18,15 @@ import type { YtMode } from '../players/YouTubeSource'
 import { LoadingCritter, useLoadingVisible } from './LoadingCritter'
 import { loadingKind } from '../lib/loading'
 import { playbackBadge } from '../lib/playbackBadge'
-import { controlsView, HANDLE_COLLAPSE_MS } from '../lib/pointerZones'
+import { controlsView } from '../lib/pointerZones'
+import { ExitFullscreenIcon, FullscreenIcon, GearIcon, MuteIcon, SpeakerIcon, YouTubeLogo } from './icons'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
 interface Props {
   index: number
   style: CSSProperties
+  /** 最上排的格子：上方的浮動按鈕往下移，避開工具列（R166） */
+  topRow: boolean
   source: Source | null
   status: PlayStatus | undefined
   failure: Failure | undefined
@@ -85,7 +88,7 @@ interface Props {
 }
 
 /** 格子裡的選單：字幕、畫質（R31、R32）；亮度、音量的滑桿選單（R40、R42） */
-type MenuKind = 'captions' | 'audio' | 'quality' | 'brightness' | 'volume' | 'youtube'
+type MenuKind = 'gear' | 'captions' | 'audio' | 'quality' | 'brightness' | 'volume' | 'youtube'
 
 /** 畫質選單：自動＋可用畫質（由高到低）；還不知道可用畫質時列出目前的選擇（R32） */
 function qualityItems(options: number[], selected: Quality): PopupItem[] {
@@ -113,16 +116,6 @@ function audioItems(menu: AudioMenu, selected: string | null): PopupItem[] {
     { key: 'auto', label: '自動', checked: !selected },
     ...menu.options.map((o) => ({ key: String(o.index), label: o.label, checked: !!selected && o.index === menu.current }))
   ]
-}
-
-/** 格子窄的時候只顯示圖示，完整名稱放在 title（R14 AC7） */
-function Label({ full, icon }: { full: string; icon: string }) {
-  return (
-    <>
-      <span className="lbl-full">{full}</span>
-      <span className="lbl-icon">{icon}</span>
-    </>
-  )
 }
 
 /** 滑鼠靜止多久後隱藏操作按鈕（R3 AC2） */
@@ -154,8 +147,14 @@ export function Cell(props: Props) {
   const [hasProgress, setHasProgress] = useState(false)
   /** 開著的格子選單與它的按鈕位置（R31、R32）；選單開著時操作區不隱藏 */
   const [menu, setMenu] = useState<{ kind: MenuKind; anchor: DOMRect } | null>(null)
-  const toggleMenu = (kind: MenuKind, e: React.MouseEvent<HTMLButtonElement>) =>
-    setMenu(menu?.kind === kind ? null : { kind, anchor: e.currentTarget.getBoundingClientRect() })
+  /** 按下按鈕時開著的選單：選單在按下時就因為點在外面而關閉，按一下同一個按鈕要能關閉它 */
+  const menuAtDown = useRef<MenuKind | null>(null)
+  const toggleMenu = (kind: MenuKind, e: React.MouseEvent<HTMLButtonElement>) => {
+    const wasOpen = menuAtDown.current === kind || menu?.kind === kind
+    menuAtDown.current = null
+    setMenu(wasOpen ? null : { kind, anchor: e.currentTarget.getBoundingClientRect() })
+  }
+  const gearWasOpen = useRef(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cellRef = useRef<HTMLDivElement>(null)
   useEffect(() => () => clearTimeout(idleTimer.current), [])
@@ -208,23 +207,14 @@ export function Cell(props: Props) {
   /** 操作區顯示中；播放方式的小標示也一起顯示（R109） */
   const busy = props.moving || seeking || previewing || !!menu
   const controlsShown = hover || busy
-  // 整頁模式平常只有小把手，滑鼠移上去才展開操作列（R117）
+  // 整頁模式平常只有小把手，滑鼠移上去才叫出浮動按鈕（R117）；之後和其他格子一樣，
+  // 滑鼠靜止或離開格子才收回（R166：按鈕分散在四個角落，不再是離開操作列 0.3 秒就收回）
   const [expanded, setExpanded] = useState(false)
-  const collapseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const expand = () => {
-    clearTimeout(collapseTimer.current)
-    setExpanded(true)
-  }
-  const collapseSoon = () => {
-    clearTimeout(collapseTimer.current)
-    collapseTimer.current = setTimeout(() => setExpanded(false), HANDLE_COLLAPSE_MS)
-  }
+  const expand = () => setExpanded(true)
   useEffect(() => {
     if (pageMode && hover) return
-    clearTimeout(collapseTimer.current)
     setExpanded(false)
   }, [pageMode, hover])
-  useEffect(() => () => clearTimeout(collapseTimer.current), [])
   const view = controlsView({ pageMode, shown: controlsShown, expanded, busy })
   const badge = source ? playbackBadge(source, props.ytMode) : null
   // 讀取動畫（R99）
@@ -252,6 +242,61 @@ export function Cell(props: Props) {
     ]
   }
 
+  // ---- 齒輪選單（R166）：原本操作列上的次要按鈕 ----
+  /** 有畫質選單的來源（R32、R103） */
+  const hasQuality =
+    !!source && (source.parsed.kind === 'youtube' || source.parsed.kind === 'hls' || (webByYtdlp && ytdlp))
+  /** 有「直接操作」的來源（R3、R14）；整頁模式本來就直接操作網頁 */
+  const hasDirect = !!source && ((source.parsed.kind === 'youtube' && !ytdlp) || (isWeb && !pageMode))
+  const gearItems = (): PopupItem[] => {
+    if (!source) return []
+    const items: PopupItem[] = [
+      { key: 'volume', label: '音量', detail: String(volume), keepOpen: true },
+      { key: 'brightness', label: '亮度', detail: `${source.brightness}%`, checked: source.brightness !== BRIGHTNESS_DEFAULT, keepOpen: true }
+    ]
+    if (hasQuality) {
+      items.push(
+        props.ytMode === 'ytdlp-mp4'
+          ? { key: 'quality', label: '畫質', detail: 'yt-dlp 固定 360p', disabled: true }
+          : { key: 'quality', label: '畫質', detail: qualityLabel(source.quality), checked: source.quality !== 'auto', keepOpen: true }
+      )
+    }
+    if (hasAudioMenu) items.push({ key: 'audio', label: '語音', checked: !!source.audioLang, keepOpen: true })
+    if (source.parsed.kind === 'youtube') {
+      items.push(
+        ytdlp
+          ? { key: 'captions', label: '字幕', detail: 'yt-dlp 不支援', disabled: true }
+          : { key: 'captions', label: '字幕', checked: !!source.captions, keepOpen: true }
+      )
+    }
+    if (hasDirect) items.push({ key: 'direct', label: '直接操作', checked: props.direct })
+    // YouTube 網站頁面固定是整頁模式（R57）
+    if (isWeb && !isYouTubeSite(source.url) && !source.youtubePage)
+      items.push({ key: 'webmode', label: pageMode ? '只顯示影片' : '顯示整個網頁' })
+    if (isWeb) items.push({ key: 'adblock', label: '廣告阻擋', checked: source.adblock })
+    if (webByYtdlp) items.push({ key: 'useweb', label: '改用網頁播放' })
+    items.push(
+      { key: 'favorite', label: props.favorite ? '從最愛移除' : '加入最愛', checked: props.favorite },
+      { key: 'edit', label: '更換網址' },
+      { key: 'remove', label: '移除', danger: true }
+    )
+    return items
+  }
+  /** 選了齒輪選單的項目：選單、滑桿在齒輪旁邊打開，其他直接執行 */
+  const onGear = (key: string, anchor: DOMRect) => {
+    if (key === 'volume' || key === 'brightness' || key === 'quality' || key === 'audio' || key === 'captions') {
+      setMenu({ kind: key, anchor })
+      return
+    }
+    if (key === 'direct') props.onDirect(index)
+    else if (key === 'webmode') props.onToggleWebMode(index)
+    else if (key === 'adblock') props.onToggleAdblock(index)
+    else if (key === 'useweb') props.onUseWebPage(index)
+    else if (key === 'favorite') props.onToggleFavorite(index)
+    else if (key === 'edit') setEditing(true)
+    else if (key === 'remove') onRemove(index)
+  }
+
   const closeInput = () => {
     setEditing(false)
     setText('')
@@ -267,7 +312,7 @@ export function Cell(props: Props) {
 
   return (
     <div
-      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''} ${props.direct || pageMode ? 'direct' : ''}`}
+      className={`cell ${source ? 'filled' : 'empty'} ${props.moving ? 'moving' : ''} ${props.dropTarget ? 'drop-target' : ''} ${props.direct || pageMode ? 'direct' : ''} ${props.topRow ? 'top-row' : ''}`}
       ref={cellRef}
       style={style}
       data-index={index}
@@ -279,11 +324,27 @@ export function Cell(props: Props) {
         if (e.target === e.currentTarget) props.onFocusAudio(index)
       }}
     >
-      {/* 左上角：有聲音（R7）與 yt-dlp 的綠色小圓點（R109、R165，和操作區同時出現）；滑鼠停在角落上說明播放方式 */}
-      {source && !showInput && (isAudible(source) || (badge?.dot && view === 'bar')) && (
-        <div className="cell-corner" title={badge ? badge.tip : undefined} onClick={(e) => e.stopPropagation()}>
-          {isAudible(source) && <div className="audio-indicator">🔊</div>}
-          {badge?.dot && view === 'bar' && <span className="ytdlp-dot" aria-label="yt-dlp" />}
+      {/* 左上角（R166）：操作區顯示時是聲音按鈕＋yt-dlp 綠點（R165）；平常只在有聲音時顯示小標示（R7）。
+          滑鼠停在角落上說明這一格的播放方式（R109、R165） */}
+      {source && !showInput && (view === 'bar' || isAudible(source)) && (
+        <div
+          className={`cell-corner ${view === 'bar' ? 'chips' : ''}`}
+          title={view === 'bar' ? undefined : badge?.tip}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {view === 'bar' ? (
+            <button
+              className="chip"
+              title={`${source.muted ? '開啟這一格的聲音' : '關閉這一格的聲音'}${badge ? `\n${badge.tip}` : ''}`}
+              aria-label={source.muted ? '開啟這一格的聲音' : '關閉這一格的聲音'}
+              onClick={() => props.onToggleMute(index)}
+            >
+              {source.muted ? <MuteIcon /> : <SpeakerIcon />}
+            </button>
+          ) : (
+            <div className="audio-indicator">🔊</div>
+          )}
+          {badge?.dot && view === 'bar' && <span className="ytdlp-dot" title={badge.tip} aria-label="yt-dlp" />}
         </div>
       )}
       {showInput && (
@@ -346,9 +407,10 @@ export function Cell(props: Props) {
         </div>
       )}
 
-      {/* 中央的半透明播放／暫停鈕：只有按鈕本身播放／暫停，其他影片區域仍然切換聲音（R30） */}
+      {/* 中央的半透明播放／暫停鈕：只有按鈕本身播放／暫停，其他影片區域仍然切換聲音（R30）；
+          整頁模式的網頁格子在浮動按鈕叫出來時也有（R166） */}
       {playHint && !pageMode && !props.direct && <div className="web-notice">{PLAY_HINT}</div>}
-      {source && !editing && hover && (hasProgress || videoFound) && !failed && !pageMode && !props.direct && (
+      {source && !editing && (pageMode ? view === 'bar' : hover) && (hasProgress || videoFound) && !failed && !props.direct && (
         <button
           className="center-play"
           title={isPlayingStatus(status) ? '暫停這一格' : '播放這一格'}
@@ -363,23 +425,87 @@ export function Cell(props: Props) {
           ⋯
         </button>
       )}
+      {/* 浮在影片上的操作按鈕（R166）：上下的漸層不接收滑鼠，只有按鈕與進度條接收 */}
       {source && !editing && (
-        <div
-          className={`cell-controls ${view === 'bar' ? 'show' : ''}`}
-          onMouseMove={onMouseMove}
-          onMouseEnter={() => pageMode && expand()}
-          onMouseLeave={() => pageMode && collapseSoon()}
-        >
+        <div className={`cell-controls ${view === 'bar' ? 'show' : ''}`}>
+          <div className="scrim top" />
+          <div className="scrim bottom" />
+          <div className="chip-row top-right">
+            {pageMode && (
+              <>
+                <button className="chip" title="上一頁" disabled={!props.nav?.back} onClick={() => props.onNav(index, true)}>
+                  ←
+                </button>
+                <button className="chip" title="下一頁" disabled={!props.nav?.forward} onClick={() => props.onNav(index, false)}>
+                  →
+                </button>
+              </>
+            )}
+            {/* 嵌入播放的 YouTube 與 YouTube 網頁模式（R66）；併入第十三版 R63 的「回到 YouTube」 */}
+            {(source.parsed.kind === 'youtube' || source.youtubePage) && (
+              <button
+                className={`chip ${source.youtubePage ? 'active' : ''}`}
+                title="YouTube：回到網頁、回到播放器、回到剛才的 YouTube 頁面、推薦影片、留言、聊天室"
+                aria-label="YouTube"
+                onPointerDown={() => (menuAtDown.current = menu?.kind ?? null)}
+                onClick={(e) => toggleMenu('youtube', e)}
+              >
+                <YouTubeLogo size={16} />
+              </button>
+            )}
+            <button
+              className={`chip ${menu && menu.kind !== 'youtube' ? 'active' : ''}`}
+              title="設定：音量、亮度、畫質、字幕、更換網址、移除…"
+              aria-label="設定"
+              // 齒輪選單或從它打開的選單、滑桿開著時，再按一下就關閉。選單在按下時就因為點在外面而關閉，
+              // 所以按下時先記住原本是不是開著
+              onPointerDown={() => (gearWasOpen.current = !!menu && menu.kind !== 'youtube')}
+              onClick={(e) => {
+                const wasOpen = gearWasOpen.current
+                gearWasOpen.current = false
+                setMenu(wasOpen ? null : { kind: 'gear', anchor: e.currentTarget.getBoundingClientRect() })
+              }}
+            >
+              <GearIcon />
+            </button>
+          </div>
+          <div className="chip-row bottom-right">
+            {props.canMove && (
+              <button
+                className="chip move-handle"
+                title="拖曳到其他格子來交換位置"
+                aria-label="移動"
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                  props.onMoveStart(index)
+                }}
+                onPointerMove={(e) => {
+                  if (e.currentTarget.hasPointerCapture(e.pointerId))
+                    props.onMoveOver(cellIndexAt(e.clientX, e.clientY))
+                }}
+                onPointerUp={(e) => {
+                  e.currentTarget.releasePointerCapture(e.pointerId)
+                  props.onMoveEnd(cellIndexAt(e.clientX, e.clientY))
+                }}
+              >
+                ✥
+              </button>
+            )}
+            <button
+              className={`chip ${props.isSolo ? 'active' : ''}`}
+              title={props.isSolo ? '離開全螢幕，回到分割畫面' : '把這一格放大到整個螢幕，其他格暫停'}
+              aria-label={props.isSolo ? '離開全螢幕' : '全螢幕'}
+              onClick={() => props.onToggleSolo(index)}
+            >
+              {props.isSolo ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+            </button>
+          </div>
           {!failed && (
             <ProgressBar
               active={hover || seeking || previewing}
               getProgress={() => props.getProgress(index)}
               onSeek={(t) => props.onSeek(index, t)}
               onDragChange={setSeeking}
-              playing={isPlayingStatus(status)}
-              onTogglePlay={togglePlay}
-              canPlay={videoFound}
-              onSkip={(seconds) => props.onSkip(index, seconds)}
               onAvailable={setHasProgress}
               onHoverChange={(on) => {
                 setPreviewing(on)
@@ -395,168 +521,19 @@ export function Cell(props: Props) {
               }
             />
           )}
-          {/* 嵌入播放的 YouTube 與 YouTube 網頁模式（R66）；併入第十三版 R63 的「回到 YouTube」 */}
-          {(source.parsed.kind === 'youtube' || source.youtubePage) && (
-            <button
-              className={source.youtubePage ? 'active' : ''}
-              title="YouTube：回到網頁、回到播放器、回到剛才的 YouTube 頁面、推薦影片、留言、聊天室"
-              onPointerDown={(e) => menu?.kind === 'youtube' && e.stopPropagation()}
-              onClick={(e) => toggleMenu('youtube', e)}
-            >
-              <Label full="YouTube ▾" icon="YT" />
-            </button>
+          {menu?.kind === 'gear' && (
+            <PopupMenu
+              anchor={menu.anchor}
+              placement="below"
+              items={gearItems()}
+              onSelect={(key) => onGear(key, menu.anchor)}
+              onClose={() => setMenu((m) => (m?.kind === 'gear' ? null : m))}
+            />
           )}
-          {props.canMove && (
-            <button
-              className="move-handle"
-              title="拖曳到其他格子來交換位置"
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId)
-                props.onMoveStart(index)
-              }}
-              onPointerMove={(e) => {
-                if (e.currentTarget.hasPointerCapture(e.pointerId))
-                  props.onMoveOver(cellIndexAt(e.clientX, e.clientY))
-              }}
-              onPointerUp={(e) => {
-                e.currentTarget.releasePointerCapture(e.pointerId)
-                props.onMoveEnd(cellIndexAt(e.clientX, e.clientY))
-              }}
-            >
-              <Label full="移動" icon="✥" />
-            </button>
-          )}
-          <button
-            title={source.muted ? '開啟這一格的聲音' : '關閉這一格的聲音'}
-            onClick={() => props.onToggleMute(index)}
-          >
-            {source.muted ? '🔇' : '🔊'}
-          </button>
-          {/* 音量改成按鈕＋彈出滑桿，操作區更精簡（R42） */}
-          <button
-            title={`音量 ${volume}`}
-            onPointerDown={(e) => menu?.kind === 'volume' && e.stopPropagation()}
-            onClick={(e) => toggleMenu('volume', e)}
-          >
-            <Label full={`🔉 ${volume}`} icon="🔉" />
-          </button>
-          {((source.parsed.kind === 'youtube' && !ytdlp) || (isWeb && !pageMode)) && (
-            <button
-              className={props.direct ? 'active' : ''}
-              title={
-                isWeb
-                  ? '暫時讓滑鼠直接操作網頁，移出這一格後恢復'
-                  : '暫時讓滑鼠直接操作 YouTube 播放器（例如略過廣告），移出這一格後恢復'
-              }
-              onClick={() => props.onDirect(index)}
-            >
-              <Label full="直接操作" icon="👆" />
-            </button>
-          )}
-          {pageMode && (
-            <>
-              <button title="上一頁" disabled={!props.nav?.back} onClick={() => props.onNav(index, true)}>
-                ←
-              </button>
-              <button title="下一頁" disabled={!props.nav?.forward} onClick={() => props.onNav(index, false)}>
-                →
-              </button>
-            </>
-          )}
-          {/* YouTube 網站頁面固定是整頁模式（R57） */}
-          {isWeb && !isYouTubeSite(source.url) && !source.youtubePage && (
-            <button
-              title={pageMode ? '只顯示影片' : '顯示整個網頁，可以登入、關閉提示或按播放'}
-              onClick={() => props.onToggleWebMode(index)}
-            >
-              {pageMode ? <Label full="只顯示影片" icon="▣" /> : <Label full="顯示整個網頁" icon="⛶" />}
-            </button>
-          )}
-          {isWeb && (
-            <button
-              className={source.adblock ? 'active' : ''}
-              title={source.adblock ? '廣告阻擋：開（按一下關閉，網頁會重新載入）' : '廣告阻擋：關（按一下開啟，網頁會重新載入）'}
-              onClick={() => props.onToggleAdblock(index)}
-            >
-              <Label full={source.adblock ? '廣告阻擋：開' : '廣告阻擋：關'} icon={source.adblock ? '🛡' : '⊘'} />
-            </button>
-          )}
-          {source.parsed.kind === 'youtube' && (
-            <button
-              className={source.captions && !ytdlp ? 'active' : ''}
-              title={ytdlp ? 'yt-dlp 播放方式不支援字幕' : '字幕'}
-              disabled={ytdlp}
-              onPointerDown={(e) => menu?.kind === 'captions' && e.stopPropagation()}
-              onClick={(e) => toggleMenu('captions', e)}
-            >
-              CC
-            </button>
-          )}
-          {hasAudioMenu && (
-            <button
-              className={source.audioLang ? 'active' : ''}
-              title="語音"
-              onPointerDown={(e) => menu?.kind === 'audio' && e.stopPropagation()}
-              onClick={(e) => toggleMenu('audio', e)}
-            >
-              <Label full="語音" icon="🗣" />
-            </button>
-          )}
-          {webByYtdlp && (
-            <button title="改用網頁播放這個網站（這次有效）" onClick={() => props.onUseWebPage(index)}>
-              <Label full="改用網頁" icon="🌐" />
-            </button>
-          )}
-          {(source.parsed.kind === 'youtube' || source.parsed.kind === 'hls' || (webByYtdlp && ytdlp)) && (
-            <button
-              className={source.quality !== 'auto' && props.ytMode !== 'ytdlp-mp4' ? 'active' : ''}
-              title={
-                props.ytMode === 'ytdlp-mp4'
-                  ? 'yt-dlp 播放這部影片固定 360p'
-                  : `畫質：${qualityLabel(source.quality)}（按一下選擇畫質）`
-              }
-              disabled={props.ytMode === 'ytdlp-mp4'}
-              onPointerDown={(e) => menu?.kind === 'quality' && e.stopPropagation()}
-              onClick={(e) => toggleMenu('quality', e)}
-            >
-              <Label
-                full={`畫質：${qualityLabel(source.quality)}`}
-                icon={source.quality === 'auto' ? 'A' : String(source.quality)}
-              />
-            </button>
-          )}
-          <button
-            className={source.brightness !== BRIGHTNESS_DEFAULT ? 'active' : ''}
-            title={`亮度 ${source.brightness}%`}
-            onPointerDown={(e) => menu?.kind === 'brightness' && e.stopPropagation()}
-            onClick={(e) => toggleMenu('brightness', e)}
-          >
-            ☀
-          </button>
-          <button
-            className={props.favorite ? 'active' : ''}
-            title={props.favorite ? '從最愛移除' : '加入最愛'}
-            onClick={() => props.onToggleFavorite(index)}
-          >
-            {props.favorite ? '★' : '☆'}
-          </button>
-          <button
-            className={props.isSolo ? 'active' : ''}
-            title={props.isSolo ? '離開全螢幕，回到分割畫面' : '把這一格放大到整個螢幕，其他格暫停'}
-            onClick={() => props.onToggleSolo(index)}
-          >
-            {props.isSolo ? <Label full="離開全螢幕" icon="⤡" /> : <Label full="全螢幕" icon="⤢" />}
-          </button>
-          <button title="更換網址" onClick={() => setEditing(true)}>
-            <Label full="更換網址" icon="✎" />
-          </button>
-          <button title="移除" onClick={() => onRemove(index)}>
-            <Label full="移除" icon="✕" />
-          </button>
           {menu?.kind === 'volume' && (
             <SliderPopup
               anchor={menu.anchor}
-              placement="above"
+              placement="below"
               title="音量"
               min={0}
               max={volumeMax(boostable)}
@@ -572,7 +549,7 @@ export function Cell(props: Props) {
           {menu?.kind === 'brightness' && (
             <SliderPopup
               anchor={menu.anchor}
-              placement="above"
+              placement="below"
               title="亮度"
               min={BRIGHTNESS_MIN}
               max={BRIGHTNESS_MAX}
@@ -587,6 +564,7 @@ export function Cell(props: Props) {
           {menu?.kind === 'youtube' && (
             <PopupMenu
               anchor={menu.anchor}
+              placement="below"
               items={[
                 source.youtubePage
                   ? { key: 'player', label: '回到播放器' }
@@ -604,6 +582,7 @@ export function Cell(props: Props) {
           {menu?.kind === 'quality' && (
             <PopupMenu
               anchor={menu.anchor}
+              placement="below"
               items={qualityItems(props.getQualityOptions(index), source.quality)}
               onSelect={(key) => props.onQuality(index, key === 'auto' ? 'auto' : Number(key))}
               onClose={() => setMenu(null)}
@@ -612,6 +591,7 @@ export function Cell(props: Props) {
           {menu?.kind === 'audio' && audio && (
             <PopupMenu
               anchor={menu.anchor}
+              placement="below"
               items={audioItems(audio, source.audioLang ?? null)}
               onSelect={(key) => {
                 const o = audio.options.find((x) => String(x.index) === key)
@@ -623,6 +603,7 @@ export function Cell(props: Props) {
           {menu?.kind === 'captions' && (
             <PopupMenu
               anchor={menu.anchor}
+              placement="below"
               items={captionItems(props.getCaptionTracks(index), source.captions)}
               onSelect={(key) => props.onCaptions(index, key === 'off' ? null : key)}
               onClose={() => setMenu(null)}

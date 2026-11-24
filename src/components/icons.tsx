@@ -58,6 +58,14 @@ export const MuteIcon = () => (
   </Icon>
 )
 
+/** 有聲音（R166 左上角的聲音按鈕） */
+export const SpeakerIcon = () => (
+  <Icon>
+    <path d="M2.5 6.2h2.3L8 3.5v9L4.8 9.8H2.5z" fill="currentColor" />
+    <path d="M10.5 5.8a3 3 0 0 1 0 4.4M12.4 4a5.6 5.6 0 0 1 0 8" />
+  </Icon>
+)
+
 export const SunIcon = () => (
   <Icon>
     <circle cx="8" cy="8" r="2.8" />

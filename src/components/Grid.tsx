@@ -226,6 +226,7 @@ export function Grid(props: Props) {
             key={index}
             index={index}
             style={rectStyle(r)}
+            topRow={r.y < EPS}
             source={source}
             status={source ? statuses[source.id] : undefined}
             failure={source ? props.failures[source.id] : undefined}

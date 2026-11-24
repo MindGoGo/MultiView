@@ -113,3 +113,24 @@ export function rangesOf(r: TimeRanges): [number, number][] {
 function clamp01(x: number): number {
   return Number.isFinite(x) ? Math.min(Math.max(x, 0), 1) : 0
 }
+
+/** 左下角的時間膠囊（R166）：text 是顯示的文字；toLive 為 true 時按一下回到直播最新位置 */
+export interface TimeChip {
+  text: string
+  toLive: boolean
+}
+
+/**
+ * 時間膠囊的內容（R166）。drag：拖曳進度條中的比例，沒有拖曳時為 null。
+ * - 一般影片：「目前 / 長度」
+ * - 可回放的直播：距離最新位置多久；接近最新位置時「直播」
+ * - 沒有回放範圍的直播：「直播」
+ */
+export function timeChip(p: Progress, drag: number | null = null): TimeChip {
+  const view = progressView(p)
+  if (view.kind === 'live') return { text: '直播', toLive: false }
+  const t = seekTarget(p, drag ?? view.fraction)
+  if (view.kind === 'vod') return { text: `${formatTime(t)} / ${formatTime(p.end)}`, toLive: false }
+  if (drag === null && view.atLive) return { text: '直播', toLive: false }
+  return { text: formatBehind(p.end - t), toLive: drag === null }
+}

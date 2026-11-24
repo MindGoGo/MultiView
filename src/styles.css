@@ -326,39 +326,127 @@ button.link {
   color: var(--muted-text);
 }
 
+/* 浮在影片上的操作按鈕（R166）：蓋住整格但不接收滑鼠，只有按鈕與進度條接收，
+   其他地方的點擊、雙擊、拖曳照常交給格子（切換聲音）或整頁模式的網頁 */
 .cell-controls {
   position: absolute;
-  left: 6px;
-  right: 6px;
-  bottom: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 6px;
-  background: var(--panel);
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s;
-}
-
-/* 隱藏時也不接收點擊，避免誤按（R3 AC2） */
-.cell-controls:not(.show) {
-  pointer-events: none;
 }
 
 .cell-controls.show {
   opacity: 1;
 }
 
-/* 直接操作播放器：拿掉攔截層，只保留操作按鈕（R3） */
-.cell.direct {
+.cell-controls.show .chip,
+.cell-controls.show .progress,
+.cell-controls.show .time-chip.to-live {
+  pointer-events: auto;
+}
+
+/* 上下各一層淡淡的黑色漸層，中間透明 */
+.scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
   pointer-events: none;
 }
 
-.cell.direct .cell-controls.show {
-  pointer-events: auto;
+.scrim.top {
+  top: 0;
+  height: 45%;
+  background: linear-gradient(rgba(0, 0, 0, 0.5), transparent);
+}
+
+.scrim.bottom {
+  bottom: 0;
+  height: 55%;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+}
+
+/* 半透明黑色的圓形按鈕 */
+.chip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  font-size: 16px;
+  color: #fff;
+  background: rgba(28, 28, 30, 0.72);
+}
+
+.chip:hover:not(:disabled) {
+  background: rgba(60, 60, 64, 0.85);
+}
+
+.chip.active {
+  color: var(--accent);
+}
+
+.chip .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.chip-row {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip-row.top-right {
+  top: 8px;
+  right: 8px;
+}
+
+.chip-row.bottom-right {
+  right: 8px;
+  bottom: 22px;
+}
+
+/* 最上排的格子：上方的按鈕放在工具列的感應區（40px）下面，滑鼠移過去時不會被工具列蓋住（R166） */
+.cell.top-row .chip-row.top-right,
+.cell.top-row .cell-corner.chips {
+  top: 48px;
+}
+
+/* 左下角的時間膠囊 */
+.time-chip {
+  position: absolute;
+  left: 10px;
+  bottom: 30px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #fff;
+  background: rgba(28, 28, 30, 0.72);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.time-chip.live {
+  color: #ff5b5b;
+  font-weight: 600;
+}
+
+.time-chip.to-live:hover {
+  background: rgba(60, 60, 64, 0.85);
+}
+
+/* 直接操作播放器：拿掉攔截層，只保留操作按鈕（R3） */
+.cell.direct {
+  pointer-events: none;
 }
 
 /* 整頁模式的小把手（R117） */
@@ -434,6 +522,13 @@ button.link {
   gap: 4px;
 }
 
+/* 操作區顯示時是聲音按鈕＋綠點，和右上的按鈕對齊（R166） */
+.cell-corner.chips {
+  top: 8px;
+  left: 8px;
+  gap: 6px;
+}
+
 /* yt-dlp 播放的綠色小圓點（R165） */
 .ytdlp-dot {
   width: 8px;
@@ -451,58 +546,57 @@ button.link {
 }
 
 
-/* ---- 進度條（R19） ---- */
+/* ---- 進度條（R19）：R166 改成貼著影片底部的細線加圓點，滑鼠移上去或拖曳時變粗 ---- */
 .progress {
-  flex: 1 1 100%;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 4px;
-  min-width: 0;
-}
-
-.progress-time {
-  font-size: 12px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.progress-track {
-  position: relative;
-  flex: 1;
-  height: 16px;
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 2px;
+  height: 18px;
   cursor: pointer;
-  touch-action: none;
 }
 
-.progress-track::before {
-  content: '';
+.progress-rail,
+.progress-fill {
   position: absolute;
   left: 0;
-  right: 0;
-  top: 7px;
+  top: 50%;
   height: 3px;
   border-radius: 2px;
+  transform: translateY(-50%);
+  transition: height 0.1s;
+}
+
+.progress-rail {
+  right: 0;
   background: rgba(255, 255, 255, 0.3);
 }
 
 .progress-fill {
-  position: absolute;
-  left: 0;
-  top: 7px;
-  height: 3px;
-  border-radius: 2px;
   background: var(--accent);
 }
 
 .progress-thumb {
   position: absolute;
-  top: 3px;
-  width: 11px;
-  height: 11px;
-  margin-left: -5.5px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--accent);
+  transform: translate(-50%, -50%);
+}
+
+.progress:hover .progress-rail,
+.progress:hover .progress-fill,
+.progress.dragging .progress-rail,
+.progress.dragging .progress-fill {
+  height: 6px;
+}
+
+.progress:hover .progress-thumb,
+.progress.dragging .progress-thumb {
+  width: 14px;
+  height: 14px;
 }
 
 /* ---- 進度條的時間提示與預覽縮圖（R50） ---- */
@@ -535,6 +629,8 @@ button.link {
 /* ---- 格子選單（R31、R32） ---- */
 .popup-menu {
   position: fixed;
+  /* 放在不接收滑鼠的浮動按鈕層裡（R166） */
+  pointer-events: auto;
   z-index: 200;
   display: flex;
   flex-direction: column;
@@ -556,6 +652,17 @@ button.link {
   white-space: nowrap;
 }
 
+.popup-item.popup-danger {
+  color: var(--danger);
+}
+
+/* 右邊的灰字（R166 齒輪選單的目前數值） */
+.popup-detail {
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--muted-text);
+}
+
 .popup-check {
   display: inline-block;
   width: 14px;
@@ -565,6 +672,7 @@ button.link {
 /* ---- 滑桿選單（R40–R42） ---- */
 .slider-popup {
   position: fixed;
+  pointer-events: auto;
   z-index: 200;
   display: flex;
   flex-direction: column;
@@ -623,6 +731,8 @@ button.link {
 /* ---- 中央的半透明播放／暫停鈕（R30） ---- */
 .center-play {
   position: absolute;
+  /* 蓋在漸層上面（R166） */
+  z-index: 3;
   left: 50%;
   top: 50%;
   /* R165：從 64 縮小約 20% */
@@ -641,38 +751,16 @@ button.link {
   background: rgba(0, 0, 0, 0.65);
 }
 
-/* 窄格子的操作區幾乎佔滿格子，中央鈕會和操作按鈕互相擋住，改用進度條旁的播放鈕（R30） */
-@container (max-width: 359px) {
+/* 太矮的格子放不下上下的按鈕和中央鈕，改用空白鍵或格子外的全部播放（R166） */
+@container (max-height: 159px) {
   .center-play {
     display: none;
   }
 }
 
-.skip-button {
-  padding: 0 4px;
-  font-size: 12px;
-}
-
-.play-button {
-  padding: 0 6px;
-  font-size: 12px;
-  min-width: 26px;
-}
-
-.live-badge {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--danger);
-}
-
-.live-button {
-  font-size: 12px;
-  padding: 1px 6px;
-  white-space: nowrap;
-}
-
-.live-button.at-live:disabled {
-  color: var(--danger);
+/* 整頁模式的格子不接收滑鼠，浮動的中央鈕仍然可以按（R166） */
+.cell.direct .center-play {
+  pointer-events: auto;
 }
 
 /* ---- 最愛與歷史清單（R21–R23） ---- */
@@ -1021,32 +1109,37 @@ button.danger {
   background: var(--danger);
 }
 
-/* ---- 格子窄的時候只顯示圖示（R14 AC7） ---- */
-.lbl-icon {
-  display: none;
-}
-
+/* 格子窄的時候（R14 AC7）：按鈕縮成 32px，時間膠囊不顯示（R166） */
 @container (max-width: 359px) {
-  .lbl-full {
+  .chip {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  .chip .icon {
+    width: 16px;
+    height: 16px;
+  }
+  .chip-row {
+    gap: 4px;
+  }
+  .chip-row.top-right {
+    top: 6px;
+    right: 6px;
+  }
+  .cell-corner.chips {
+    top: 6px;
+    left: 6px;
+  }
+  .cell.top-row .chip-row.top-right,
+  .cell.top-row .cell-corner.chips {
+    top: 46px;
+  }
+  .chip-row.bottom-right {
+    right: 6px;
+  }
+  .time-chip {
     display: none;
-  }
-  .lbl-icon {
-    display: inline;
-  }
-  /* 3×3 且視窗最小時，按鈕要排得進格子，不能超出視窗上緣（R42 AC4） */
-  .cell-controls button {
-    padding: 2px 4px;
-  }
-  .progress-time {
-    display: none;
-  }
-  /* 窄格子不顯示快轉、倒轉按鈕，鍵盤照常可用（R51） */
-  .skip-button {
-    display: none;
-  }
-  /* 最小的格子操作區有三列高，進度條在上方會被工具列蓋住，移到最下面（R19） */
-  .progress {
-    order: 99;
   }
 }
 

@@ -1,7 +1,7 @@
-// 每格的進度條（R19）與播放／暫停按鈕（R26）
+// 每格的進度條（R19）：R166 改成貼著影片底部的細進度條，時間移到左下角的時間膠囊。
+// 播放／暫停只留中間的按鈕（R166），快轉、倒轉只用 ←／→ 快捷鍵（R51）。
 import { useEffect, useRef, useState } from 'react'
-import { formatBehind, formatTime, progressView, seekTarget, type Progress } from '../lib/progress'
-import { SKIP_SECONDS } from '../lib/shortcuts'
+import { formatBehind, formatTime, progressView, seekTarget, timeChip, type Progress } from '../lib/progress'
 import { ProgressPreview, type PreviewSource } from './ProgressPreview'
 
 interface Props {
@@ -11,36 +11,17 @@ interface Props {
   onSeek(seconds: number): void
   /** 拖曳中操作區不隱藏 */
   onDragChange(dragging: boolean): void
-  /** 這一格正在播放或緩衝（R26） */
-  playing: boolean
-  onTogglePlay(): void
-  /** 快轉、倒轉（R51） */
-  onSkip(seconds: number): void
   /** 有沒有進度（有進度才顯示播放鈕，R26、R30） */
   onAvailable?(available: boolean): void
   /** 預覽縮圖的來源（R50）；null 時只顯示時間 */
   preview: PreviewSource
   /** 時間提示顯示／消失時通知，顯示中操作區不隱藏（R50） */
   onHoverChange?(on: boolean): void
-  /** 找到影片但還沒有進度時，仍然顯示播放鈕（R54） */
-  canPlay?: boolean
 }
 
 const POLL_MS = 250
 
-export function ProgressBar({
-  active,
-  getProgress,
-  onSeek,
-  onDragChange,
-  playing,
-  onTogglePlay,
-  onSkip,
-  onAvailable,
-  preview,
-  onHoverChange,
-  canPlay
-}: Props) {
+export function ProgressBar({ active, getProgress, onSeek, onDragChange, onAvailable, preview, onHoverChange }: Props) {
   const [progress, setProgress] = useState<Progress | null>(null)
   /** 拖曳中游標所在的比例；沒有拖曳時為 null */
   const [drag, setDrag] = useState<number | null>(null)
@@ -70,50 +51,31 @@ export function ProgressBar({
   // 進度條消失時（例如變成沒有回放範圍的直播）提示也一起消失
   useEffect(() => () => onHoverRef.current?.(false), [])
 
-  // 只影響這一格，不影響聲音（R26）
-  const playButton = (
-    <button className="play-button" title={playing ? '暫停這一格' : '播放這一格'} onClick={onTogglePlay}>
-      {playing ? '❚❚' : '▶'}
-    </button>
-  )
-  // 網站的影片在播放前不提供長度時沒有進度條，只顯示播放鈕（R54）
-  if (!progress) return canPlay ? <div className="progress">{playButton}</div> : null
+  // 網站的影片在播放前不提供長度時沒有進度條與時間（R54）
+  if (!progress) return null
   const view = progressView(progress)
-  if (view.kind === 'live') {
-    return (
-      <div className="progress">
-        {playButton}
-        <span className="live-badge">● LIVE</span>
-      </div>
-    )
-  }
+  const chip = timeChip(progress, drag)
+  // 左下角的時間膠囊；格子太窄時由 CSS 隱藏（R166）
+  const chipEl = chip.toLive ? (
+    <button className="time-chip to-live" title="回到直播最新位置" onClick={() => onSeek(progress.end)}>
+      {chip.text}
+    </button>
+  ) : (
+    <span className={`time-chip ${chip.text === '直播' ? 'live' : ''}`}>{chip.text}</span>
+  )
+  if (view.kind === 'live') return chipEl
 
   const fractionAt = (clientX: number) => {
     const r = trackRef.current!.getBoundingClientRect()
     return r.width > 0 ? Math.min(Math.max((clientX - r.left) / r.width, 0), 1) : 0
   }
   const shown = drag ?? view.fraction
-  const shownTime = seekTarget(progress, shown)
-  const label =
-    view.kind === 'vod'
-      ? `${formatTime(shownTime)} / ${formatTime(progress.end)}`
-      : drag === null && view.atLive
-        ? ''
-        : formatBehind(progress.end - shownTime)
 
   return (
-    <div className="progress">
-      {playButton}
-      {/* 窄格子不顯示，鍵盤照常可用（R51） */}
-      <button className="skip-button" title={`倒轉 ${SKIP_SECONDS} 秒（←）`} onClick={() => onSkip(-SKIP_SECONDS)}>
-        ⏪
-      </button>
-      <button className="skip-button" title={`快轉 ${SKIP_SECONDS} 秒（→）`} onClick={() => onSkip(SKIP_SECONDS)}>
-        ⏩
-      </button>
-      {label && <span className="progress-time">{label}</span>}
+    <>
+      {chipEl}
       <div
-        className="progress-track"
+        className={`progress ${drag !== null ? 'dragging' : ''}`}
         ref={trackRef}
         title={view.kind === 'vod' ? '拖曳或點擊來跳轉' : '拖曳或點擊來倒轉直播'}
         onPointerDown={(e) => {
@@ -145,6 +107,7 @@ export function ProgressBar({
           onDragChange(false)
         }}
       >
+        <div className="progress-rail" />
         <div className="progress-fill" style={{ width: `${shown * 100}%` }} />
         <div className="progress-thumb" style={{ left: `${shown * 100}%` }} />
       </div>
@@ -165,16 +128,6 @@ export function ProgressBar({
           />
         )
       })()}
-      {view.kind === 'dvr' && (
-        <button
-          className={`live-button ${view.atLive ? 'at-live' : ''}`}
-          disabled={view.atLive && drag === null}
-          title="回到直播最新位置"
-          onClick={() => onSeek(progress.end)}
-        >
-          {view.atLive && drag === null ? '● LIVE' : '回到直播'}
-        </button>
-      )}
-    </div>
+    </>
   )
 }

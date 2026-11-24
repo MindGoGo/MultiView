@@ -9,6 +9,10 @@ export interface PopupItem {
   disabled?: boolean
   /** 選了之後選單不關閉（R93：更新 yt-dlp 後在選單裡看狀態） */
   keepOpen?: boolean
+  /** 右邊的灰字（R166 齒輪選單：目前的音量、畫質等） */
+  detail?: string
+  /** 紅字（R166 齒輪選單的「移除」） */
+  danger?: boolean
 }
 
 interface Props {
@@ -61,7 +65,7 @@ export function PopupMenu({ anchor, placement = 'above', items, onSelect, onClos
       {items.map((i) => (
         <button
           key={i.key}
-          className={`popup-item ${i.checked ? 'checked' : ''}`}
+          className={`popup-item ${i.checked ? 'checked' : ''} ${i.danger ? 'popup-danger' : ''}`}
           disabled={i.disabled}
           onClick={() => {
             onSelect(i.key)
@@ -70,6 +74,7 @@ export function PopupMenu({ anchor, placement = 'above', items, onSelect, onClos
         >
           <span className="popup-check">{i.checked ? '✓' : ''}</span>
           {i.label}
+          {i.detail && <span className="popup-detail">{i.detail}</span>}
         </button>
       ))}
     </div>
