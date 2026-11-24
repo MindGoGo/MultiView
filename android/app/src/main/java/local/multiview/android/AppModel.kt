@@ -188,6 +188,15 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
     )
         private set
 
+    /** 開啟 App 時，只有一格而且會上下排（手機直向）就自動打開小視窗（R165）。App 自己的偏好設定。 */
+    var companionOnLaunch by mutableStateOf(
+        appContext.getSharedPreferences("app", Context.MODE_PRIVATE).getBoolean(KEY_COMPANION_ON_LAUNCH, false),
+    )
+        private set
+
+    /** 開啟 App 後已經判斷過要不要自動打開小視窗（R165），只判斷一次。 */
+    private var launchCompanionChecked = false
+
     /** 小視窗搜尋分頁的網頁，由畫面設定。 */
     var companionBrowser: CompanionBrowser? = null
 
@@ -821,6 +830,23 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         if (companionOpen || !companionStackAvailable) return false
         toggleCompanion()
         return true
+    }
+
+    fun changeCompanionOnLaunch(value: Boolean) {
+        if (companionOnLaunch == value) return
+        companionOnLaunch = value
+        appContext.getSharedPreferences("app", Context.MODE_PRIVATE).edit().putBoolean(KEY_COMPANION_ON_LAUNCH, value).apply()
+    }
+
+    /**
+     * 開啟 App 後第一次量到畫面大小、回報過會不會上下排之後由畫面呼叫（R165），只判斷一次：
+     * 設定打開、會上下排（手機直向、只有一格）而且小視窗沒開，就打開小視窗。
+     */
+    fun openCompanionOnLaunchIfNeeded() {
+        if (launchCompanionChecked) return
+        launchCompanionChecked = true
+        if (!companionOnLaunch || companionOpen || !companionStackAvailable) return
+        toggleCompanion()
     }
 
     fun changeCompanionExpanded(expanded: Boolean) {
@@ -1570,6 +1596,7 @@ class AppModel(private val appContext: Context, directory: File = appContext.fil
         private const val SAVE_DELAY_MS = 300L
         private const val KEY_METHODS_DEFAULT = "youtubeMethodsDefaultApplied"
         private const val KEY_COMPANION_BROWSE = "companionBrowse"
+        private const val KEY_COMPANION_ON_LAUNCH = "companionOnLaunch"
 
         /** 畫質選單的選項（R153）。 */
         val qualityOptions: List<Quality> =

@@ -39,6 +39,8 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -63,9 +65,6 @@ private val ToolbarHeight = 52.dp
 /** 在影片上往上滑超過這個距離就打開小視窗（R164）。 */
 private val SWIPE_UP_DISTANCE = 60.dp
 
-/** 格子比這個矮時，操作列只排一列（R163）。 */
-private val COMPACT_CONTROLS_HEIGHT = 260.dp
-
 /** 兩指張開、捏合超過這個比例才進入、離開單格全螢幕（R153）。 */
 private const val ENTER_SOLO_SCALE = 1.25f
 private const val EXIT_SOLO_SCALE = 0.8f
@@ -89,6 +88,8 @@ fun CellView(
     // 整頁模式的網頁：手指操作直接交給網頁
     val interactive = player?.isInteractive ?: false
     var skipHint by remember { mutableStateOf<String?>(null) }
+    // 左上、右上角按鈕上方要留的距離：避開瀏海，工具列顯示時再避開工具列
+    val topPadding = insets.calculateTopPadding() + if (touchesTop && model.toolbarVisible) ToolbarHeight else 0.dp
 
     Box(modifier = Modifier.fillMaxSize().clipToBounds().background(Color.Black)) {
         if (player != null) PlayerHost(player)
@@ -99,6 +100,16 @@ fun CellView(
 
         if (!interactive) {
             TouchLayer(model, index) { skipHint = it }
+        }
+
+        // 浮在影片上的操作按鈕與上下的漸層（R166）。放在中央的播放鈕、左上角的喇叭下面，漸層才不會蓋住它們
+        if (active) {
+            val barInsets = PaddingValues(
+                start = insets.calculateStartPadding(LayoutDirection.Ltr),
+                end = insets.calculateEndPadding(LayoutDirection.Ltr),
+                bottom = insets.calculateBottomPadding(),
+            )
+            ControlsBar(model, index, source, player, barInsets, topPadding)
         }
 
         // 狀態：錯誤訊息、讀取動畫、中央的播放／暫停鈕
@@ -117,12 +128,12 @@ fun CellView(
             PlayStatus.LOADING -> if (!interactive) {
                 LoadingCritter(player?.isResolving ?: false, width, height, modifier = Modifier.align(Alignment.Center))
             }
-            // 暫停時一直顯示播放鈕
-            PlayStatus.PAUSED, PlayStatus.ENDED -> if (!interactive && model.pipCell == null) {
+            // 暫停時一直顯示播放鈕；整頁模式只在操作列顯示時（R166：操作列不再有播放鈕）
+            PlayStatus.PAUSED, PlayStatus.ENDED -> if ((!interactive || active) && model.pipCell == null) {
                 CenterButton(AppIcons.Play, "播放", Modifier.align(Alignment.Center)) { model.togglePlay(index) }
             }
             // 播放中：點一下格子、操作列顯示時才出現暫停鈕
-            PlayStatus.PLAYING -> if (!interactive && active) {
+            PlayStatus.PLAYING -> if (active) {
                 CenterButton(AppIcons.Pause, "暫停", Modifier.align(Alignment.Center)) { model.togglePlay(index) }
             }
         }
@@ -147,19 +158,21 @@ fun CellView(
                     .align(Alignment.TopEnd)
                     .padding(
                         end = insets.calculateEndPadding(LayoutDirection.Ltr),
-                        top = insets.calculateTopPadding() + if (touchesTop && model.toolbarVisible) ToolbarHeight else 0.dp,
+                        // 操作列顯示時在右上角按鈕的下面（R166）
+                        top = topPadding + if (active) CHIP_TOUCH_SIZE else 0.dp,
                     )
                     .padding(6.dp),
             ) { player.undoSkip() }
         }
 
-        // 左上角：工具列顯示時是喇叭按鈕（只切換這一格的聲音，用來讓多格同時出聲），旁邊是播放方式的小標示
+        // 左上角：工具列顯示時是喇叭按鈕（只切換這一格的聲音，用來讓多格同時出聲），旁邊是播放方式的小標示。
+        // 操作列顯示時也有（R166：操作列不再有喇叭按鈕，上下排時也沒有工具列）
         val startInset = insets.calculateStartPadding(LayoutDirection.Ltr)
-        if (model.toolbarVisible) {
+        if (model.toolbarVisible || active) {
             Row(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(start = startInset, top = insets.calculateTopPadding() + if (touchesTop) ToolbarHeight else 0.dp)
+                    .padding(start = startInset, top = topPadding)
                     .padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -178,8 +191,16 @@ fun CellView(
                         modifier = Modifier.size(20.dp),
                     )
                 }
-                // 放在喇叭按鈕右邊，不要蓋住喇叭（iOS 0.0.16 的問題）
-                model.badgeOf(source)?.let { Pill(it, Modifier.padding(start = 4.dp), fontSize = 10) }
+                // 放在喇叭按鈕右邊，不要蓋住喇叭（iOS 0.0.16 的問題）。用 yt-dlp 播放時只顯示一個綠色小圓點（R165）
+                model.badgeOf(source)?.let { badge ->
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(8.dp)
+                            .background(Color(0xFF34C759), CircleShape)
+                            .semantics { contentDescription = badge },
+                    )
+                }
             }
         } else if (source.isAudible && model.pipCell == null && model.solo == null && model.displayedLayout != LayoutId.ONE) {
             // 有聲音的格子一直顯示小喇叭（R7 AC5）。畫面上只有一格（版型 `1`、單格全螢幕）時不顯示（R162）
@@ -196,18 +217,8 @@ fun CellView(
             )
         }
 
-        // 下緣：操作列；整頁模式的網頁用小把手叫出操作列
-        val bottomInsets = PaddingValues(
-            start = startInset,
-            end = insets.calculateEndPadding(LayoutDirection.Ltr),
-            bottom = insets.calculateBottomPadding(),
-        )
-        if (active) {
-            Box(modifier = Modifier.align(Alignment.BottomCenter)) {
-                // 很矮的格子（直向上下排時上面的影片，R162）：操作列只排一列
-                ControlsBar(model, index, source, player, bottomInsets, compact = height < COMPACT_CONTROLS_HEIGHT)
-            }
-        } else if (interactive) {
+        // 整頁模式的網頁用小把手叫出操作列
+        if (!active && interactive) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -374,17 +385,17 @@ private fun SkipNoticePill(notice: SkipNotice, modifier: Modifier, onUndo: () ->
     }
 }
 
-/** 中央的半透明播放／暫停鈕（R30）。 */
+/** 中央的半透明播放／暫停鈕（R30；R165 從 64 縮成 52）。 */
 @Composable
 private fun CenterButton(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier = modifier
-            .size(64.dp)
+            .size(52.dp)
             .clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.45f))
             .clickable(onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(34.dp))
+        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(28.dp))
     }
 }

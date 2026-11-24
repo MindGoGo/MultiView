@@ -134,6 +134,14 @@ fun SettingsScreen(model: AppModel) {
                 )
                 Note("片段資料來自 SponsorBlock（sponsor.ajay.app），授權 CC BY-NC-SA 4.0。")
 
+                Section("YouTube 小視窗")
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Label("開啟 App 時打開小視窗")
+                    Spacer(modifier = Modifier.weight(1f))
+                    Switch(checked = model.companionOnLaunch, onCheckedChange = { model.changeCompanionOnLaunch(it) })
+                }
+                Note("手機直向、畫面上只有一格時，開啟 App 就把小視窗打開在影片下面。")
+
                 Section("其他網站的播放方式")
                 Segmented(webMethodOptions, model.webMethod) { model.changeWebMethod(it) }
                 Note("yt-dlp 支援上千個影音網站（例如 Twitch、Dailymotion、新聞台），可以選畫質、多格同時出聲。不支援或需要登入的網站會自動改用網頁。")

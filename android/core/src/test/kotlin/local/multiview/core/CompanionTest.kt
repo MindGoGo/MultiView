@@ -50,7 +50,7 @@ class CompanionTest {
 
     @Test
     fun headerAndUrls() {
-        assertEquals("第 2 格：標題", CompanionRules.header(1, "標題"))
+        assertEquals("標題", CompanionRules.header(1, "標題"))
         assertEquals("第 1 格", CompanionRules.header(0, null))
         assertTrue(CompanionRules.header(null, "x").contains("點一下"))
         assertEquals("https://www.youtube.com/live_chat?v=$id&is_popout=1", CompanionRules.liveChatUrl(id))

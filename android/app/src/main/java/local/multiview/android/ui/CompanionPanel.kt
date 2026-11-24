@@ -15,8 +15,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -41,15 +43,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.math.abs
 import kotlinx.coroutines.delay
 import local.multiview.android.AppModel
 import local.multiview.core.CompanionRules
@@ -126,54 +136,58 @@ fun CompanionPanel(
             .padding(insets),
     ) {
         if (headerShown) {
-            // 上下排時標題上面也有小把手：拖曳，或點一下切換占滿畫面／回到影片下面（R163）
-            if (drag != null) {
+            // 上下排時小把手、標題與分頁整條都可以上下拖曳（R167）：移動超過 10dp 才算拖曳，點按鈕、切換分頁照常。
+            // 沒有 drag 時只是不作用，不換成另一個畫面元件
+            Column(modifier = Modifier.panelDrag(drag, HEADER_DRAG_SLOP)) {
+                // 上下排時標題上面也有小把手：點一下切換占滿畫面／回到影片下面（R163）。
+                // 一直留著、不是上下排時高度 0（iOS 0.0.40 的教訓：不要在打開小視窗的那一刻才插入，R167）
                 PanelHandle(
-                    drag,
+                    null,
                     if (model.companionExpanded) "小視窗回到影片下面" else "小視窗占滿畫面",
+                    shown = drag != null,
                 ) { model.changeCompanionExpanded(!model.companionExpanded) }
-            }
-            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = if (drag != null) 0.dp else 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (browsing && search.canGoBack) {
-                        BarButton(AppIcons.ArrowBack, "上一頁", onClick = touched { search.goBack() })
-                    }
-                    Text(
-                        if (browsing) "在小視窗裡看" else CompanionRules.header(model.companionCell, model.companionTitle),
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // 在這裡看的是一部影片：放進格子
-                    if (browsing && currentVideo != null) {
-                        BarButton(AppIcons.SendToGrid, "放進格子", onClick = touched { model.companionPushCurrent(currentVideo) })
-                    }
-                    // 搜尋分頁點影片的方式：圖示是目前的方式，按一下切換（R162）
-                    if (tab == CompanionTab.SEARCH) {
-                        BarButton(
-                            if (model.companionBrowse) AppIcons.WatchHere else AppIcons.SendToGrid,
-                            if (model.companionBrowse) "點影片：在這裡看（按一下改成放進格子）" else "點影片：放進格子（按一下改成在這裡看）",
-                            highlighted = model.companionBrowse,
-                            onClick = touched {
-                                model.changeCompanionBrowse(!model.companionBrowse)
-                                model.showToast(if (model.companionBrowse) "點影片：在小視窗裡看" else "點影片：放進格子")
-                            },
+                Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = if (drag != null) 0.dp else 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (browsing && search.canGoBack) {
+                            BarButton(AppIcons.ArrowBack, "上一頁", onClick = touched { search.goBack() })
+                        }
+                        Text(
+                            if (browsing) "在小視窗裡看" else CompanionRules.header(model.companionCell, model.companionTitle),
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
                         )
+                        // 在這裡看的是一部影片：放進格子
+                        if (browsing && currentVideo != null) {
+                            BarButton(AppIcons.SendToGrid, "放進格子", onClick = touched { model.companionPushCurrent(currentVideo) })
+                        }
+                        // 搜尋分頁點影片的方式：圖示是目前的方式，按一下切換（R162）
+                        if (tab == CompanionTab.SEARCH) {
+                            BarButton(
+                                if (model.companionBrowse) AppIcons.WatchHere else AppIcons.SendToGrid,
+                                if (model.companionBrowse) "點影片：在這裡看（按一下改成放進格子）" else "點影片：放進格子（按一下改成在這裡看）",
+                                highlighted = model.companionBrowse,
+                                onClick = touched {
+                                    model.changeCompanionBrowse(!model.companionBrowse)
+                                    model.showToast(if (model.companionBrowse) "點影片：在小視窗裡看" else "點影片：放進格子")
+                                },
+                            )
+                        }
+                        // 上下排時往下拉小把手就關掉，不用關閉按鈕（R164）
+                        if (drag == null) {
+                            BarButton(AppIcons.Close, "關閉 YouTube 小視窗") { model.closeCompanion() }
+                        }
                     }
-                    // 上下排時往下拉小把手就關掉，不用關閉按鈕（R164）
-                    if (drag == null) {
-                        BarButton(AppIcons.Close, "關閉 YouTube 小視窗") { model.closeCompanion() }
+                    Segmented(CompanionTab.entries.map { it to it.label }, tab) {
+                        headerTouches++
+                        model.selectCompanionTab(it)
                     }
-                }
-                Segmented(CompanionTab.entries.map { it to it.label }, tab) {
-                    headerTouches++
-                    model.selectCompanionTab(it)
                 }
             }
         } else {
-            // 小把手：點一下叫出上方的標題與分頁；上下排時也可以拖曳（R163）
+            // 小把手：點一下叫出上方的標題與分頁；上下排時也可以拖曳（R163）。標題隱藏時照原本只有小把手可以拖（R167）
             PanelHandle(drag, "顯示小視窗的工具列") { headerShown = true }
         }
 
@@ -209,34 +223,90 @@ fun CompanionPanel(
     }
 }
 
-/** 上下排時拖曳小視窗上方的小把手（R163）：dy 是這次移動的像素（往下為正）；放開時呼叫 onEnd。 */
-class PanelDrag(val onDrag: (Float) -> Unit, val onEnd: () -> Unit)
+/**
+ * 上下排時拖曳小視窗上方的小把手、標題與分頁（R163、R167）：onDrag 的 dy 是這次移動的像素（往下為正）；
+ * 放開時呼叫 onEnd，參數是放開時的垂直速度（像素／秒，往下為正），用來判斷快速甩動。
+ */
+class PanelDrag(val onDrag: (Float) -> Unit, val onEnd: (velocityY: Float) -> Unit)
 
-/** 小視窗上方的小把手：點一下做 onTap；有 drag 時可以上下拖曳。 */
+/**
+ * 有 drag 時可以上下拖曳（R167）。和裡面的按鈕、分頁同時作用：手指上下移動超過 minimumDistance 才算拖曳，
+ * 開始拖曳後把事件吃掉，裡面的按鈕就不會當作點一下；沒有超過時照常交給裡面的按鈕。
+ * 沒有 drag 時只是不作用，不換掉畫面元件。
+ */
 @Composable
-private fun PanelHandle(drag: PanelDrag?, label: String, onTap: () -> Unit) {
+private fun Modifier.panelDrag(drag: PanelDrag?, minimumDistance: Dp): Modifier {
     // 拖曳中畫面每一格都會重畫：手勢不能因此重新開始，所以用最新的 drag，不當作手勢的 key
     val currentDrag by rememberUpdatedState(drag)
+    return pointerInput(Unit) {
+        val slop = minimumDistance.toPx()
+        awaitEachGesture {
+            // 在裡面的按鈕之前看到事件（Initial），才能在開始拖曳時把事件吃掉
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            if (currentDrag == null) return@awaitEachGesture
+            var dragging = false
+            var totalX = 0f
+            var totalY = 0f
+            val tracker = VelocityTracker()
+            tracker.addPosition(down.uptimeMillis, Offset.Zero)
+            try {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) {
+                        if (dragging) change.consume()
+                        break
+                    }
+                    // 小視窗本身也在移動：位置是用移動後的版面算的，兩次事件的差就是手指實際移動的距離
+                    val delta = change.positionChange()
+                    totalX += delta.x
+                    totalY += delta.y
+                    if (!dragging) {
+                        if (abs(totalY) > slop && abs(totalY) > abs(totalX)) {
+                            dragging = true
+                            currentDrag?.onDrag(totalY)
+                        }
+                    } else {
+                        currentDrag?.onDrag(delta.y)
+                    }
+                    if (dragging) {
+                        change.consume()
+                        tracker.addPosition(change.uptimeMillis, Offset(0f, totalY))
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                if (dragging) currentDrag?.onEnd(0f)
+                throw cancelled
+            }
+            if (dragging) currentDrag?.onEnd(tracker.calculateVelocity().y)
+        }
+    }
+}
+
+/**
+ * 小視窗上方的小把手：點一下做 onTap；有 drag 時可以上下拖曳。
+ * shown 為 false 時高度 0、看不到、不能點（一直留在畫面裡，R167）。
+ */
+@Composable
+private fun PanelHandle(drag: PanelDrag?, label: String, shown: Boolean = true, onTap: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClickLabel = label, onClick = onTap)
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragEnd = { currentDrag?.onEnd?.invoke() },
-                    onDragCancel = { currentDrag?.onEnd?.invoke() },
-                ) { change, dy ->
-                    val target = currentDrag ?: return@detectVerticalDragGestures
-                    change.consume()
-                    target.onDrag(dy)
-                }
-            }
-            .padding(vertical = 8.dp),
+            .then(if (shown) Modifier else Modifier.height(0.dp).alpha(0f).clearAndSetSemantics { })
+            .clickable(enabled = shown, onClickLabel = label, onClick = onTap)
+            .panelDrag(drag, HANDLE_DRAG_SLOP)
+            .padding(vertical = if (shown) 8.dp else 0.dp),
         contentAlignment = Alignment.Center,
     ) {
         Box(modifier = Modifier.size(width = 44.dp, height = 5.dp).background(Color.White.copy(alpha = 0.35f), CircleShape))
     }
 }
+
+/** 標題與分頁要移動超過這個距離才算拖曳（R167），點按鈕、切換分頁照常。 */
+private val HEADER_DRAG_SLOP = 10.dp
+
+/** 小把手本身沒有其他按鈕，移動一點點就算拖曳。 */
+private val HANDLE_DRAG_SLOP = 4.dp
 
 private enum class CompanionPage { SEARCH, WATCH, CHAT }
 
