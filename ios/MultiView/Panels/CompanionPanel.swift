@@ -32,13 +32,18 @@ struct CompanionPanel: View {
 
         VStack(spacing: 0) {
             if headerShown || !browsing {
-                // 上下排時標題上面也有小把手：拖曳，或點一下切換占滿畫面／回到影片下面（R163）
-                if let drag {
-                    PanelHandle(label: model.companionExpanded ? "小視窗回到影片下面" : "小視窗占滿畫面", drag: drag) {
-                        withAnimation(.easeOut(duration: 0.25)) { model.companionExpanded.toggle() }
+                // 上下排時標題上面也有小把手：點一下切換占滿畫面／回到影片下面（R163）。
+                // 小把手、標題與分頁整條都可以拖曳（R167）
+                VStack(spacing: 0) {
+                    if drag != nil {
+                        PanelHandle(label: model.companionExpanded ? "小視窗回到影片下面" : "小視窗占滿畫面", drag: nil) {
+                            withAnimation(.easeOut(duration: 0.25)) { model.companionExpanded.toggle() }
+                        }
                     }
+                    header(tab: tab, browsing: browsing, canGoBack: browser.canGoBack, currentVideo: currentVideo)
                 }
-                header(tab: tab, browsing: browsing, canGoBack: browser.canGoBack, currentVideo: currentVideo)
+                .contentShape(Rectangle())
+                .panelDrag(drag, minimumDistance: 10)
             } else {
                 // 小把手：點一下叫出上方的標題與分頁；上下排時也可以拖曳（R163）
                 PanelHandle(label: "顯示小視窗的工具列", drag: drag) {
@@ -413,10 +418,28 @@ private struct CompanionWebView: UIViewRepresentable {
     }
 }
 
-/// 上下排時拖曳小視窗上方的小把手（R163）：參數是從按下的位置算起的垂直移動距離（往下為正）。
+/// 上下排時拖曳小視窗上方的小把手、標題與分頁（R163、R167）：參數是從按下的位置算起的垂直移動距離（往下為正）；
+/// 放開時另外給預估的最終距離（快速甩動時比實際距離大）。
 struct PanelDrag {
     var changed: (CGFloat) -> Void
-    var ended: (CGFloat) -> Void
+    var ended: (_ moved: CGFloat, _ predicted: CGFloat) -> Void
+}
+
+extension View {
+    /// 有 drag 時可以上下拖曳。和裡面的按鈕、分頁同時作用：手指移動超過 minimumDistance 才算拖曳，點一下照常是按按鈕。
+    /// 拖曳時小視窗本身也在移動：用整個畫面的座標，移動距離才不會跳動。
+    @ViewBuilder
+    func panelDrag(_ drag: PanelDrag?, minimumDistance: CGFloat) -> some View {
+        if let drag {
+            simultaneousGesture(
+                DragGesture(minimumDistance: minimumDistance, coordinateSpace: .global)
+                    .onChanged { value in drag.changed(value.translation.height) }
+                    .onEnded { value in drag.ended(value.translation.height, value.predictedEndTranslation.height) }
+            )
+        } else {
+            self
+        }
+    }
 }
 
 /// 小視窗上方的小把手：點一下做 onTap；有 drag 時可以上下拖曳。
@@ -433,12 +456,7 @@ private struct PanelHandle: View {
             .padding(.vertical, 10)
             .contentShape(Rectangle())
             .onTapGesture(perform: onTap)
-            // 拖曳時小視窗本身也在移動：用整個畫面的座標，移動距離才不會跳動
-            .gesture(
-                DragGesture(minimumDistance: 4, coordinateSpace: .global)
-                    .onChanged { value in drag?.changed(value.translation.height) }
-                    .onEnded { value in drag?.ended(value.translation.height) }
-            )
+            .panelDrag(drag, minimumDistance: 4)
             .accessibilityElement()
             .accessibilityLabel(label)
             .accessibilityAddTraits(.isButton)

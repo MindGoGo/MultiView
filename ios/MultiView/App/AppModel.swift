@@ -88,6 +88,10 @@ final class AppModel {
     var companionExpanded = false
     /// 打開小視窗的話會上下排（iPhone 直向、只有一格），由畫面回報。這時在影片上往上滑就打開小視窗（R164）。
     var companionStackAvailable = false
+    /// 上下排的小視窗正在打開（R167）：這時影片先停在畫面中間，RootView 再用動畫把影片移到上面。
+    private(set) var companionOpening = false
+    /// 每次上下排地打開小視窗加一（R167）：RootView 用來在打開的那一刻不做影片的動畫。
+    private(set) var companionOpenSerial = 0
     /// 上下排的小視窗正在往下收起（R164）：收起的動畫中影片維持 16:9，小視窗離開後才放大回整個畫面。
     private(set) var companionClosingStacked = false
     /// 小視窗搜尋分頁的網頁（R162）：在這裡看影片時，App 要能暫停它。
@@ -648,6 +652,11 @@ final class AppModel {
                 companionCell = slots.indices.first { isVisible($0) && slots[$0]?.parsed.kind == .youtube }
             }
             companionOpen = true
+            if companionStackAvailable {
+                // 上下排地打開（R167）：影片從畫面中間往上移，和小視窗從下往上同時動
+                companionOpening = true
+                companionOpenSerial += 1
+            }
             // iPhone 單格全螢幕（橫向）中打開：轉成直向，上面影片、下面小視窗（R162）；關掉小視窗時轉回橫向
             if solo != nil, UIDevice.current.userInterfaceIdiom == .phone, !Orientation.isPortrait {
                 companionRotated = true
@@ -656,6 +665,11 @@ final class AppModel {
             }
         }
         keepControlsVisible()
+    }
+
+    /// 打開小視窗的動畫開始後由 RootView 呼叫（R167）。
+    func endCompanionOpening() {
+        companionOpening = false
     }
 
     func closeCompanion() {

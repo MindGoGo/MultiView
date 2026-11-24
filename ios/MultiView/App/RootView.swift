@@ -11,6 +11,8 @@ struct RootView: View {
     @State private var screenSize: CGSize = .zero
     /// 正在拖曳上下排的小視窗（R163）：從按下的位置算起的垂直移動距離（往下為正）。
     @State private var stackDrag: CGFloat = 0
+    /// 安全區域上緣（瀏海）的高度：上下排時影片從這裡開始。
+    @State private var safeTop: CGFloat = 0
     /// 開啟 App 後已經判斷過要不要自動打開小視窗（R165），只判斷一次。
     @State private var launchCompanionChecked = false
 
@@ -39,12 +41,33 @@ struct RootView: View {
         return min(max(rest + stackDrag, 0), limit)
     }
 
-    /// 按著小視窗上方的小把手上下拖曳，放開時往拖曳的方向收合或展開（R163）。
+    /// 小視窗從接在影片下面拉到完全離開畫面要移動的距離（R167）。
+    private var stackPanelTravel: CGFloat {
+        max(1, screenSize.height - safeTop - stackedVideoHeight)
+    }
+
+    /// 上下排時影片往下移的距離（R167）。移到底時影片在畫面正中間，就是小視窗關掉後只有一格時影片的位置，
+    /// 所以關掉的動畫結束、改回整個畫面時影片不會跳動（16:9 的影片）。
+    /// - 往下拉小視窗：跟著小視窗被拉下去的比例移動。
+    /// - 正在收起：移到底。
+    /// - 正在打開：先在底下，RootView 再用動畫移回上面。
+    private var stackedVideoShift: CGFloat {
+        let full = max(0, (screenSize.height - stackedVideoHeight) / 2 - safeTop)
+        if model.companionClosingStacked || model.companionOpening {
+            return full
+        }
+        guard !model.companionExpanded, stackDrag > 0 else { return 0 }
+        return full * min(1, stackDrag / stackPanelTravel)
+    }
+
+    /// 按著小視窗上方的小把手、標題或分頁上下拖曳，放開時往拖曳的方向收合或展開（R163、R167）。
     private var stackPanelDrag: PanelDrag {
         PanelDrag(
             changed: { stackDrag = $0 },
-            ended: { moved in
-                if !model.companionExpanded, moved > 80 {
+            ended: { moved, predicted in
+                // 往下拉超過 1/4，或很快往下甩（預估會超過一半）就關掉
+                if !model.companionExpanded, moved > 0,
+                   moved > stackPanelTravel * 0.25 || predicted > stackPanelTravel * 0.5 {
                     // 接在影片下面時往下拉：關掉，從手指放開的位置往下收起（R164）；收起之後才把拖曳的距離歸零
                     withAnimation(.easeOut(duration: 0.25)) {
                         model.closeCompanion()
@@ -55,7 +78,10 @@ struct RootView: View {
                     }
                     return
                 }
-                let expand = moved < -40 ? true : (moved > 40 ? false : model.companionExpanded)
+                // 拉超過 40pt，或很快甩動（預估超過 150pt）就往那個方向收合或展開
+                let up = moved < -40 || predicted < -150
+                let down = moved > 40 || predicted > 150
+                let expand = up ? true : (down ? false : model.companionExpanded)
                 withAnimation(.easeOut(duration: 0.25)) {
                     model.companionExpanded = expand
                     stackDrag = 0
@@ -88,9 +114,16 @@ struct RootView: View {
                     .frame(height: stacked ? stackedVideoHeight : nil)
                     .padding(.top, stacked ? insets.top : 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    // 往下拉、收起、打開小視窗時影片跟著上下移動（R167）
+                    .offset(y: stacked ? stackedVideoShift : 0)
+                    // 上下排地打開的那一刻：影片直接縮成 16:9 放在畫面中間（不做大小的動畫），之後才往上移
+                    .animation(nil, value: model.companionOpenSerial)
                     .ignoresSafeArea()
                     .onChange(of: Self.fullSize(proxy), initial: true) { _, size in
                         screenSize = size
+                    }
+                    .onChange(of: insets.top, initial: true) { _, top in
+                        safeTop = top
                     }
             }
 
@@ -169,6 +202,14 @@ struct RootView: View {
         }
         .onChange(of: model.companionOpen, initial: true) { _, open in
             if open { companionCreated = true }
+        }
+        // 上下排地打開小視窗（R167）：影片先畫在中間，下一輪再用動畫移到上面，和小視窗從下往上同時動
+        .onChange(of: model.companionOpenSerial) { _, _ in
+            DispatchQueue.main.async {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    model.endCompanionOpening()
+                }
+            }
         }
         .onChange(of: companionStacked, initial: true) { _, value in
             model.companionStacked = value
