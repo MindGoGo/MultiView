@@ -22,6 +22,8 @@ interface Props {
   placement?: 'above' | 'below'
   /** 對齊按鈕的右邊（預設）或從左邊開始（R171：在游標位置打開時） */
   align?: 'start' | 'end'
+  /** 開關這個選單的按鈕的 data-popup-toggle；按這些按鈕時不當作點在選單外面 */
+  toggleKey?: string
   items: PopupItem[]
   onSelect(key: string): void
   onClose(): void
@@ -29,7 +31,7 @@ interface Props {
 
 const MARGIN = 4
 
-export function PopupMenu({ anchor, placement = 'above', align = 'end', items, onSelect, onClose }: Props) {
+export function PopupMenu({ anchor, placement = 'above', align = 'end', toggleKey, items, onSelect, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; bottom?: number; top?: number; maxHeight: number }>(
     placement === 'above'
@@ -46,6 +48,9 @@ export function PopupMenu({ anchor, placement = 'above', align = 'end', items, o
 
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
+      // 按的是打開這個選單的按鈕：交給按鈕自己開關，否則這裡先關閉、按鈕又把它打開（R171 修正）
+      const toggle = (e.target as Element | null)?.closest?.('[data-popup-toggle]')
+      if (toggleKey && toggle?.getAttribute('data-popup-toggle') === toggleKey) return
       if (!ref.current?.contains(e.target as Node)) onClose()
     }
     // 先於全域快捷鍵處理 Esc，避免同時離開全螢幕
@@ -60,7 +65,7 @@ export function PopupMenu({ anchor, placement = 'above', align = 'end', items, o
       window.removeEventListener('pointerdown', onDown, true)
       window.removeEventListener('keydown', onKey, true)
     }
-  }, [onClose])
+  }, [onClose, toggleKey])
 
   return (
     <div className="popup-menu" ref={ref} style={pos}>

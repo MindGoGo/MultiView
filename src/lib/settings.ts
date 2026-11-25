@@ -196,6 +196,16 @@ export function normalizeView(raw: unknown): ViewSettings {
   }
 }
 
+/**
+ * 交給畫面的設定（R10）：設定檔裡除了視窗位置、小視窗的位置以外的全部欄位。
+ * 不逐一列出欄位，新增的設定才不會漏掉（0.9.2 漏了 cellClick、companionOnLaunch，R171 修正）。
+ */
+export function viewSettingsOf(settings: Settings): ViewSettings {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { version, window, companion, ...view } = settings
+  return view
+}
+
 /** 把讀到的 JSON 轉成合法設定；整體結構不對時回傳 null（視為損毀）。個別欄位不合法時改用預設值。 */
 export function normalizeSettings(raw: unknown): Settings | null {
   if (!isObject(raw) || raw.version !== 1) return null

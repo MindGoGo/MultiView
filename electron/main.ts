@@ -4,7 +4,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, screen, sess
 import { createSaver, loadSettings } from './store'
 import { MIN_HEIGHT, MIN_WIDTH, resolveBounds } from './windowState'
 import { startStaticServer } from './staticServer'
-import { normalizeView, type Settings } from '../src/lib/settings'
+import { normalizeView, viewSettingsOf, type Settings } from '../src/lib/settings'
 import { guestKeyAction, isRepeatableKey, shortcutFor } from '../src/lib/shortcuts'
 import { WEB_PARTITION, type WebMode } from '../src/players/webTypes'
 import { forgetWebContents, installAdblock, loadAdblockList, setAdblockEnabled } from './adblock'
@@ -471,19 +471,7 @@ ipcMain.on('win:focus', () => {
 })
 
 // 畫面這一側的設定（版型、比例、來源）（R10）
-ipcMain.handle('settings:getView', () => ({
-  layout: settings.layout,
-  customLayouts: settings.customLayouts,
-  ratios: settings.ratios,
-  slots: settings.slots,
-  brightness: settings.brightness,
-  autoYoutubeWeb: settings.autoYoutubeWeb,
-  youtubeMethods: settings.youtubeMethods,
-  webMethod: settings.webMethod,
-  listTab: settings.listTab,
-  sponsorBlock: settings.sponsorBlock,
-  loginBrowser: settings.loginBrowser
-}))
+ipcMain.handle('settings:getView', () => viewSettingsOf(settings))
 ipcMain.on('settings:saveView', (_, view: unknown) => {
   settings = { ...settings, ...normalizeView(view) }
   saveSoon()

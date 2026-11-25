@@ -1,7 +1,7 @@
 # 浮動按鈕的調整（桌面版）規格
 
 - 功能代號：`floating-controls-tweaks`
-- 狀態：已確認、已實作（桌面版 0.9.2，2026-11-25），待使用者實測
+- 狀態：已確認、已實作（桌面版 0.9.2；0.9.3 修正，2026-11-25），待使用者實測左右鍵
 - 前置規格：[floating-controls](floating-controls.md)（R165、R166）
 - 需求編號：R171（只有桌面版）。R165–R167 和手機共用，R168–R170 是桌面版原本的登入、貼上網址、自訂版型。
 
@@ -43,6 +43,14 @@
   - AC5：設定 → yt-dlp 的「已是最新版」標籤正常。
   - AC6：預設設定：在影片上按右鍵 → 游標位置出現齒輪選單；左鍵 → 只聽這一格。設定改成左鍵「播放／暫停」→ 左鍵暫停、播放；重新開啟程式後設定還在。
 
+### 0.9.3 修正（使用者實測 0.9.2）
+- **「滑鼠操作」設定頁整個畫面變黑**：主程序交給畫面的設定（`settings:getView`）是逐一列出欄位，漏了 `cellClick`，畫面讀到 `undefined` 就當掉。同一個原因也讓 R165 的 `companionOnLaunch` 每次開啟都是關閉（之後又被存成關閉），「開啟 App 時打開小視窗」實際上沒有作用。改成 `viewSettingsOf`：交給畫面除了 `version`、`window`、`companion` 以外的全部欄位，不再逐一列出（單元測試檢查欄位和 `normalizeView` 相同）。
+- **齒輪再按一下關不掉**：選單、滑桿在 `pointerdown`（捕捉階段）判斷點在外面就關閉，畫面在按鈕的事件之前就更新，按鈕以為選單是關的又把它打開。改成：選單、滑桿有 `toggleKey`，按這一格的齒輪或 YouTube ▾（`data-popup-toggle` 相同）時不當作點在外面，交給按鈕自己開關。
+- 驗收條件：
+  - AC7：設定 → 滑鼠操作 → 正常顯示，可以切換；重新開啟程式後設定還在。
+  - AC8：「開啟 App 時打開小視窗」打開後重新開啟程式（版型 1）→ 小視窗打開，設定仍是打開。
+  - AC9：按齒輪打開選單，再按一次齒輪 → 關閉；從齒輪打開亮度滑桿後按齒輪 → 關閉。YouTube ▾ 相同。
+
 ## 3. 對前置規格的影響
 
 | 前置需求 | 變更 |
@@ -60,10 +68,12 @@
 - `src/components/SettingsDialog.tsx`、`src/components/icons.tsx`（`MouseIcon`）、`src/App.tsx`、`src/components/Grid.tsx`
 - `src/styles.css`：`.fab`、`.vol-group`、`.audio-indicator` 的音波
 - 手動驗收：`tests/manual/floating-controls-tweaks.md`
-- 版本：`package.json` 0.9.2；`release-notes-desktop.txt`
+- `src/lib/settings.ts` 的 `viewSettingsOf`、`electron/main.ts` 的 `settings:getView`（0.9.3）；`PopupMenu`、`SliderPopup` 的 `toggleKey`（0.9.3）
+- 版本：`package.json` 0.9.3；`release-notes-desktop.txt`
 
 ## 變更紀錄
 
 | 日期 | 變更 | 原因 |
 |---|---|---|
+| 2026-11-25 | 0.9.3：修正滑鼠操作設定頁變黑（連帶修正 R165 的開啟 App 時打開小視窗不會保存）、齒輪再按一下關不掉 | 使用者實測 0.9.2 |
 | 2026-11-25 | 初版：R171、版本 0.9.2 | 使用者實測 0.9.1 後提出六項；有聲音的圖示由使用者從三個候選選定，左右鍵做成設定 |

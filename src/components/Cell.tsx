@@ -211,14 +211,10 @@ export function Cell(props: Props) {
   const [hasProgress, setHasProgress] = useState(false)
   /** 開著的格子選單與它的按鈕位置（R31、R32）；選單開著時操作區不隱藏 */
   const [menu, setMenu] = useState<{ kind: MenuKind; anchor: DOMRect; atCursor?: boolean } | null>(null)
-  /** 按下按鈕時開著的選單：選單在按下時就因為點在外面而關閉，按一下同一個按鈕要能關閉它 */
-  const menuAtDown = useRef<MenuKind | null>(null)
-  const toggleMenu = (kind: MenuKind, e: React.MouseEvent<HTMLButtonElement>) => {
-    const wasOpen = menuAtDown.current === kind || menu?.kind === kind
-    menuAtDown.current = null
-    setMenu(wasOpen ? null : { kind, anchor: e.currentTarget.getBoundingClientRect() })
-  }
-  const gearWasOpen = useRef(false)
+  const toggleMenu = (kind: MenuKind, e: React.MouseEvent<HTMLButtonElement>) =>
+    setMenu(menu?.kind === kind ? null : { kind, anchor: e.currentTarget.getBoundingClientRect() })
+  /** 這一格的選單按鈕（齒輪、YouTube ▾）的 data-popup-toggle：按它們時選單不當作點在外面（R171 修正） */
+  const toggleKey = `cell-${props.index}`
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cellRef = useRef<HTMLDivElement>(null)
   useEffect(() => () => clearTimeout(idleTimer.current), [])
@@ -633,7 +629,7 @@ export function Cell(props: Props) {
                 className={`fab ${source.youtubePage ? 'active' : ''}`}
                 title="YouTube：回到網頁、回到播放器、回到剛才的 YouTube 頁面、推薦影片、留言、聊天室"
                 aria-label="YouTube"
-                onPointerDown={() => (menuAtDown.current = menu?.kind ?? null)}
+                data-popup-toggle={toggleKey}
                 onClick={(e) => toggleMenu('youtube', e)}
               >
                 <YouTubeLogo size={16} />
@@ -643,14 +639,11 @@ export function Cell(props: Props) {
               className={`fab ${menu && menu.kind !== 'youtube' ? 'active' : ''}`}
               title="設定：音量、亮度、畫質、字幕、更換網址、移除…"
               aria-label="設定"
-              // 齒輪選單或從它打開的選單、滑桿開著時，再按一下就關閉。選單在按下時就因為點在外面而關閉，
-              // 所以按下時先記住原本是不是開著
-              onPointerDown={() => (gearWasOpen.current = !!menu && menu.kind !== 'youtube')}
-              onClick={(e) => {
-                const wasOpen = gearWasOpen.current
-                gearWasOpen.current = false
-                setMenu(wasOpen ? null : { kind: 'gear', anchor: e.currentTarget.getBoundingClientRect() })
-              }}
+              data-popup-toggle={toggleKey}
+              // 齒輪選單或從它打開的選單、滑桿開著時，再按一下就關閉；YouTube ▾ 開著時換成齒輪選單
+              onClick={(e) =>
+                setMenu(menu && menu.kind !== 'youtube' ? null : { kind: 'gear', anchor: e.currentTarget.getBoundingClientRect() })
+              }
             >
               <GearIcon />
             </button>
@@ -712,6 +705,7 @@ export function Cell(props: Props) {
             <PopupMenu
               anchor={menu.anchor}
               placement={popupPlacement}
+              toggleKey={toggleKey}
               align={menu.atCursor ? 'start' : 'end'}
               items={gearItems()}
               onSelect={(key) => onGear(key, menu.anchor)}
@@ -722,6 +716,7 @@ export function Cell(props: Props) {
             <SliderPopup
               anchor={menu.anchor}
               placement={popupPlacement}
+              toggleKey={toggleKey}
               title="亮度"
               min={BRIGHTNESS_MIN}
               max={BRIGHTNESS_MAX}
@@ -737,6 +732,7 @@ export function Cell(props: Props) {
             <PopupMenu
               anchor={menu.anchor}
               placement={popupPlacement}
+              toggleKey={toggleKey}
               items={[
                 source.youtubePage
                   ? { key: 'player', label: '回到播放器' }
@@ -755,6 +751,7 @@ export function Cell(props: Props) {
             <PopupMenu
               anchor={menu.anchor}
               placement={popupPlacement}
+              toggleKey={toggleKey}
               items={qualityItems(props.getQualityOptions(index), source.quality)}
               onSelect={(key) => props.onQuality(index, key === 'auto' ? 'auto' : Number(key))}
               onClose={() => setMenu(null)}
@@ -764,6 +761,7 @@ export function Cell(props: Props) {
             <PopupMenu
               anchor={menu.anchor}
               placement={popupPlacement}
+              toggleKey={toggleKey}
               items={audioItems(audio, source.audioLang ?? null)}
               onSelect={(key) => {
                 const o = audio.options.find((x) => String(x.index) === key)
@@ -776,6 +774,7 @@ export function Cell(props: Props) {
             <PopupMenu
               anchor={menu.anchor}
               placement={popupPlacement}
+              toggleKey={toggleKey}
               items={captionItems(props.getCaptionTracks(index), source.captions)}
               onSelect={(key) => props.onCaptions(index, key === 'off' ? null : key)}
               onClose={() => setMenu(null)}

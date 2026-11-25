@@ -16,12 +16,14 @@ interface Props {
   onChange(value: number): void
   onReset(): void
   onClose(): void
+  /** 開關這個滑桿的按鈕的 data-popup-toggle；按這些按鈕時不當作點在滑桿外面 */
+  toggleKey?: string
 }
 
 const MARGIN = 4
 
 export function SliderPopup(props: Props) {
-  const { anchor, placement, onClose } = props
+  const { anchor, placement, onClose, toggleKey } = props
   const ref = useRef<HTMLDivElement>(null)
   const [left, setLeft] = useState(anchor.left)
 
@@ -33,6 +35,9 @@ export function SliderPopup(props: Props) {
 
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
+      // 按的是打開這個選單的按鈕：交給按鈕自己開關，否則這裡先關閉、按鈕又把它打開（R171 修正）
+      const toggle = (e.target as Element | null)?.closest?.('[data-popup-toggle]')
+      if (toggleKey && toggle?.getAttribute('data-popup-toggle') === toggleKey) return
       if (!ref.current?.contains(e.target as Node)) onClose()
     }
     // 先於全域快捷鍵處理 Esc，避免同時離開全螢幕
@@ -47,7 +52,7 @@ export function SliderPopup(props: Props) {
       window.removeEventListener('pointerdown', onDown, true)
       window.removeEventListener('keydown', onKey, true)
     }
-  }, [onClose])
+  }, [onClose, toggleKey])
 
   const style =
     placement === 'above'
