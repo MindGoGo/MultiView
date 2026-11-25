@@ -78,6 +78,8 @@ interface Props {
   onMoveOver(index: number | null): void
   onMoveEnd(target: number | null): void
   onFocusAudio(index: number): void
+  /** 循環播放的開關（R174） */
+  onToggleLoop(index: number): void
   /** 在影片格子上按左鍵、右鍵的效果（R171） */
   cellClick: CellClick
   /** 左上角「這一格有聲音」的標示（R173） */
@@ -302,6 +304,7 @@ export function Grid(props: Props) {
             onMoveOver={props.onMoveOver}
             onMoveEnd={props.onMoveEnd}
             onFocusAudio={props.onFocusAudio}
+            onToggleLoop={props.onToggleLoop}
             cellClick={props.cellClick}
             audioIndicator={props.audioIndicator}
             onToggleMute={props.onToggleMute}

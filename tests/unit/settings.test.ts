@@ -15,7 +15,7 @@ describe('parseSettings（R10）', () => {
       ...defaultSettings(),
       layout: '3x3',
       ratios: { '2': { cols: [0.7, 0.3], rows: [1] } },
-      slots: [{ url: YT, muted: false, volume: 40, adblock: true, quality: 'auto', captions: null, audioLang: null, brightness: 100, youtubeWeb: false, position: null, backUrl: null, pageAdblock: true }, null, null, null, null, null, null, null, null]
+      slots: [{ url: YT, muted: false, volume: 40, adblock: true, quality: 'auto', captions: null, audioLang: null, brightness: 100, youtubeWeb: false, position: null, backUrl: null, pageAdblock: true, loop: false }, null, null, null, null, null, null, null, null]
     }
     const { settings, corrupt } = parseSettings(JSON.stringify(s))
     expect(corrupt).toBe(false)
@@ -55,7 +55,7 @@ describe('parseSettings（R10）', () => {
     expect(settings.ratios).toEqual({ '2x2': { cols: [0.6, 0.4], rows: [0.5, 0.5] } })
     expect(settings.slots[0]).toBeNull() // 不支援的網址
     // 音量上限 200（R98）
-    expect(settings.slots[1]).toEqual({ url: YT, muted: false, volume: 200, adblock: true, quality: 'auto', captions: null, audioLang: null, brightness: 100, youtubeWeb: false, position: null, backUrl: null, pageAdblock: true })
+    expect(settings.slots[1]).toEqual({ url: YT, muted: false, volume: 200, adblock: true, quality: 'auto', captions: null, audioLang: null, brightness: 100, youtubeWeb: false, position: null, backUrl: null, pageAdblock: true, loop: false })
     expect(settings.slots[2]).toBeNull()
     expect(settings.slots).toHaveLength(9)
   })
@@ -147,5 +147,13 @@ describe('視窗位置還原（R1 AC4）', () => {
   it('只露出一小角（不到 100px）不算在螢幕內', () => {
     expect(isOnSomeDisplay({ x: 1880, y: 0, width: 800, height: 600 }, [primary])).toBe(false)
     expect(isOnSomeDisplay({ x: 1800, y: 0, width: 800, height: 600 }, [primary])).toBe(true)
+  })
+})
+
+describe('循環播放（R174）', () => {
+  it('跟著來源保存；舊的設定檔沒有時視為關閉', () => {
+    const view = normalizeView({ slots: [{ url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', loop: true }, { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' }] })
+    expect(view.slots[0]?.loop).toBe(true)
+    expect(view.slots[1]?.loop).toBe(false)
   })
 })

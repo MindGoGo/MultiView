@@ -118,7 +118,8 @@ function restoreSlots(saved: ViewSettings['slots']): Slots {
         youtubeWeb: s.youtubeWeb,
         resume: s.position,
         backUrl: s.backUrl,
-        pageAdblock: s.pageAdblock
+        pageAdblock: s.pageAdblock,
+        loop: s.loop
       }
   })
   return slots
@@ -298,7 +299,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
             youtubeWeb: s.youtubeWeb,
             position: s.id in pos ? pos[s.id] : s.resume,
             backUrl: s.backUrl ?? null,
-            pageAdblock: s.pageAdblock ?? true
+            pageAdblock: s.pageAdblock ?? true,
+            loop: s.loop ?? false
           }
         : null
     )
@@ -356,6 +358,12 @@ export default function App({ initial }: { initial: ViewSettings }) {
     const native = s && (s.parsed.kind !== 'web' || ytModesRef.current[id]?.startsWith('ytdlp'))
     if (native && (status === 'playing' || status === 'paused' || status === 'ended')) onLoaded(id)
     setStatuses((prev) => (prev[id] === status ? prev : { ...prev, [id]: status }))
+    // 循環播放（R174）：播完就從頭再播
+    if (status === 'ended' && s?.loop) {
+      const p = players.current.get(id)
+      p?.seek(0)
+      p?.play()
+    }
     if (failure) setFailures((prev) => (prev[id] === failure ? prev : { ...prev, [id]: failure }))
   }, [])
 
@@ -773,6 +781,19 @@ export default function App({ initial }: { initial: ViewSettings }) {
     else onWebMode(s.id, 'page')
   }
 
+  /** 循環播放的開關（R174） */
+  const onToggleLoop = (index: number) => {
+    const s = slots[index]
+    if (!s) return
+    setSlots(setSlot(slots, index, { ...s, loop: !s.loop }))
+    // 已經播完時打開循環：馬上從頭再播
+    if (!s.loop && statuses[s.id] === 'ended') {
+      const p = players.current.get(s.id)
+      p?.seek(0)
+      p?.play()
+    }
+  }
+
   const onFocusAudio = (index: number) => {
     const s = slots[index]
     // 空白格或錯誤狀態的格子不影響聲音（R7）
@@ -1046,6 +1067,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onMoveOver={(over) => setMove((m) => (m ? { ...m, over } : m))}
         onMoveEnd={onMoveEnd}
         onFocusAudio={onFocusAudio}
+        onToggleLoop={onToggleLoop}
         cellClick={cellClick}
         audioIndicator={audioIndicator}
         onToggleMute={(i) => setSlots(toggleMute(slots, i))}

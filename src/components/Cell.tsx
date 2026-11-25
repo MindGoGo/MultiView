@@ -22,7 +22,7 @@ import { controlsView } from '../lib/pointerZones'
 import { categoryInfo, skippedLabel, type SkipAction, type SponsorSegment } from '../lib/sponsorBlock'
 import type { SplitBlock, SplitDir } from '../lib/layoutTree'
 import { ExitFullscreenIcon, FullscreenIcon, GearIcon, MuteIcon, SpeakerIcon, YouTubeLogo } from './icons'
-import type { CellClick, CellClickAction } from '../lib/cellClick'
+import { clickWaitsForDouble, DOUBLE_CLICK_MS, type CellClick, type CellClickAction, type DoubleClickAction } from '../lib/cellClick'
 import { GRADIENT_STOPS, indicatorFill, type AudioIndicator } from '../lib/audioIndicator'
 import { createWheelStepper, sliderKeyValue, sliderWheelValue } from '../lib/sliderInput'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
@@ -62,6 +62,8 @@ interface Props {
   /** target：放開時游標下的格子，不在任何格子上時為 null */
   onMoveEnd(target: number | null): void
   onFocusAudio(index: number): void
+  /** 循環播放的開關（R174） */
+  onToggleLoop(index: number): void
   /** 在影片上按左鍵、右鍵的效果（R171） */
   cellClick: CellClick
   /** 左上角「這一格有聲音」的標示（R173） */
@@ -182,7 +184,7 @@ function cellIndexAt(x: number, y: number): number | null {
  */
 function SoundIndicator({ setting, playing, gradientId }: { setting: AudioIndicator; playing: boolean; gradientId: string }) {
   if (setting.style === 'speaker') return <div className="audio-indicator speaker">🔊</div>
-  const fill = indicatorFill(setting.color)
+  const fill = indicatorFill(setting)
   const animate = setting.style === 'wave-animated' && playing
   return (
     <div className="audio-indicator" aria-label="有聲音">
@@ -375,6 +377,8 @@ export function Cell(props: Props) {
           : { key: 'captions', label: '字幕', checked: !!source.captions, keepOpen: true }
       )
     }
+    // 循環播放（R174）：直播沒有「播完」，不顯示
+    if (!props.getProgress(index)?.live) items.push({ key: 'loop', label: '循環播放', checked: !!source.loop })
     if (hasDirect) items.push({ key: 'direct', label: '直接操作', checked: props.direct })
     // YouTube 網站頁面固定是整頁模式（R57）
     if (isWeb && !isYouTubeSite(source.url) && !source.youtubePage)
@@ -394,7 +398,8 @@ export function Cell(props: Props) {
       setMenu({ kind: key, anchor, atCursor: menu?.atCursor })
       return
     }
-    if (key === 'direct') props.onDirect(index)
+    if (key === 'loop') props.onToggleLoop(index)
+    else if (key === 'direct') props.onDirect(index)
     else if (key === 'webmode') props.onToggleWebMode(index)
     else if (key === 'adblock') props.onToggleAdblock(index)
     else if (key === 'useweb') props.onUseWebPage(index)
@@ -414,8 +419,34 @@ export function Cell(props: Props) {
   const popupPlacement: 'above' | 'below' =
     menu?.atCursor && menu.anchor.top > window.innerHeight / 2 ? 'above' : 'below'
 
+  /** 等著確定不是雙擊的單擊（R174） */
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(clickTimer.current), [])
+  /** 在影片上單擊（R171、R174）：需要時等一下，確定不是雙擊才作用 */
+  const onCellClick = (e: React.MouseEvent) => {
+    const c = props.cellClick
+    // 雙擊的第二下：交給 onDoubleClick
+    if (e.detail >= 2 && c.double !== 'none') return
+    if (!clickWaitsForDouble(c)) {
+      runClick(c.left, e)
+      return
+    }
+    const at = { clientX: e.clientX, clientY: e.clientY }
+    clearTimeout(clickTimer.current)
+    clickTimer.current = setTimeout(() => runClick(c.left, at), DOUBLE_CLICK_MS)
+  }
+  /** 在影片上雙擊（R174）：全螢幕或其他效果 */
+  const onCellDoubleClick = (e: React.MouseEvent) => {
+    const action: DoubleClickAction = props.cellClick.double
+    if (action === 'none') return
+    clearTimeout(clickTimer.current)
+    if (action === 'fullscreen') {
+      if (source) props.onToggleSolo(index)
+    } else runClick(action, e)
+  }
+
   /** 在影片上按左鍵、右鍵（R171）：只聽這一格（R7）、播放／暫停、在游標位置打開齒輪選單 */
-  const runClick = (action: CellClickAction, e: React.MouseEvent) => {
+  const runClick = (action: CellClickAction, e: { clientX: number; clientY: number }) => {
     if (action === 'solo') props.onFocusAudio(index)
     else if (action === 'play') {
       if (source && !failed && (hasProgress || videoFound)) togglePlay()
@@ -499,7 +530,11 @@ export function Cell(props: Props) {
       onClick={(e) => {
         // 只有點在格子本身（影片區域）才算，按鈕和輸入框不算（R7 獨占聲音）
         if (suppressClick.current) return
-        if (e.target === e.currentTarget) runClick(props.cellClick.left, e)
+        if (e.target === e.currentTarget) onCellClick(e)
+      }}
+      onDoubleClick={(e) => {
+        if (suppressClick.current) return
+        if (e.target === e.currentTarget) onCellDoubleClick(e)
       }}
     >
       {/* 編輯版型（R170）：格子編號與切開、刪除的按鈕，蓋住格子的其他操作 */}

@@ -37,6 +37,8 @@ export interface Source {
   youtubePage?: boolean
   /** YouTube 網頁模式的廣告阻擋（R70）；沒有設定時為開啟。跟著來源移動和保存 */
   pageAdblock?: boolean
+  /** 循環播放：播完後從頭再播（R174）。跟著來源移動和保存；放入新的網址時關閉 */
+  loop?: boolean
 }
 
 export type { Quality } from './quality'

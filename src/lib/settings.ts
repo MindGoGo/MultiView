@@ -43,6 +43,8 @@ export interface SavedSource {
   backUrl: string | null
   /** YouTube 網頁模式的廣告阻擋（R70）；舊的設定檔沒有時視為開啟 */
   pageAdblock: boolean
+  /** 循環播放（R174）；舊的設定檔沒有時視為關閉 */
+  loop: boolean
 }
 
 /** 畫面這一側的設定，由畫面送給主程序保存 */
@@ -162,7 +164,8 @@ function normalizeSource(raw: unknown): SavedSource | null {
     youtubeWeb: raw.youtubeWeb === true,
     position: isFiniteNumber(raw.position) && raw.position > 0 ? raw.position : null,
     backUrl: typeof raw.backUrl === 'string' && isYouTubeSite(raw.backUrl) ? raw.backUrl : null,
-    pageAdblock: raw.pageAdblock !== false
+    pageAdblock: raw.pageAdblock !== false,
+    loop: raw.loop === true
   }
 }
 

@@ -10,7 +10,7 @@ import {
   type YtDlpChannel,
   type YtDlpStatus
 } from '../lib/ytdlp'
-import { CELL_CLICK_ACTIONS, type CellClick } from '../lib/cellClick'
+import { CELL_CLICK_ACTIONS, DOUBLE_CLICK_ACTIONS, type CellClick } from '../lib/cellClick'
 import { INDICATOR_COLORS, INDICATOR_STYLES, type AudioIndicator } from '../lib/audioIndicator'
 import { LOGIN_BROWSERS, type LoginBrowser } from '../lib/googleLogin'
 import { SPONSOR_CATEGORIES, type SponsorBlockSettings } from '../lib/sponsorBlock'
@@ -212,6 +212,22 @@ function DisplaySection(props: Props) {
               onClick={() => props.onAudioIndicator({ ...a, color: c.value })}
             />
           ))}
+          {/* 自訂（R174）：Windows 的選色器；選好的顏色會記住 */}
+          <label
+            className={`swatch swatch-custom ${a.color === 'custom' ? 'active' : ''} ${wave ? '' : 'disabled'}`}
+            title="自訂顏色"
+            style={{ background: a.color === 'custom' ? a.custom : undefined }}
+          >
+            {a.color !== 'custom' && <span aria-hidden="true">＋</span>}
+            <input
+              type="color"
+              aria-label="自訂顏色"
+              disabled={!wave}
+              value={a.custom}
+              onClick={() => a.color !== 'custom' && props.onAudioIndicator({ ...a, color: 'custom' })}
+              onChange={(e) => props.onAudioIndicator({ ...a, color: 'custom', custom: e.target.value })}
+            />
+          </label>
         </div>
       </Row>
     </section>
@@ -228,6 +244,12 @@ function MouseSection(props: Props) {
       </Row>
       <Row title="在影片上按右鍵" desc="「開啟選單」會在游標的位置打開齒輪選單。顯示整個網頁時，右鍵仍是網頁的選單。">
         <Choice label="在影片上按右鍵" value={c.right} options={CELL_CLICK_ACTIONS} onChange={(right) => props.onCellClick({ ...c, right })} />
+      </Row>
+      <Row
+        title="在影片上雙擊"
+        desc="「全螢幕」和右下的全螢幕按鈕相同，再雙擊一次回到分割畫面。左鍵是「播放／暫停」或「開啟選單」時，單擊會等一下確定不是雙擊才作用。"
+      >
+        <Choice label="在影片上雙擊" value={c.double} options={DOUBLE_CLICK_ACTIONS} onChange={(double) => props.onCellClick({ ...c, double })} />
       </Row>
     </section>
   )

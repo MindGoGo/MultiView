@@ -1879,7 +1879,43 @@ button.danger {
     0 0 0 4px var(--accent);
 }
 
-.swatch:disabled {
+.swatch:disabled,
+.swatch.disabled {
   opacity: 0.35;
+  cursor: default;
+}
+
+/* 自訂顏色（R174）：色塊裡藏著 Windows 選色器；還沒選自訂時顯示「＋」 */
+.swatch-custom {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-size: 14px;
+  color: var(--muted-text);
+  background: conic-gradient(#ff3b30, #ffcc00, #34c759, #4da3ff, #af52de, #ff3b30);
+  cursor: pointer;
+}
+
+.swatch-custom span {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(20, 20, 22, 0.85);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.swatch-custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.swatch-custom.disabled input {
   cursor: default;
 }

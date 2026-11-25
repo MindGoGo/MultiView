@@ -1,6 +1,6 @@
 # 浮動按鈕的調整（桌面版）：手動驗收步驟
 
-對應規格：`doc/specs/floating-controls-tweaks.md`（R171–R173）。單元測試見 `tests/unit/cell-click.test.ts`、`tests/unit/slider-input.test.ts`、`tests/unit/audio-indicator.test.ts`。
+對應規格：`doc/specs/floating-controls-tweaks.md`（R171–R174）。單元測試見 `tests/unit/cell-click.test.ts`、`tests/unit/slider-input.test.ts`、`tests/unit/audio-indicator.test.ts`、`tests/unit/settings.test.ts`。
 
 | 需求 | 步驟 | 預期結果 |
 |---|---|---|
@@ -23,4 +23,9 @@
 | R173 AC1 | 滑鼠移到影片格子、顯示整個網頁的格子 | 影片格子右下只有全螢幕；網頁格子有「移動」和全螢幕 |
 | R173 AC2 | 2×2，開兩格的聲音，滑鼠移開 | 左上角是跳動的白色音波（Windows 關閉動畫效果也會跳） |
 | R173 AC3 | 設定 → 格子顯示：音波（不動）＋粉紫漸層；喇叭；不顯示；重新開啟程式 | 左上角跟著改；設定還在 |
-| 版本 | 設定 → 關於；GitHub Releases | 0.9.5；Actions 自動發佈 `desktop-v0.9.5` |
+| R174 AC1 | 短影片：齒輪 →「循環播放」，等它播完；重開程式；更換網址 | 自動從頭再播；重開後仍打勾；換網址後沒有打勾 |
+| R174 AC1 | 直播的格子打開齒輪 | 沒有「循環播放」 |
+| R174 AC2 | 設定 → 格子顯示 → 按「自訂」選一個顏色；換白色再按回「自訂」 | 音波變成那個顏色；換回時顏色還在 |
+| R174 AC3 | 預設設定：雙擊影片兩次；單擊 | 全螢幕、回到分割畫面；單擊立刻只聽這一格 |
+| R174 AC4 | 左鍵改「播放／暫停」：單擊、雙擊；雙擊改「不作用」後單擊 | 單擊約 0.25 秒後暫停；雙擊只切換全螢幕；不作用時單擊立刻作用 |
+| 版本 | 設定 → 關於；GitHub Releases | 0.9.6；Actions 自動發佈 `desktop-v0.9.6` |
