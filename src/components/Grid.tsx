@@ -18,6 +18,7 @@ import { VideoPlayer } from '../players/VideoPlayer'
 import { WebPlayer } from '../players/WebPlayer'
 import type { WebMode } from '../players/webTypes'
 import { Cell } from './Cell'
+import type { CellClick } from '../lib/cellClick'
 import { Divider } from './Divider'
 
 const EPS = 1e-6
@@ -76,6 +77,8 @@ interface Props {
   onMoveOver(index: number | null): void
   onMoveEnd(target: number | null): void
   onFocusAudio(index: number): void
+  /** 在影片格子上按左鍵、右鍵的效果（R171） */
+  cellClick: CellClick
   onToggleMute(index: number): void
   onVolume(index: number, volume: number): void
   /** 處於「直接操作播放器」的格子（R3） */
@@ -296,6 +299,7 @@ export function Grid(props: Props) {
             onMoveOver={props.onMoveOver}
             onMoveEnd={props.onMoveEnd}
             onFocusAudio={props.onFocusAudio}
+            cellClick={props.cellClick}
             onToggleMute={props.onToggleMute}
             onVolume={props.onVolume}
             direct={props.direct === index}

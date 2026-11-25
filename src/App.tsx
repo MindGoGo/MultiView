@@ -147,6 +147,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   autoYoutubeWebRef.current = autoYoutubeWeb
   /** 開啟程式時打開 YouTube 小視窗（R165） */
   const [companionOnLaunch, setCompanionOnLaunch] = useState(initial.companionOnLaunch)
+  /** 在影片格子上按左鍵、右鍵的效果（R171） */
+  const [cellClick, setCellClick] = useState(initial.cellClick)
   /** YouTube 直播、一般影片的播放方式（R88） */
   const [youtubeMethods, setYoutubeMethods] = useState(initial.youtubeMethods)
   /** YouTube 格子目前的播放方式，依來源 id（R89） */
@@ -276,6 +278,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     webMethod,
     listTab,
     companionOnLaunch,
+    cellClick,
     sponsorBlock,
     loginBrowser,
     slots: slots.map((s) =>
@@ -312,7 +315,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
     window.multiview.saveView(viewOf(positions))
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, sponsorBlock, loginBrowser, customLayouts, companionOnLaunch])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, sponsorBlock, loginBrowser, customLayouts, companionOnLaunch, cellClick])
 
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
@@ -1040,6 +1043,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onMoveOver={(over) => setMove((m) => (m ? { ...m, over } : m))}
         onMoveEnd={onMoveEnd}
         onFocusAudio={onFocusAudio}
+        cellClick={cellClick}
         onToggleMute={(i) => setSlots(toggleMute(slots, i))}
         onVolume={(i, v) => setSlots(setVolume(slots, i, v))}
         direct={direct}
@@ -1113,6 +1117,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
           onWebMethod={setWebMethod}
           companionOnLaunch={companionOnLaunch}
           onCompanionOnLaunch={setCompanionOnLaunch}
+          cellClick={cellClick}
+          onCellClick={setCellClick}
           sponsorBlock={sponsorBlock}
           onSponsorBlock={setSponsorBlock}
           loginBrowser={loginBrowser}

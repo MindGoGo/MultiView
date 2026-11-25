@@ -150,6 +150,14 @@ export const YouTubeIcon = () => (
   </Icon>
 )
 
+/** 滑鼠（R171 的設定分類） */
+export const MouseIcon = () => (
+  <Icon>
+    <rect x="4" y="1.8" width="8" height="12.4" rx="4" />
+    <path d="M8 1.8v4.4M4 6.2h8" />
+  </Icon>
+)
+
 /** 主視窗旁邊的小視窗（R165 的設定分類） */
 export const CompanionIcon = () => (
   <Icon>

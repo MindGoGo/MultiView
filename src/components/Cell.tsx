@@ -22,6 +22,7 @@ import { controlsView } from '../lib/pointerZones'
 import { categoryInfo, skippedLabel, type SkipAction, type SponsorSegment } from '../lib/sponsorBlock'
 import type { SplitBlock, SplitDir } from '../lib/layoutTree'
 import { ExitFullscreenIcon, FullscreenIcon, GearIcon, MuteIcon, SpeakerIcon, YouTubeLogo } from './icons'
+import type { CellClick, CellClickAction } from '../lib/cellClick'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
 interface Props {
@@ -59,6 +60,8 @@ interface Props {
   /** target：放開時游標下的格子，不在任何格子上時為 null */
   onMoveEnd(target: number | null): void
   onFocusAudio(index: number): void
+  /** 在影片上按左鍵、右鍵的效果（R171） */
+  cellClick: CellClick
   onToggleMute(index: number): void
   onVolume(index: number, volume: number): void
   direct: boolean
@@ -109,7 +112,7 @@ const SPLIT_BLOCK_TEXT: Record<Exclude<SplitBlock, null>, string> = {
 }
 
 /** 格子裡的選單：字幕、畫質（R31、R32）；亮度、音量的滑桿選單（R40、R42） */
-type MenuKind = 'gear' | 'captions' | 'audio' | 'quality' | 'brightness' | 'volume' | 'youtube'
+type MenuKind = 'gear' | 'captions' | 'audio' | 'quality' | 'brightness' | 'youtube'
 
 /** 畫質選單：自動＋可用畫質（由高到低）；還不知道可用畫質時列出目前的選擇（R32） */
 function qualityItems(options: number[], selected: Quality): PopupItem[] {
@@ -141,9 +144,12 @@ function audioItems(menu: AudioMenu, selected: string | null): PopupItem[] {
 
 /** 工具列的高度（styles.css 的 .toolbar） */
 const TOOLBAR_HEIGHT = 40
-/** 浮動按鈕的大小與上緣（R166，styles.css 的 .chip、.chip-row.top-right） */
+/** 浮動按鈕的大小與上緣（R166，styles.css 的 .fab、.fab-row.top-right） */
 const CHIP_SIZE = 40
 const CHIP_TOP = 8
+
+/** 滑鼠離開聲音按鈕與音量滑桿多久後收起滑桿（R171） */
+const VOLUME_CLOSE_MS = 300
 
 /** 滑鼠靜止多久後隱藏操作按鈕（R3 AC2） */
 const CONTROLS_IDLE_MS = 2000
@@ -151,13 +157,31 @@ const CONTROLS_IDLE_MS = 2000
 const PLAY_HINT_MS = 5000
 export const PLAY_HINT = '無法直接播放，請按「直接操作」後按網站的播放鈕'
 
-/** 游標下的格子編號；不在任何格子上時回傳 null */
+/**
+ * 游標下的格子編號；不在任何格子上時回傳 null。
+ * 用格子的位置判斷：整頁模式的格子不接收滑鼠（pointer-events: none），用 elementsFromPoint 找不到（R171 修正換位）
+ */
 function cellIndexAt(x: number, y: number): number | null {
-  for (const el of document.elementsFromPoint(x, y)) {
-    const cell = (el as HTMLElement).closest?.('.cell') as HTMLElement | null
-    if (cell?.dataset.index) return Number(cell.dataset.index)
+  for (const el of document.querySelectorAll<HTMLElement>('.cell[data-index]')) {
+    const r = el.getBoundingClientRect()
+    if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) return Number(el.dataset.index)
   }
   return null
+}
+
+/** 這一格有聲音（R7）：五條白色音波，播放時上下跳動（R171） */
+function SoundBars({ playing }: { playing: boolean }) {
+  return (
+    <div className="audio-indicator" aria-label="有聲音">
+      <svg className={playing ? 'playing' : ''} width="15" height="12" viewBox="0 0 20 16" aria-hidden="true">
+        <rect x="1" y="5.5" width="2.4" height="5" rx="1.2" />
+        <rect x="5" y="3" width="2.4" height="10" rx="1.2" />
+        <rect x="9" y="0.5" width="2.4" height="15" rx="1.2" />
+        <rect x="13" y="3" width="2.4" height="10" rx="1.2" />
+        <rect x="17" y="5.5" width="2.4" height="5" rx="1.2" />
+      </svg>
+    </div>
+  )
 }
 
 export function Cell(props: Props) {
@@ -166,6 +190,19 @@ export function Cell(props: Props) {
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [hover, setHover] = useState(false)
+  /** 滑鼠在左上的聲音按鈕上：旁邊展開音量滑桿（R171）；拖曳中不收起 */
+  const [volOpen, setVolOpen] = useState(false)
+  const volDrag = useRef(false)
+  const volTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(volTimer.current), [])
+  const openVolume = () => {
+    clearTimeout(volTimer.current)
+    setVolOpen(true)
+  }
+  const closeVolumeSoon = () => {
+    clearTimeout(volTimer.current)
+    volTimer.current = setTimeout(() => !volDrag.current && setVolOpen(false), VOLUME_CLOSE_MS)
+  }
   /** 拖曳進度條中，操作區不隱藏（R19） */
   const [seeking, setSeeking] = useState(false)
   /** 游標在進度條上（顯示時間提示）時，操作區不因滑鼠靜止而隱藏（R50） */
@@ -173,7 +210,7 @@ export function Cell(props: Props) {
   /** 有進度時才顯示播放鈕（R26、R30） */
   const [hasProgress, setHasProgress] = useState(false)
   /** 開著的格子選單與它的按鈕位置（R31、R32）；選單開著時操作區不隱藏 */
-  const [menu, setMenu] = useState<{ kind: MenuKind; anchor: DOMRect } | null>(null)
+  const [menu, setMenu] = useState<{ kind: MenuKind; anchor: DOMRect; atCursor?: boolean } | null>(null)
   /** 按下按鈕時開著的選單：選單在按下時就因為點在外面而關閉，按一下同一個按鈕要能關閉它 */
   const menuAtDown = useRef<MenuKind | null>(null)
   const toggleMenu = (kind: MenuKind, e: React.MouseEvent<HTMLButtonElement>) => {
@@ -232,7 +269,7 @@ export function Cell(props: Props) {
   const showInput = !source || editing
   const failed = source !== null && status === 'error' && !editing
   /** 操作區顯示中；播放方式的小標示也一起顯示（R109） */
-  const busy = props.moving || seeking || previewing || !!menu
+  const busy = props.moving || seeking || previewing || !!menu || volOpen
   const controlsShown = hover || busy
   // 整頁模式平常只有小把手，滑鼠移上去才叫出浮動按鈕（R117）；之後和其他格子一樣，
   // 滑鼠靜止或離開格子才收回（R166：按鈕分散在四個角落，不再是離開操作列 0.3 秒就收回）
@@ -278,7 +315,6 @@ export function Cell(props: Props) {
   const gearItems = (): PopupItem[] => {
     if (!source) return []
     const items: PopupItem[] = [
-      { key: 'volume', label: '音量', detail: String(volume), keepOpen: true },
       { key: 'brightness', label: '亮度', detail: `${source.brightness}%`, checked: source.brightness !== BRIGHTNESS_DEFAULT, keepOpen: true }
     ]
     if (hasQuality) {
@@ -311,8 +347,8 @@ export function Cell(props: Props) {
   }
   /** 選了齒輪選單的項目：選單、滑桿在齒輪旁邊打開，其他直接執行 */
   const onGear = (key: string, anchor: DOMRect) => {
-    if (key === 'volume' || key === 'brightness' || key === 'quality' || key === 'audio' || key === 'captions') {
-      setMenu({ kind: key, anchor })
+    if (key === 'brightness' || key === 'quality' || key === 'audio' || key === 'captions') {
+      setMenu({ kind: key, anchor, atCursor: menu?.atCursor })
       return
     }
     if (key === 'direct') props.onDirect(index)
@@ -329,6 +365,21 @@ export function Cell(props: Props) {
     const atTop = props.topRow || (!!cellRef.current && cellRef.current.getBoundingClientRect().top < TOOLBAR_HEIGHT)
     if (view === 'bar') return { top: (props.topRow ? TOOLBAR_HEIGHT + CHIP_TOP : CHIP_TOP) + CHIP_SIZE + 6 }
     return props.toolbarShown && atTop ? { top: TOOLBAR_HEIGHT + 6 } : undefined
+  }
+
+  /** 選單、滑桿出現在按鈕下方；在游標位置打開而且游標在視窗下半部時出現在上方（R171） */
+  const popupPlacement: 'above' | 'below' =
+    menu?.atCursor && menu.anchor.top > window.innerHeight / 2 ? 'above' : 'below'
+
+  /** 在影片上按左鍵、右鍵（R171）：只聽這一格（R7）、播放／暫停、在游標位置打開齒輪選單 */
+  const runClick = (action: CellClickAction, e: React.MouseEvent) => {
+    if (action === 'solo') props.onFocusAudio(index)
+    else if (action === 'play') {
+      if (source && !failed && (hasProgress || videoFound)) togglePlay()
+    } else if (source && !showInput) {
+      onMouseMove()
+      setMenu({ kind: 'gear', anchor: new DOMRect(e.clientX, e.clientY, 0, 0), atCursor: true })
+    }
   }
 
   const closeInput = () => {
@@ -364,10 +415,16 @@ export function Cell(props: Props) {
       data-index={index}
       data-page={pageMode ? '' : undefined}
       onMouseMove={onMouseMove}
-      onMouseLeave={onMouseLeave}
+      // 整頁模式由主程序回報的游標位置判斷離開格子：游標從浮動按鈕移到網頁上時，格子也會收到 mouseleave（R171 修正）
+      onMouseLeave={() => !pageMode && onMouseLeave()}
+      onContextMenu={(e) => {
+        if (e.target !== e.currentTarget) return
+        e.preventDefault()
+        runClick(props.cellClick.right, e)
+      }}
       onClick={(e) => {
         // 只有點在格子本身（影片區域）才算，按鈕和輸入框不算（R7 獨占聲音）
-        if (e.target === e.currentTarget) props.onFocusAudio(index)
+        if (e.target === e.currentTarget) runClick(props.cellClick.left, e)
       }}
     >
       {/* 編輯版型（R170）：格子編號與切開、刪除的按鈕，蓋住格子的其他操作 */}
@@ -405,21 +462,53 @@ export function Cell(props: Props) {
           滑鼠停在角落上說明這一格的播放方式（R109、R165） */}
       {source && !showInput && (view === 'bar' || (isAudible(source) && !props.singleView)) && (
         <div
-          className={`cell-corner ${view === 'bar' ? 'chips' : ''}`}
+          className={`cell-corner ${view === 'bar' ? 'fabs' : ''}`}
           title={view === 'bar' ? undefined : badge?.tip}
           onClick={(e) => e.stopPropagation()}
         >
           {view === 'bar' ? (
-            <button
-              className="chip"
-              title={`${source.muted ? '開啟這一格的聲音' : '關閉這一格的聲音'}${badge ? `\n${badge.tip}` : ''}`}
-              aria-label={source.muted ? '開啟這一格的聲音' : '關閉這一格的聲音'}
-              onClick={() => props.onToggleMute(index)}
-            >
-              {source.muted ? <MuteIcon /> : <SpeakerIcon />}
-            </button>
+            // 聲音按鈕：按一下靜音／開聲音；滑鼠移上去旁邊展開音量滑桿（R171，像 YouTube）
+            <div className={`vol-group ${volOpen ? 'open' : ''}`} onMouseEnter={openVolume} onMouseLeave={closeVolumeSoon}>
+              <button
+                className="fab"
+                title={`${source.muted ? '開啟這一格的聲音' : '關閉這一格的聲音'}${badge ? `\n${badge.tip}` : ''}`}
+                aria-label={source.muted ? '開啟這一格的聲音' : '關閉這一格的聲音'}
+                onClick={() => props.onToggleMute(index)}
+              >
+                {source.muted || volume === 0 ? <MuteIcon /> : <SpeakerIcon />}
+              </button>
+              <div className="vol-slider">
+                <input
+                  type="range"
+                  tabIndex={-1}
+                  aria-label="音量"
+                  title={`音量 ${volume}`}
+                  className={boostable && volume > VOLUME_NORMAL_MAX ? 'boosted' : ''}
+                  style={
+                    {
+                      '--fill': `${(volume / volumeMax(boostable)) * 100}%`,
+                      '--boost': boostable ? `${(VOLUME_NORMAL_MAX / volumeMax(boostable)) * 100}%` : '100%'
+                    } as CSSProperties
+                  }
+                  min={0}
+                  max={volumeMax(boostable)}
+                  step={1}
+                  value={volume}
+                  onPointerDown={() => (volDrag.current = true)}
+                  onPointerUp={(e) => {
+                    volDrag.current = false
+                    // 不留下焦點：←／→ 仍是快轉、倒轉的快捷鍵（R51）
+                    e.currentTarget.blur()
+                    if (!e.currentTarget.closest('.vol-group')?.matches(':hover')) closeVolumeSoon()
+                  }}
+                  onChange={(e) => props.onVolume(index, Number(e.target.value))}
+                  onDoubleClick={() => props.onVolume(index, VOLUME_DEFAULT)}
+                />
+                <span className="vol-value">{volume}</span>
+              </div>
+            </div>
           ) : (
-            <div className="audio-indicator">🔊</div>
+            <SoundBars playing={isPlayingStatus(status)} />
           )}
           {badge?.dot && view === 'bar' && <span className="ytdlp-dot" title={badge.tip} aria-label="yt-dlp" />}
         </div>
@@ -527,13 +616,13 @@ export function Cell(props: Props) {
         <div className={`cell-controls ${view === 'bar' ? 'show' : ''}`}>
           <div className="scrim top" />
           <div className="scrim bottom" />
-          <div className="chip-row top-right">
+          <div className="fab-row top-right">
             {pageMode && (
               <>
-                <button className="chip" title="上一頁" disabled={!props.nav?.back} onClick={() => props.onNav(index, true)}>
+                <button className="fab" title="上一頁" disabled={!props.nav?.back} onClick={() => props.onNav(index, true)}>
                   ←
                 </button>
-                <button className="chip" title="下一頁" disabled={!props.nav?.forward} onClick={() => props.onNav(index, false)}>
+                <button className="fab" title="下一頁" disabled={!props.nav?.forward} onClick={() => props.onNav(index, false)}>
                   →
                 </button>
               </>
@@ -541,7 +630,7 @@ export function Cell(props: Props) {
             {/* 嵌入播放的 YouTube 與 YouTube 網頁模式（R66）；併入第十三版 R63 的「回到 YouTube」 */}
             {(source.parsed.kind === 'youtube' || source.youtubePage) && (
               <button
-                className={`chip ${source.youtubePage ? 'active' : ''}`}
+                className={`fab ${source.youtubePage ? 'active' : ''}`}
                 title="YouTube：回到網頁、回到播放器、回到剛才的 YouTube 頁面、推薦影片、留言、聊天室"
                 aria-label="YouTube"
                 onPointerDown={() => (menuAtDown.current = menu?.kind ?? null)}
@@ -551,7 +640,7 @@ export function Cell(props: Props) {
               </button>
             )}
             <button
-              className={`chip ${menu && menu.kind !== 'youtube' ? 'active' : ''}`}
+              className={`fab ${menu && menu.kind !== 'youtube' ? 'active' : ''}`}
               title="設定：音量、亮度、畫質、字幕、更換網址、移除…"
               aria-label="設定"
               // 齒輪選單或從它打開的選單、滑桿開著時，再按一下就關閉。選單在按下時就因為點在外面而關閉，
@@ -566,10 +655,10 @@ export function Cell(props: Props) {
               <GearIcon />
             </button>
           </div>
-          <div className="chip-row bottom-right">
+          <div className="fab-row bottom-right">
             {props.canMove && (
               <button
-                className="chip move-handle"
+                className="fab move-handle"
                 title="拖曳到其他格子來交換位置"
                 aria-label="移動"
                 onPointerDown={(e) => {
@@ -589,7 +678,7 @@ export function Cell(props: Props) {
               </button>
             )}
             <button
-              className={`chip ${props.isSolo ? 'active' : ''}`}
+              className={`fab ${props.isSolo ? 'active' : ''}`}
               title={props.isSolo ? '離開全螢幕，回到分割畫面' : '把這一格放大到整個螢幕，其他格暫停'}
               aria-label={props.isSolo ? '離開全螢幕' : '全螢幕'}
               onClick={() => props.onToggleSolo(index)}
@@ -622,32 +711,17 @@ export function Cell(props: Props) {
           {menu?.kind === 'gear' && (
             <PopupMenu
               anchor={menu.anchor}
-              placement="below"
+              placement={popupPlacement}
+              align={menu.atCursor ? 'start' : 'end'}
               items={gearItems()}
               onSelect={(key) => onGear(key, menu.anchor)}
               onClose={() => setMenu((m) => (m?.kind === 'gear' ? null : m))}
             />
           )}
-          {menu?.kind === 'volume' && (
-            <SliderPopup
-              anchor={menu.anchor}
-              placement="below"
-              title="音量"
-              min={0}
-              max={volumeMax(boostable)}
-              boostFrom={boostable ? VOLUME_NORMAL_MAX : undefined}
-              step={1}
-              value={volume}
-              format={(v) => String(v)}
-              onChange={(v) => props.onVolume(index, v)}
-              onReset={() => props.onVolume(index, VOLUME_DEFAULT)}
-              onClose={() => setMenu(null)}
-            />
-          )}
           {menu?.kind === 'brightness' && (
             <SliderPopup
               anchor={menu.anchor}
-              placement="below"
+              placement={popupPlacement}
               title="亮度"
               min={BRIGHTNESS_MIN}
               max={BRIGHTNESS_MAX}
@@ -662,7 +736,7 @@ export function Cell(props: Props) {
           {menu?.kind === 'youtube' && (
             <PopupMenu
               anchor={menu.anchor}
-              placement="below"
+              placement={popupPlacement}
               items={[
                 source.youtubePage
                   ? { key: 'player', label: '回到播放器' }
@@ -680,7 +754,7 @@ export function Cell(props: Props) {
           {menu?.kind === 'quality' && (
             <PopupMenu
               anchor={menu.anchor}
-              placement="below"
+              placement={popupPlacement}
               items={qualityItems(props.getQualityOptions(index), source.quality)}
               onSelect={(key) => props.onQuality(index, key === 'auto' ? 'auto' : Number(key))}
               onClose={() => setMenu(null)}
@@ -689,7 +763,7 @@ export function Cell(props: Props) {
           {menu?.kind === 'audio' && audio && (
             <PopupMenu
               anchor={menu.anchor}
-              placement="below"
+              placement={popupPlacement}
               items={audioItems(audio, source.audioLang ?? null)}
               onSelect={(key) => {
                 const o = audio.options.find((x) => String(x.index) === key)
@@ -701,7 +775,7 @@ export function Cell(props: Props) {
           {menu?.kind === 'captions' && (
             <PopupMenu
               anchor={menu.anchor}
-              placement="below"
+              placement={popupPlacement}
               items={captionItems(props.getCaptionTracks(index), source.captions)}
               onSelect={(key) => props.onCaptions(index, key === 'off' ? null : key)}
               onClose={() => setMenu(null)}

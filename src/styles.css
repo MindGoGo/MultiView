@@ -367,7 +367,7 @@ button.link {
   opacity: 1;
 }
 
-.cell-controls.show .chip,
+.cell-controls.show .fab,
 .cell-controls.show .progress,
 .cell-controls.show .time-chip.to-live {
   pointer-events: auto;
@@ -394,7 +394,7 @@ button.link {
 }
 
 /* 半透明黑色的圓形按鈕 */
-.chip {
+.fab {
   display: grid;
   place-items: center;
   flex: none;
@@ -408,39 +408,39 @@ button.link {
   background: rgba(28, 28, 30, 0.72);
 }
 
-.chip:hover:not(:disabled) {
+.fab:hover:not(:disabled) {
   background: rgba(60, 60, 64, 0.85);
 }
 
-.chip.active {
+.fab.active {
   color: var(--accent);
 }
 
-.chip .icon {
+.fab .icon {
   width: 18px;
   height: 18px;
 }
 
-.chip-row {
+.fab-row {
   position: absolute;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.chip-row.top-right {
+.fab-row.top-right {
   top: 8px;
   right: 8px;
 }
 
-.chip-row.bottom-right {
+.fab-row.bottom-right {
   right: 8px;
   bottom: 22px;
 }
 
 /* 最上排的格子：上方的按鈕放在工具列的感應區（40px）下面，滑鼠移過去時不會被工具列蓋住（R166） */
-.cell.top-row .chip-row.top-right,
-.cell.top-row .cell-corner.chips {
+.cell.top-row .fab-row.top-right,
+.cell.top-row .cell-corner.fabs {
   top: 48px;
 }
 
@@ -549,7 +549,7 @@ button.link {
 }
 
 /* 操作區顯示時是聲音按鈕＋綠點，和右上的按鈕對齊（R166） */
-.cell-corner.chips {
+.cell-corner.fabs {
   top: 8px;
   left: 8px;
   gap: 6px;
@@ -565,10 +565,124 @@ button.link {
 }
 
 .audio-indicator {
-  padding: 2px 5px;
-  border-radius: 4px;
-  font-size: 12px;
+  display: grid;
+  place-items: center;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
   background: rgba(0, 0, 0, 0.55);
+}
+
+/* 有聲音的音波（R171）：播放時五條直條上下跳動，暫停時停住 */
+.audio-indicator svg {
+  fill: #fff;
+}
+
+.audio-indicator svg.playing rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sound-bar 0.9s ease-in-out infinite;
+}
+
+.audio-indicator svg.playing rect:nth-child(2) {
+  animation-delay: -0.3s;
+}
+
+.audio-indicator svg.playing rect:nth-child(3) {
+  animation-delay: -0.6s;
+}
+
+.audio-indicator svg.playing rect:nth-child(4) {
+  animation-delay: -0.15s;
+}
+
+.audio-indicator svg.playing rect:nth-child(5) {
+  animation-delay: -0.45s;
+}
+
+@keyframes sound-bar {
+  0%,
+  100% {
+    transform: scaleY(0.45);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audio-indicator svg.playing rect {
+    animation: none;
+  }
+}
+
+/* 聲音按鈕＋音量滑桿（R171）：滑鼠移上去時按鈕和滑桿連成一個膠囊 */
+.vol-group {
+  display: flex;
+  align-items: center;
+  border-radius: 999px;
+  transition: background 0.15s;
+  pointer-events: auto;
+}
+
+.vol-group.open {
+  background: rgba(28, 28, 30, 0.72);
+}
+
+.vol-group.open .fab {
+  background: transparent;
+}
+
+.vol-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: width 0.15s, opacity 0.15s, padding 0.15s;
+}
+
+.vol-group.open .vol-slider {
+  width: 132px;
+  padding-right: 12px;
+  opacity: 1;
+}
+
+.vol-slider input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  margin: 0;
+  appearance: none;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    #fff 0 min(var(--fill), var(--boost)),
+    var(--boost-color) min(var(--fill), var(--boost)) var(--fill),
+    rgba(255, 255, 255, 0.3) var(--fill) 100%
+  );
+  cursor: pointer;
+}
+
+.vol-slider input[type='range']::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  appearance: none;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.vol-slider input[type='range'].boosted::-webkit-slider-thumb {
+  background: var(--boost-color);
+}
+
+.vol-value {
+  min-width: 2.2em;
+  font-size: 12px;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
 }
 
 
@@ -1162,34 +1276,41 @@ button.danger {
 
 /* 格子窄的時候（R14 AC7）：按鈕縮成 32px，時間膠囊不顯示（R166） */
 @container (max-width: 359px) {
-  .chip {
+  .fab {
     width: 32px;
     height: 32px;
     font-size: 14px;
   }
-  .chip .icon {
+  .fab .icon {
     width: 16px;
     height: 16px;
   }
-  .chip-row {
+  .fab-row {
     gap: 4px;
   }
-  .chip-row.top-right {
+  .fab-row.top-right {
     top: 6px;
     right: 6px;
   }
-  .cell-corner.chips {
+  .cell-corner.fabs {
     top: 6px;
     left: 6px;
   }
-  .cell.top-row .chip-row.top-right,
-  .cell.top-row .cell-corner.chips {
+  .cell.top-row .fab-row.top-right,
+  .cell.top-row .cell-corner.fabs {
     top: 46px;
   }
-  .chip-row.bottom-right {
+  .fab-row.bottom-right {
     right: 6px;
   }
   .time-chip {
+    display: none;
+  }
+  .vol-group.open .vol-slider {
+    width: 92px;
+    padding-right: 8px;
+  }
+  .vol-value {
     display: none;
   }
 }

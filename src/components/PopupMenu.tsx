@@ -20,6 +20,8 @@ interface Props {
   anchor: DOMRect
   /** 出現在按鈕上方（格子，預設）或下方（工具列，R49） */
   placement?: 'above' | 'below'
+  /** 對齊按鈕的右邊（預設）或從左邊開始（R171：在游標位置打開時） */
+  align?: 'start' | 'end'
   items: PopupItem[]
   onSelect(key: string): void
   onClose(): void
@@ -27,7 +29,7 @@ interface Props {
 
 const MARGIN = 4
 
-export function PopupMenu({ anchor, placement = 'above', items, onSelect, onClose }: Props) {
+export function PopupMenu({ anchor, placement = 'above', align = 'end', items, onSelect, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; bottom?: number; top?: number; maxHeight: number }>(
     placement === 'above'
@@ -38,9 +40,9 @@ export function PopupMenu({ anchor, placement = 'above', items, onSelect, onClos
   // 量到選單寬度後限制在視窗內
   useLayoutEffect(() => {
     const w = ref.current?.offsetWidth ?? 0
-    const left = Math.min(Math.max(anchor.right - w, MARGIN), window.innerWidth - w - MARGIN)
+    const left = Math.min(Math.max(align === 'start' ? anchor.left : anchor.right - w, MARGIN), window.innerWidth - w - MARGIN)
     setPos((p) => ({ ...p, left }))
-  }, [anchor])
+  }, [anchor, align])
 
   useEffect(() => {
     const onDown = (e: PointerEvent) => {

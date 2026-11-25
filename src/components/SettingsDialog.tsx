@@ -10,15 +10,17 @@ import {
   type YtDlpChannel,
   type YtDlpStatus
 } from '../lib/ytdlp'
+import { CELL_CLICK_ACTIONS, type CellClick } from '../lib/cellClick'
 import { LOGIN_BROWSERS, type LoginBrowser } from '../lib/googleLogin'
 import { SPONSOR_CATEGORIES, type SponsorBlockSettings } from '../lib/sponsorBlock'
-import { CloseIcon, CompanionIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
+import { CloseIcon, CompanionIcon, MouseIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
 
-export type SettingsCategory = 'youtube' | 'companion' | 'web' | 'ytdlp' | 'about'
+export type SettingsCategory = 'youtube' | 'companion' | 'mouse' | 'web' | 'ytdlp' | 'about'
 
 const CATEGORIES: { id: SettingsCategory; label: string; icon: ReactNode }[] = [
   { id: 'youtube', label: 'YouTube 播放', icon: <YouTubeIcon /> },
   { id: 'companion', label: 'YouTube 小視窗', icon: <CompanionIcon /> },
+  { id: 'mouse', label: '滑鼠操作', icon: <MouseIcon /> },
   { id: 'web', label: '其他網站', icon: <GlobeIcon /> },
   { id: 'ytdlp', label: 'yt-dlp', icon: <DownloadToolIcon /> },
   { id: 'about', label: '關於', icon: <InfoIcon /> }
@@ -39,6 +41,9 @@ interface Props {
   /** 開啟程式時打開小視窗（R165） */
   companionOnLaunch: boolean
   onCompanionOnLaunch(on: boolean): void
+  /** 在影片格子上按左鍵、右鍵的效果（R171） */
+  cellClick: CellClick
+  onCellClick(click: CellClick): void
   /** SponsorBlock（R161） */
   sponsorBlock: SponsorBlockSettings
   onSponsorBlock(settings: SponsorBlockSettings): void
@@ -95,6 +100,7 @@ export function SettingsDialog(props: Props) {
         <main className="settings-body">
           {category === 'youtube' && <YouTubeSection {...props} />}
           {category === 'companion' && <CompanionSection {...props} />}
+          {category === 'mouse' && <MouseSection {...props} />}
           {category === 'web' && <WebSection {...props} />}
           {category === 'ytdlp' && <YtDlpSection onToast={props.onToast} />}
           {category === 'about' && <AboutSection />}
@@ -172,6 +178,21 @@ function YouTubeSection(props: Props) {
       </Row>
       <SponsorBlockRows settings={props.sponsorBlock} onChange={props.onSponsorBlock} />
       <LoginBrowserRow value={props.loginBrowser} onChange={props.onLoginBrowser} />
+    </section>
+  )
+}
+
+function MouseSection(props: Props) {
+  const c = props.cellClick
+  return (
+    <section>
+      <h2 className="set-heading">滑鼠操作</h2>
+      <Row title="在影片上按左鍵" desc="按在影片上按鈕以外的地方。「只聽這一格」會開這一格的聲音、其他格全部靜音。">
+        <Choice label="在影片上按左鍵" value={c.left} options={CELL_CLICK_ACTIONS} onChange={(left) => props.onCellClick({ ...c, left })} />
+      </Row>
+      <Row title="在影片上按右鍵" desc="「開啟選單」會在游標的位置打開齒輪選單。顯示整個網頁時，右鍵仍是網頁的選單。">
+        <Choice label="在影片上按右鍵" value={c.right} options={CELL_CLICK_ACTIONS} onChange={(right) => props.onCellClick({ ...c, right })} />
+      </Row>
     </section>
   )
 }

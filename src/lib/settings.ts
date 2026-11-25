@@ -1,4 +1,5 @@
 // 設定檔的資料結構與驗證（R10）。主程序與畫面共用，不依賴 Electron。
+import { DEFAULT_CELL_CLICK, normalizeCellClick, type CellClick } from './cellClick'
 import { DEFAULT_LAYOUT, isPresetLayout, isValidRatios, LAYOUT_IDS, type LayoutId, type LayoutKey, type Ratios } from './layout'
 import { CUSTOM_PREFIX, normalizeCustomLayouts, type CustomLayout } from './layoutTree'
 import { isYouTubeSite, parseSource } from './source'
@@ -63,6 +64,8 @@ export interface ViewSettings {
   listTab: { group: 'youtube' | 'other'; tab: 'subscriptions' | 'favorites' | 'history' }
   /** 開啟程式時打開 YouTube 小視窗（R165，只在畫面上只有一格時）；桌面版自己的欄位，舊的設定檔沒有時視為關閉 */
   companionOnLaunch: boolean
+  /** 在影片格子上按左鍵、右鍵的效果（R171）；桌面版自己的欄位，舊的設定檔沒有時左鍵只聽這一格、右鍵開啟選單 */
+  cellClick: CellClick
   /** SponsorBlock（R161）；舊的設定檔沒有這個欄位時開啟、只跳過業配（和手機版相同的格式） */
   sponsorBlock: SponsorBlockSettings
   /** 登入 Google 用的瀏覽器（R168）；舊的設定檔沒有時是 Edge */
@@ -93,6 +96,7 @@ export function defaultSettings(): Settings {
     webMethod: 'web',
     listTab: DEFAULT_LIST_TAB,
     companionOnLaunch: false,
+    cellClick: { ...DEFAULT_CELL_CLICK },
     sponsorBlock: { ...DEFAULT_SPONSOR_BLOCK, categories: [...DEFAULT_SPONSOR_BLOCK.categories] },
     loginBrowser: DEFAULT_LOGIN_BROWSER
   }
@@ -186,6 +190,7 @@ export function normalizeView(raw: unknown): ViewSettings {
     webMethod: normalizeWebMethod(obj.webMethod),
     listTab: normalizeListTab(obj.listTab),
     companionOnLaunch: obj.companionOnLaunch === true,
+    cellClick: normalizeCellClick(obj.cellClick),
     sponsorBlock: normalizeSponsorBlock(obj.sponsorBlock),
     loginBrowser: normalizeLoginBrowser(obj.loginBrowser)
   }
