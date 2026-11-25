@@ -575,30 +575,26 @@ button.link {
   background: rgba(0, 0, 0, 0.55);
 }
 
-/* 有聲音的音波（R171）：播放時五條直條上下跳動，暫停時停住 */
-.audio-indicator svg {
-  fill: #fff;
-}
-
+/* 有聲音的音波（R171、R173）：選「跳動的音波」時播放中上下跳動，暫停時停住；顏色由設定決定（SVG 的 fill） */
 .audio-indicator svg.playing rect {
   transform-box: fill-box;
   transform-origin: center;
   animation: sound-bar 0.9s ease-in-out infinite;
 }
 
-.audio-indicator svg.playing rect:nth-child(2) {
+.audio-indicator svg.playing rect:nth-of-type(2) {
   animation-delay: -0.3s;
 }
 
-.audio-indicator svg.playing rect:nth-child(3) {
+.audio-indicator svg.playing rect:nth-of-type(3) {
   animation-delay: -0.6s;
 }
 
-.audio-indicator svg.playing rect:nth-child(4) {
+.audio-indicator svg.playing rect:nth-of-type(4) {
   animation-delay: -0.15s;
 }
 
-.audio-indicator svg.playing rect:nth-child(5) {
+.audio-indicator svg.playing rect:nth-of-type(5) {
   animation-delay: -0.45s;
 }
 
@@ -612,10 +608,9 @@ button.link {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .audio-indicator svg.playing rect {
-    animation: none;
-  }
+/* 喇叭樣式（R173） */
+.audio-indicator.speaker {
+  font-size: 12px;
 }
 
 /* 聲音按鈕＋音量滑桿（R171）：滑鼠移上去時按鈕和滑桿連成一個膠囊 */
@@ -1862,4 +1857,29 @@ button.danger {
   justify-content: center;
   padding: 16px;
   background: rgba(0, 0, 0, 0.6);
+}
+
+/* 設定 → 格子顯示 → 音波的顏色（R173） */
+.swatches {
+  display: flex;
+  gap: 10px;
+}
+
+.swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+}
+
+.swatch.active {
+  box-shadow:
+    0 0 0 2px var(--bg, #1c1c1e),
+    0 0 0 4px var(--accent);
+}
+
+.swatch:disabled {
+  opacity: 0.35;
+  cursor: default;
 }

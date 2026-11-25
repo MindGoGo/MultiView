@@ -11,15 +11,17 @@ import {
   type YtDlpStatus
 } from '../lib/ytdlp'
 import { CELL_CLICK_ACTIONS, type CellClick } from '../lib/cellClick'
+import { INDICATOR_COLORS, INDICATOR_STYLES, type AudioIndicator } from '../lib/audioIndicator'
 import { LOGIN_BROWSERS, type LoginBrowser } from '../lib/googleLogin'
 import { SPONSOR_CATEGORIES, type SponsorBlockSettings } from '../lib/sponsorBlock'
-import { CloseIcon, CompanionIcon, MouseIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
+import { CloseIcon, CompanionIcon, DisplayIcon, MouseIcon, DownloadToolIcon, GlobeIcon, InfoIcon, YouTubeIcon } from './icons'
 
-export type SettingsCategory = 'youtube' | 'companion' | 'mouse' | 'web' | 'ytdlp' | 'about'
+export type SettingsCategory = 'youtube' | 'companion' | 'display' | 'mouse' | 'web' | 'ytdlp' | 'about'
 
 const CATEGORIES: { id: SettingsCategory; label: string; icon: ReactNode }[] = [
   { id: 'youtube', label: 'YouTube 播放', icon: <YouTubeIcon /> },
   { id: 'companion', label: 'YouTube 小視窗', icon: <CompanionIcon /> },
+  { id: 'display', label: '格子顯示', icon: <DisplayIcon /> },
   { id: 'mouse', label: '滑鼠操作', icon: <MouseIcon /> },
   { id: 'web', label: '其他網站', icon: <GlobeIcon /> },
   { id: 'ytdlp', label: 'yt-dlp', icon: <DownloadToolIcon /> },
@@ -44,6 +46,9 @@ interface Props {
   /** 在影片格子上按左鍵、右鍵的效果（R171） */
   cellClick: CellClick
   onCellClick(click: CellClick): void
+  /** 左上角「這一格有聲音」的標示（R173） */
+  audioIndicator: AudioIndicator
+  onAudioIndicator(indicator: AudioIndicator): void
   /** SponsorBlock（R161） */
   sponsorBlock: SponsorBlockSettings
   onSponsorBlock(settings: SponsorBlockSettings): void
@@ -100,6 +105,7 @@ export function SettingsDialog(props: Props) {
         <main className="settings-body">
           {category === 'youtube' && <YouTubeSection {...props} />}
           {category === 'companion' && <CompanionSection {...props} />}
+          {category === 'display' && <DisplaySection {...props} />}
           {category === 'mouse' && <MouseSection {...props} />}
           {category === 'web' && <WebSection {...props} />}
           {category === 'ytdlp' && <YtDlpSection onToast={props.onToast} />}
@@ -178,6 +184,36 @@ function YouTubeSection(props: Props) {
       </Row>
       <SponsorBlockRows settings={props.sponsorBlock} onChange={props.onSponsorBlock} />
       <LoginBrowserRow value={props.loginBrowser} onChange={props.onLoginBrowser} />
+    </section>
+  )
+}
+
+function DisplaySection(props: Props) {
+  const a = props.audioIndicator
+  const wave = a.style === 'wave-animated' || a.style === 'wave'
+  return (
+    <section>
+      <h2 className="set-heading">格子顯示</h2>
+      <Row title="有聲音的標示" desc="多格時，有開聲音的格子左上角的小標示（滑鼠沒有移到格子上時）。選「跳動的音波」時，播放中會上下跳動。">
+        <Choice label="有聲音的標示" value={a.style} options={INDICATOR_STYLES} onChange={(style) => props.onAudioIndicator({ ...a, style })} />
+      </Row>
+      <Row title="音波的顏色" desc={wave ? undefined : '選音波時才能選顏色。'}>
+        <div className="swatches" role="radiogroup" aria-label="音波的顏色">
+          {INDICATOR_COLORS.map((c) => (
+            <button
+              key={c.value}
+              role="radio"
+              aria-checked={c.value === a.color}
+              aria-label={c.label}
+              title={c.label}
+              disabled={!wave}
+              className={`swatch ${c.value === a.color ? 'active' : ''}`}
+              style={{ background: c.css }}
+              onClick={() => props.onAudioIndicator({ ...a, color: c.value })}
+            />
+          ))}
+        </div>
+      </Row>
     </section>
   )
 }

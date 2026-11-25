@@ -149,6 +149,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
   const [companionOnLaunch, setCompanionOnLaunch] = useState(initial.companionOnLaunch)
   /** 在影片格子上按左鍵、右鍵的效果（R171） */
   const [cellClick, setCellClick] = useState(initial.cellClick)
+  /** 左上角「這一格有聲音」的標示（R173） */
+  const [audioIndicator, setAudioIndicator] = useState(initial.audioIndicator)
   /** YouTube 直播、一般影片的播放方式（R88） */
   const [youtubeMethods, setYoutubeMethods] = useState(initial.youtubeMethods)
   /** YouTube 格子目前的播放方式，依來源 id（R89） */
@@ -279,6 +281,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
     listTab,
     companionOnLaunch,
     cellClick,
+    audioIndicator,
     sponsorBlock,
     loginBrowser,
     slots: slots.map((s) =>
@@ -315,7 +318,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
   // 任何設定變更都送給主程序，由主程序合併後寫入檔案（R10 AC3）
   useEffect(() => {
     window.multiview.saveView(viewOf(positions))
-  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, sponsorBlock, loginBrowser, customLayouts, companionOnLaunch, cellClick])
+  }, [layout, ratiosMap, slots, masterBrightness, autoYoutubeWeb, youtubeMethods, webMethod, positions, listTab, sponsorBlock, loginBrowser, customLayouts, companionOnLaunch, cellClick, audioIndicator])
 
 
   const registerPlayer = useCallback((id: number, handle: PlayerHandle | null) => {
@@ -1044,6 +1047,7 @@ export default function App({ initial }: { initial: ViewSettings }) {
         onMoveEnd={onMoveEnd}
         onFocusAudio={onFocusAudio}
         cellClick={cellClick}
+        audioIndicator={audioIndicator}
         onToggleMute={(i) => setSlots(toggleMute(slots, i))}
         onVolume={(i, v) => setSlots(setVolume(slots, i, v))}
         direct={direct}
@@ -1119,6 +1123,8 @@ export default function App({ initial }: { initial: ViewSettings }) {
           onCompanionOnLaunch={setCompanionOnLaunch}
           cellClick={cellClick}
           onCellClick={setCellClick}
+          audioIndicator={audioIndicator}
+          onAudioIndicator={setAudioIndicator}
           sponsorBlock={sponsorBlock}
           onSponsorBlock={setSponsorBlock}
           loginBrowser={loginBrowser}

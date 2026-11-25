@@ -1,5 +1,6 @@
 // 設定檔的資料結構與驗證（R10）。主程序與畫面共用，不依賴 Electron。
 import { DEFAULT_CELL_CLICK, normalizeCellClick, type CellClick } from './cellClick'
+import { DEFAULT_AUDIO_INDICATOR, normalizeAudioIndicator, type AudioIndicator } from './audioIndicator'
 import { DEFAULT_LAYOUT, isPresetLayout, isValidRatios, LAYOUT_IDS, type LayoutId, type LayoutKey, type Ratios } from './layout'
 import { CUSTOM_PREFIX, normalizeCustomLayouts, type CustomLayout } from './layoutTree'
 import { isYouTubeSite, parseSource } from './source'
@@ -66,6 +67,8 @@ export interface ViewSettings {
   companionOnLaunch: boolean
   /** 在影片格子上按左鍵、右鍵的效果（R171）；桌面版自己的欄位，舊的設定檔沒有時左鍵只聽這一格、右鍵開啟選單 */
   cellClick: CellClick
+  /** 左上角「這一格有聲音」的標示（R173）；桌面版自己的欄位，舊的設定檔沒有時是白色、跳動的音波 */
+  audioIndicator: AudioIndicator
   /** SponsorBlock（R161）；舊的設定檔沒有這個欄位時開啟、只跳過業配（和手機版相同的格式） */
   sponsorBlock: SponsorBlockSettings
   /** 登入 Google 用的瀏覽器（R168）；舊的設定檔沒有時是 Edge */
@@ -97,6 +100,7 @@ export function defaultSettings(): Settings {
     listTab: DEFAULT_LIST_TAB,
     companionOnLaunch: false,
     cellClick: { ...DEFAULT_CELL_CLICK },
+    audioIndicator: { ...DEFAULT_AUDIO_INDICATOR },
     sponsorBlock: { ...DEFAULT_SPONSOR_BLOCK, categories: [...DEFAULT_SPONSOR_BLOCK.categories] },
     loginBrowser: DEFAULT_LOGIN_BROWSER
   }
@@ -191,6 +195,7 @@ export function normalizeView(raw: unknown): ViewSettings {
     listTab: normalizeListTab(obj.listTab),
     companionOnLaunch: obj.companionOnLaunch === true,
     cellClick: normalizeCellClick(obj.cellClick),
+    audioIndicator: normalizeAudioIndicator(obj.audioIndicator),
     sponsorBlock: normalizeSponsorBlock(obj.sponsorBlock),
     loginBrowser: normalizeLoginBrowser(obj.loginBrowser)
   }

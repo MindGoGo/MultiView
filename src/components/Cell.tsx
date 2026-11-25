@@ -23,6 +23,7 @@ import { categoryInfo, skippedLabel, type SkipAction, type SponsorSegment } from
 import type { SplitBlock, SplitDir } from '../lib/layoutTree'
 import { ExitFullscreenIcon, FullscreenIcon, GearIcon, MuteIcon, SpeakerIcon, YouTubeLogo } from './icons'
 import type { CellClick, CellClickAction } from '../lib/cellClick'
+import { GRADIENT_STOPS, indicatorFill, type AudioIndicator } from '../lib/audioIndicator'
 import { createWheelStepper, sliderKeyValue, sliderWheelValue } from '../lib/sliderInput'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
@@ -63,6 +64,8 @@ interface Props {
   onFocusAudio(index: number): void
   /** 在影片上按左鍵、右鍵的效果（R171） */
   cellClick: CellClick
+  /** 左上角「這一格有聲音」的標示（R173） */
+  audioIndicator: AudioIndicator
   onToggleMute(index: number): void
   onVolume(index: number, volume: number): void
   direct: boolean
@@ -173,11 +176,25 @@ function cellIndexAt(x: number, y: number): number | null {
   return null
 }
 
-/** 這一格有聲音（R7）：五條白色音波，播放時上下跳動（R171） */
-function SoundBars({ playing }: { playing: boolean }) {
+/**
+ * 這一格有聲音（R7）：依設定顯示音波（跳動或不動、可選顏色）或喇叭（R171、R173）。
+ * 選「跳動的音波」時一律跳動，不看系統的「減少動態效果」（使用者自己選的）；暫停時停住。
+ */
+function SoundIndicator({ setting, playing, gradientId }: { setting: AudioIndicator; playing: boolean; gradientId: string }) {
+  if (setting.style === 'speaker') return <div className="audio-indicator speaker">🔊</div>
+  const fill = indicatorFill(setting.color)
+  const animate = setting.style === 'wave-animated' && playing
   return (
     <div className="audio-indicator" aria-label="有聲音">
-      <svg className={playing ? 'playing' : ''} width="15" height="12" viewBox="0 0 20 16" aria-hidden="true">
+      <svg className={animate ? 'playing' : ''} width="15" height="12" viewBox="0 0 20 16" aria-hidden="true" fill={fill ?? `url(#${gradientId})`}>
+        {!fill && (
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={GRADIENT_STOPS[0]} />
+              <stop offset="1" stopColor={GRADIENT_STOPS[1]} />
+            </linearGradient>
+          </defs>
+        )}
         <rect x="1" y="5.5" width="2.4" height="5" rx="1.2" />
         <rect x="5" y="3" width="2.4" height="10" rx="1.2" />
         <rect x="9" y="0.5" width="2.4" height="15" rx="1.2" />
@@ -518,7 +535,9 @@ export function Cell(props: Props) {
       )}
       {/* 左上角（R166）：操作區顯示時是聲音按鈕＋yt-dlp 綠點（R165）；平常只在有聲音時顯示小標示（R7）。
           滑鼠停在角落上說明這一格的播放方式（R109、R165） */}
-      {source && !showInput && (view === 'bar' || (isAudible(source) && !props.singleView)) && (
+      {source &&
+        !showInput &&
+        (view === 'bar' || (isAudible(source) && !props.singleView && props.audioIndicator.style !== 'none')) && (
         <div
           className={`cell-corner ${view === 'bar' ? 'fabs' : ''}`}
           title={view === 'bar' ? undefined : badge?.tip}
@@ -572,7 +591,7 @@ export function Cell(props: Props) {
               </div>
             </div>
           ) : (
-            <SoundBars playing={isPlayingStatus(status)} />
+            <SoundIndicator setting={props.audioIndicator} playing={isPlayingStatus(status)} gradientId={`sound-gradient-${index}`} />
           )}
           {badge?.dot && view === 'bar' && <span className="ytdlp-dot" title={badge.tip} aria-label="yt-dlp" />}
         </div>
@@ -717,7 +736,8 @@ export function Cell(props: Props) {
             </button>
           </div>
           <div className="fab-row bottom-right">
-            {props.canMove && (
+            {/* 影片格子在影片上按住就能拖曳換位（R172），「移動」按鈕只給顯示整個網頁的格子（R173） */}
+            {props.canMove && pageMode && (
               <button
                 className="fab move-handle"
                 title="拖曳到其他格子來交換位置"

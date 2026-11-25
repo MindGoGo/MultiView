@@ -150,6 +150,14 @@ export const YouTubeIcon = () => (
   </Icon>
 )
 
+/** 格子顯示（R173 的設定分類）：格子左上角的小音波 */
+export const DisplayIcon = () => (
+  <Icon>
+    <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
+    <path d="M4 6.2v1.6M5.8 5.2v3.6M7.6 5.8v2.4" />
+  </Icon>
+)
+
 /** 滑鼠（R171 的設定分類） */
 export const MouseIcon = () => (
   <Icon>

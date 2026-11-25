@@ -1,6 +1,6 @@
 # 浮動按鈕的調整（桌面版）：手動驗收步驟
 
-對應規格：`doc/specs/floating-controls-tweaks.md`（R171、R172）。單元測試見 `tests/unit/cell-click.test.ts`、`tests/unit/slider-input.test.ts`。
+對應規格：`doc/specs/floating-controls-tweaks.md`（R171–R173）。單元測試見 `tests/unit/cell-click.test.ts`、`tests/unit/slider-input.test.ts`、`tests/unit/audio-indicator.test.ts`。
 
 | 需求 | 步驟 | 預期結果 |
 |---|---|---|
@@ -20,4 +20,7 @@
 | R172 AC1 | 整頁模式的網頁格子 | 按住網頁是操作網頁；用「移動」按鈕換位 |
 | R172 AC2 | 滑鼠在聲音按鈕上滾動滾輪；按 ↑ ↓ ← →；移開後按 ← → | 音量一格 5 增減；移開後恢復快轉、倒轉 |
 | R172 AC3 | 齒輪 → 亮度，滾輪、方向鍵、Home、End；工具列的總亮度 | 都可以調 |
-| 版本 | 設定 → 關於；GitHub Releases | 0.9.4；Actions 自動發佈 `desktop-v0.9.4` |
+| R173 AC1 | 滑鼠移到影片格子、顯示整個網頁的格子 | 影片格子右下只有全螢幕；網頁格子有「移動」和全螢幕 |
+| R173 AC2 | 2×2，開兩格的聲音，滑鼠移開 | 左上角是跳動的白色音波（Windows 關閉動畫效果也會跳） |
+| R173 AC3 | 設定 → 格子顯示：音波（不動）＋粉紫漸層；喇叭；不顯示；重新開啟程式 | 左上角跟著改；設定還在 |
+| 版本 | 設定 → 關於；GitHub Releases | 0.9.5；Actions 自動發佈 `desktop-v0.9.5` |
