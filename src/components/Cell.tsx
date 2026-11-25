@@ -23,6 +23,7 @@ import { categoryInfo, skippedLabel, type SkipAction, type SponsorSegment } from
 import type { SplitBlock, SplitDir } from '../lib/layoutTree'
 import { ExitFullscreenIcon, FullscreenIcon, GearIcon, MuteIcon, SpeakerIcon, YouTubeLogo } from './icons'
 import type { CellClick, CellClickAction } from '../lib/cellClick'
+import { createWheelStepper, sliderKeyValue, sliderWheelValue } from '../lib/sliderInput'
 import { canBoost, effectiveVolume, VOLUME_DEFAULT, VOLUME_NORMAL_MAX, volumeMax } from '../lib/volume'
 
 interface Props {
@@ -148,6 +149,9 @@ const TOOLBAR_HEIGHT = 40
 const CHIP_SIZE = 40
 const CHIP_TOP = 8
 
+/** 在影片上按住後移動多遠才開始拖曳換位（R172）；不到這個距離放開時算點一下 */
+const MOVE_DRAG_PX = 6
+
 /** 滑鼠離開聲音按鈕與音量滑桿多久後收起滑桿（R171） */
 const VOLUME_CLOSE_MS = 300
 
@@ -199,6 +203,32 @@ export function Cell(props: Props) {
     clearTimeout(volTimer.current)
     setVolOpen(true)
   }
+  /** 在影片上按下的位置；移動超過 MOVE_DRAG_PX 後開始換位（R172） */
+  const press = useRef<{ x: number; y: number; id: number; moving: boolean } | null>(null)
+  const suppressClick = useRef(false)
+  const volWheel = useRef(createWheelStepper())
+  const volRange = () => ({ min: 0, max: volumeMax(boostable), step: 1 })
+  const onVolumeWheel = (e: React.WheelEvent) => {
+    // 滾輪調整音量（R172）：往上加、往下減
+    openVolume()
+    const steps = volWheel.current(e.deltaY, e.deltaMode)
+    if (steps) props.onVolume(index, sliderWheelValue(steps, volume, volRange()))
+  }
+  // 音量滑桿展開時（滑鼠在聲音按鈕或滑桿上），方向鍵等調整音量，不當作快轉、倒轉（R172）
+  const volKeyRef = useRef<(e: KeyboardEvent) => void>(() => undefined)
+  volKeyRef.current = (e: KeyboardEvent) => {
+    const next = sliderKeyValue(e.key, volume, volRange())
+    if (next === null) return
+    e.stopPropagation()
+    e.preventDefault()
+    if (next !== volume) props.onVolume(index, next)
+  }
+  useEffect(() => {
+    if (!volOpen) return
+    const onKey = (e: KeyboardEvent) => volKeyRef.current(e)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [volOpen])
   const closeVolumeSoon = () => {
     clearTimeout(volTimer.current)
     volTimer.current = setTimeout(() => !volDrag.current && setVolOpen(false), VOLUME_CLOSE_MS)
@@ -413,6 +443,37 @@ export function Cell(props: Props) {
       onMouseMove={onMouseMove}
       // 整頁模式由主程序回報的游標位置判斷離開格子：游標從浮動按鈕移到網頁上時，格子也會收到 mouseleave（R171 修正）
       onMouseLeave={() => !pageMode && onMouseLeave()}
+      // 在影片上按住拖曳就換位（R172）；移動不到 MOVE_DRAG_PX 放開時算點一下
+      onPointerDown={(e) => {
+        if (e.button !== 0 || e.target !== e.currentTarget || !props.canMove || !source) return
+        press.current = { x: e.clientX, y: e.clientY, id: e.pointerId, moving: false }
+      }}
+      onPointerMove={(e) => {
+        const p = press.current
+        if (!p || p.id !== e.pointerId) return
+        if (!p.moving) {
+          if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < MOVE_DRAG_PX) return
+          p.moving = true
+          e.currentTarget.setPointerCapture(e.pointerId)
+          props.onMoveStart(index)
+        }
+        props.onMoveOver(cellIndexAt(e.clientX, e.clientY))
+      }}
+      onPointerUp={(e) => {
+        const p = press.current
+        press.current = null
+        if (!p?.moving) return
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+        props.onMoveEnd(cellIndexAt(e.clientX, e.clientY))
+        // 放開後瀏覽器還會送出 click：這次不算點一下
+        suppressClick.current = true
+        setTimeout(() => (suppressClick.current = false), 0)
+      }}
+      onPointerCancel={() => {
+        const p = press.current
+        press.current = null
+        if (p?.moving) props.onMoveEnd(null)
+      }}
       onContextMenu={(e) => {
         if (e.target !== e.currentTarget) return
         e.preventDefault()
@@ -420,6 +481,7 @@ export function Cell(props: Props) {
       }}
       onClick={(e) => {
         // 只有點在格子本身（影片區域）才算，按鈕和輸入框不算（R7 獨占聲音）
+        if (suppressClick.current) return
         if (e.target === e.currentTarget) runClick(props.cellClick.left, e)
       }}
     >
@@ -464,7 +526,13 @@ export function Cell(props: Props) {
         >
           {view === 'bar' ? (
             // 聲音按鈕：按一下靜音／開聲音；滑鼠移上去旁邊展開音量滑桿（R171，像 YouTube）
-            <div className={`vol-group ${volOpen ? 'open' : ''}`} onMouseEnter={openVolume} onMouseLeave={closeVolumeSoon}>
+            <div
+              className={`vol-group ${volOpen ? 'open' : ''}`}
+              title="滾輪或方向鍵也可以調整音量"
+              onMouseEnter={openVolume}
+              onMouseLeave={closeVolumeSoon}
+              onWheel={onVolumeWheel}
+            >
               <button
                 className="fab"
                 title={`${source.muted ? '開啟這一格的聲音' : '關閉這一格的聲音'}${badge ? `\n${badge.tip}` : ''}`}

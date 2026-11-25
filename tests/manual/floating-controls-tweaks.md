@@ -1,6 +1,6 @@
 # 浮動按鈕的調整（桌面版）：手動驗收步驟
 
-對應規格：`doc/specs/floating-controls-tweaks.md`（R171）。單元測試見 `tests/unit/cell-click.test.ts`。
+對應規格：`doc/specs/floating-controls-tweaks.md`（R171、R172）。單元測試見 `tests/unit/cell-click.test.ts`、`tests/unit/slider-input.test.ts`。
 
 | 需求 | 步驟 | 預期結果 |
 |---|---|---|
@@ -16,4 +16,8 @@
 | 0.9.3 AC7 | 設定 → 滑鼠操作 | 正常顯示；切換後重新開啟程式，設定還在 |
 | 0.9.3 AC8 | 設定 → YouTube 小視窗 → 打開「開啟 App 時打開小視窗」，版型 1，重新開啟程式 | 小視窗打開；設定仍是打開 |
 | 0.9.3 AC9 | 按齒輪 → 再按一次齒輪；齒輪 → 亮度 → 再按齒輪；YouTube ▾ 按兩次 | 每次第二下都關閉 |
-| 版本 | 設定 → 關於；GitHub Releases | 0.9.3；Actions 自動發佈 `desktop-v0.9.3` |
+| R172 AC1 | 2×2，在影片上按住拖到另一格；只點一下 | 藍色覆蓋、放開交換；點一下不換位 |
+| R172 AC1 | 整頁模式的網頁格子 | 按住網頁是操作網頁；用「移動」按鈕換位 |
+| R172 AC2 | 滑鼠在聲音按鈕上滾動滾輪；按 ↑ ↓ ← →；移開後按 ← → | 音量一格 5 增減；移開後恢復快轉、倒轉 |
+| R172 AC3 | 齒輪 → 亮度，滾輪、方向鍵、Home、End；工具列的總亮度 | 都可以調 |
+| 版本 | 設定 → 關於；GitHub Releases | 0.9.4；Actions 自動發佈 `desktop-v0.9.4` |

@@ -524,6 +524,8 @@ button.link {
 }
 
 .cell.moving {
+  /* 在影片上按住拖曳換位中（R172） */
+  cursor: grabbing;
   outline: 2px dashed var(--muted-text);
   outline-offset: -2px;
 }
