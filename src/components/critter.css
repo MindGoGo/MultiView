@@ -24,7 +24,7 @@
   padding: 1px 8px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.55);
-  color: #d8f5ea;
+  color: #ffe3ec;
   font-size: 12px;
   white-space: nowrap;
 }
@@ -44,7 +44,7 @@
 
 .critter-shadow {
   /* 黑色影片上看得見的淡色影子 */
-  fill: rgba(159, 231, 203, 0.22);
+  fill: rgba(255, 184, 203, 0.22);
   transform-box: fill-box;
   transform-origin: 50% 50%;
   animation: critter-shadow 0.9s cubic-bezier(0.3, 0, 0.4, 1) infinite;

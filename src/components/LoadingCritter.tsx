@@ -28,8 +28,8 @@ export function LoadingCritter({ kind, label }: { kind: LoadingKind; label?: str
           {/* 圓滾滾的麻糬身體與左上的光澤 */}
           <path
             d="M50 38c19 0 32 13 32 29 0 14-12 22-32 22S18 81 18 67c0-16 13-29 32-29z"
-            fill="#9fe7cb"
-            stroke="#6fcfa9"
+            fill="#ffb8cb"
+            stroke="#f48aa8"
             strokeWidth="1.5"
           />
           <ellipse cx="37" cy="50" rx="8" ry="4.5" fill="#fff" opacity="0.55" transform="rotate(-25 37 50)" />
@@ -39,8 +39,8 @@ export function LoadingCritter({ kind, label }: { kind: LoadingKind; label?: str
             <circle cx="42.2" cy="60.8" r="1" fill="#fff" />
             <circle cx="60.2" cy="60.8" r="1" fill="#fff" />
           </g>
-          <ellipse cx="33" cy="69" rx="4.6" ry="2.8" fill="#ff9fb3" opacity="0.75" />
-          <ellipse cx="67" cy="69" rx="4.6" ry="2.8" fill="#ff9fb3" opacity="0.75" />
+          <ellipse cx="33" cy="69" rx="4.6" ry="2.8" fill="#ff6b8f" opacity="0.7" />
+          <ellipse cx="67" cy="69" rx="4.6" ry="2.8" fill="#ff6b8f" opacity="0.7" />
           <path d="M47 68.5q3 2.6 6 0" fill="none" stroke="#21302b" strokeWidth="1.6" strokeLinecap="round" />
           {/* 肚子上的播放符號 */}
           <path d="M46.5 75.5v8l7-4z" fill="#fff" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" opacity="0.9" />
